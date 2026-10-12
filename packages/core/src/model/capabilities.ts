@@ -316,6 +316,8 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
             "claude-opus-4-6*",
             "claude-sonnet-5*",
             "claude-sonnet-4-6*",
+            // Haiku joined the 1M generation at 5.5 (read 2026-10-12); earlier Haikus keep the row below.
+            "claude-haiku-5*",
         ] as const
     ).map((pattern) => ({
         // 1M context, 128K output — Anthropic's model comparison table, read 2026-08-29.
@@ -324,8 +326,10 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
         note: CLAUDE_NOTE,
     })),
     {
-        // 200K context, 64K output — same table, same date.
+        // 200K context, 64K output — same table, same date. A net now that Haiku 5.5 has its own
+        // row above: it stands in for the 4.x Haikus, so a 4.x id reports `family`, not `registry`.
         pattern: "claude-haiku-*",
+        family: true,
         capabilities: { ...CLAUDE_BASE, contextWindow: 200_000, maxOutput: 64_000 },
         note: CLAUDE_NOTE,
     },

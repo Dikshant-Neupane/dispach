@@ -177,6 +177,23 @@ describe("request mapping", () => {
             })
         })
 
+        test("Haiku 5.5 is adaptive too (a budget is a 400 there); Haiku 4.5 keeps its budget", () => {
+            expect(fields("global.anthropic.claude-haiku-5-5", "low", 0.3)).toMatchObject({
+                additionalModelRequestFields: {
+                    thinking: { type: "adaptive" },
+                    output_config: { effort: "low" },
+                },
+                inferenceConfig: { maxTokens: 32_768 },
+            })
+            expect(
+                fields("global.anthropic.claude-haiku-5-5", "none").additionalModelRequestFields,
+            ).toEqual({ thinking: { type: "disabled" } })
+            expect(
+                fields("global.anthropic.claude-haiku-4-5-20251001-v1:0", "medium")
+                    .additionalModelRequestFields,
+            ).toEqual({ thinking: { type: "enabled", budget_tokens: 8192 } })
+        })
+
         test("none is each model's own off switch, or low effort where there is none", () => {
             expect(
                 fields("global.anthropic.claude-sonnet-5-5", "none").additionalModelRequestFields,

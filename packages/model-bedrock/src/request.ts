@@ -74,14 +74,17 @@ function claudeVersion(
 /**
  * How a Bedrock model takes reasoning: a Claude token budget, Claude's adaptive thinking with an effort,
  * or an `openai.*` effort. Adaptive from 4.7, the first version that refuses a budget with a 400; 4.6
- * still accepts one (deprecated), so its requests stay exactly as they were.
+ * still accepts one (deprecated), so its requests stay exactly as they were. Haiku stayed on a budget
+ * through 4.5; Haiku 5.5 is adaptive and refuses a budget (VelaCrew, pilot.17: `"thinking.type.enabled"
+ * is not supported for this model. Use "thinking.type.adaptive" and "output_config.effort"`).
  */
 export function thinkingStyle(modelId: string): "budget" | "adaptive" | "openai" | undefined {
     if (/(^|[./])openai\./.test(modelId)) return "openai"
     const claude = claudeVersion(modelId)
     if (claude === undefined) return undefined
     if (claude.family === "fable" || claude.family === "mythos") return "adaptive"
-    return claude.family !== "haiku" && claude.version >= 4.7 ? "adaptive" : "budget"
+    if (claude.family === "haiku") return claude.version >= 5.5 ? "adaptive" : "budget"
+    return claude.version >= 4.7 ? "adaptive" : "budget"
 }
 
 /**
