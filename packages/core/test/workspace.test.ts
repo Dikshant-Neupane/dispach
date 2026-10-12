@@ -18,7 +18,9 @@ import {
     DEFAULT_WORKSPACE_BUDGETS,
     loadWorkspace,
     planWorkspace,
+    reloadVolatile,
     ruleBudgetFailure,
+    volatileFingerprint,
     workspaceRefs,
     writeTarget,
 } from "../src/workspace/load.ts"
@@ -493,5 +495,73 @@ describe("soul rule counting", () => {
         const { workspace } = load(dir, { static: ["AGENT.md"] })
         const failure = ruleBudgetFailure(workspace, RULES)
         expect(failure !== undefined).toBe(true)
+    })
+})
+
+describe("reloading the volatile tier", () => {
+    const FILES = {
+        "SOUL.md": "---\ntier: static\n---\n\nThe original identity.",
+        "MEMORY.md": "---\ntier: volatile\n---\n\n- the original note",
+        "REMINDER.md": "---\ntier: reminder\n---\n\nThe original reminder.",
+    }
+
+    function loaded() {
+        const dir = workspaceDir(FILES)
+        const { workspace } = load(dir, {
+            static: ["SOUL.md"],
+            volatile: ["MEMORY.md"],
+            reminder: "REMINDER.md",
+        })
+        return { dir, workspace }
+    }
+
+    test("re-reads volatile files and carries static and reminder over unread", () => {
+        // The cached prefix is safe by construction only if static is never re-read: an edit to SOUL.md
+        // on disk must not reach slot 0 through a volatile reload.
+        const { dir, workspace } = loaded()
+        writeFileSync(
+            join(dir, "workspace", "SOUL.md"),
+            "---\ntier: static\n---\n\nAn edited identity.",
+        )
+        writeFileSync(
+            join(dir, "workspace", "REMINDER.md"),
+            "---\ntier: reminder\n---\n\nAn edited reminder.",
+        )
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            "---\ntier: volatile\n---\n\n- an edited note",
+        )
+
+        const reloaded = reloadVolatile(workspace)
+
+        expect(reloaded.static).toBe(workspace.static)
+        expect(reloaded.static.includes("The original identity.")).toBe(true)
+        expect(reloaded.reminder).toBe(workspace.reminder)
+        expect(reloaded.volatile.includes("an edited note")).toBe(true)
+        expect(reloaded.volatile.includes("the original note")).toBe(false)
+    })
+
+    test("refuses an over-budget volatile file exactly as a load would", () => {
+        const { dir, workspace } = loaded()
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            `---\ntier: volatile\nbudget: 50\n---\n\n${"- a note that is far too long for its budget\n".repeat(40)}`,
+        )
+        expect(caught(() => reloadVolatile(workspace)).code).toBe("workspace_budget_exceeded")
+    })
+
+    test("the fingerprint moves when a volatile file changes and not when a static one does", () => {
+        const { dir, workspace } = loaded()
+        const before = volatileFingerprint(workspace)
+        writeFileSync(
+            join(dir, "workspace", "SOUL.md"),
+            "---\ntier: static\n---\n\nAn edited identity.",
+        )
+        expect(volatileFingerprint(workspace)).toBe(before)
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            "---\ntier: volatile\n---\n\n- a longer edited note",
+        )
+        expect(volatileFingerprint(workspace)).not.toBe(before)
     })
 })

@@ -146,12 +146,72 @@ export interface LoadWorkspaceOptions {
 export function loadWorkspace(options: LoadWorkspaceOptions): Workspace {
     const budgets = options.budgets ?? DEFAULT_WORKSPACE_BUDGETS
     const style = options.style ?? DEFAULT_PROMPT_STYLE
-    const files: WorkspaceFile[] = []
+    return assemble(
+        options.refs.map((ref) => readOne(ref, budgets, style)),
+        budgets,
+    )
+}
 
-    for (const ref of options.refs) {
-        files.push(readOne(ref, budgets, style))
-    }
+/**
+ * Re-read the `volatile` tier and nothing else, under the same checks a load applies.
+ *
+ * The volatile tier is the one place the workspace changes while an agent runs — `memory_write` appends
+ * to it, eviction trims it, and a person edits it — and it sits after cache breakpoint A precisely so it
+ * can. Holding the boot-time copy instead was a real defect rather than a staleness nuisance, because
+ * recall *excludes* the carried file on the grounds that slot 4 already shows it: a note saved during a
+ * long-running process reached neither slot until a restart, in every session but the one that saved it.
+ *
+ * `static` and `reminder` files are carried over as the same objects, so slot 0 stays byte-identical
+ * and the cached prefix survives a reload by construction rather than by care. Throws exactly what a
+ * load would throw — budget, tier mismatch, a missing file — and the caller decides what that means for
+ * a running agent.
+ */
+export function reloadVolatile(
+    workspace: Workspace,
+    options: ReloadVolatileOptions = {},
+): Workspace {
+    const budgets = options.budgets ?? DEFAULT_WORKSPACE_BUDGETS
+    const style = options.style ?? DEFAULT_PROMPT_STYLE
+    return assemble(
+        workspace.files.map((file) =>
+            file.tier === "volatile"
+                ? readOne(
+                      { name: file.name, path: file.path, tier: file.tier, field: file.field },
+                      budgets,
+                      style,
+                  )
+                : file,
+        ),
+        budgets,
+    )
+}
 
+export type ReloadVolatileOptions = Omit<LoadWorkspaceOptions, "refs">
+
+/**
+ * What the volatile tier looks like on disk right now: modification time and size per file.
+ *
+ * The same staleness witness `memory/fts5.ts` uses for the index, and with the same blind spot — an edit
+ * that preserves both — which is stated rather than papered over. A file that cannot be stat'd
+ * contributes a marker instead of throwing, so a deleted file reads as a change and the reload is what
+ * reports it.
+ */
+export function volatileFingerprint(workspace: Workspace): string {
+    return workspace.files
+        .filter((file) => file.tier === "volatile")
+        .map((file) => {
+            try {
+                const stat = statSync(file.path)
+                return `${file.path}\t${stat.mtimeMs}\t${stat.size}`
+            } catch {
+                return `${file.path}\tmissing`
+            }
+        })
+        .join("\n")
+}
+
+/** Budget, then concatenate. Shared by a load and a volatile reload so the two cannot disagree. */
+function assemble(files: readonly WorkspaceFile[], budgets: WorkspaceBudgets): Workspace {
     for (const file of files) {
         if (file.tokens <= file.budget) continue
         throw workspaceBudgetExceeded({

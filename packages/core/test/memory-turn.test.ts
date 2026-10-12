@@ -484,7 +484,7 @@ describe("memory_write evicts rather than growing without bound", () => {
         await runtime.stop()
     })
 
-    test("a fact saved in one session is recalled in another", async () => {
+    test("a fact saved in one session is recalled in another, across a restart", async () => {
         // The phase's headline criterion, and the reason the two tiers exist: session A writes into the
         // carried file, the budget pushes it into the archive, and session B — whose carried file no
         // longer holds it — retrieves it from there.
@@ -515,5 +515,160 @@ describe("memory_write evicts rather than growing without bound", () => {
         expect(sent.includes("# Remembered")).toBe(true)
         expect(sent.includes("manual approval gate")).toBe(true)
         await second.stop()
+    })
+})
+
+/**
+ * The carried tier is current while the agent runs — not as it was at boot.
+ *
+ * Every test above that crosses sessions does it across a **restart**, which is exactly why this defect
+ * survived: slot 4 was the boot-time copy of `MEMORY.md`, and recall excludes that file on the grounds
+ * that slot 4 already shows it. So a note saved during a long-running process reached neither slot in any
+ * other session until the process restarted. These run in **one** runtime.
+ */
+describe("the carried file is current while the agent runs", () => {
+    /** The one system message that carries the volatile tier, found by its frame rather than its index. */
+    function carriedOf(body: Record<string, unknown> | undefined): string {
+        const messages = body?.messages
+        if (!Array.isArray(messages)) return ""
+        const found = messages
+            .map((message) => String((message as { content?: unknown }).content ?? ""))
+            .find((content) => content.startsWith("What I already know"))
+        return found ?? ""
+    }
+
+    function memoryFile(bullets: string): string {
+        return `---\ntier: volatile\neditable: replace\nbudget: 2000\neviction: oldest\n---\n\n# What I know\n\n${bullets}\n`
+    }
+
+    test("a note saved in one session is carried into another without a restart", async () => {
+        const { manifest } = agent()
+        const bodies: Record<string, unknown>[] = []
+        let call = 0
+        const fetch: FetchLike = async (_url, init) => {
+            bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>)
+            call += 1
+            const content =
+                call === 1
+                    ? "ACTION: memory_write\ntext: the staging cluster lives in frankfurt\nEND"
+                    : "Saved."
+            return sse([
+                `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+                "data: [DONE]\n\n",
+            ])
+        }
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("please keep a note of where staging is", {
+            sessionKey: "local:savea0",
+        })
+        expect(call).toBe(2)
+        await subject?.send("hello again", { sessionKey: "local:readb0" })
+
+        // In slot 4 itself — not merely somewhere in the prompt, where a "Remembered" block or a
+        // conversation excerpt could also have put it.
+        expect(carriedOf(bodies[2]).includes("the staging cluster lives in frankfurt")).toBe(true)
+        await runtime.stop()
+    })
+
+    test("an edit made outside the agent is in the next turn, and a deleted line is gone", async () => {
+        const { manifest, dir } = agent({
+            carried:
+                "- **2026-08-01T10:00:00Z** The deploy pipeline waits for a manual approval gate.",
+        })
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:edit00" })
+        expect(carriedOf(bodies[0]).includes("manual approval gate")).toBe(true)
+
+        // What a person does from a workspace editor: replace the note with a different one.
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-01T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("hello again", { sessionKey: "local:edit00" })
+
+        const carried = carriedOf(bodies[1])
+        expect(carried.includes("Releases ship on thursdays only.")).toBe(true)
+        expect(carried.includes("manual approval gate")).toBe(false)
+        await runtime.stop()
+    })
+
+    test("an over-budget edit keeps the previous version, warns once, and the agent keeps answering", async () => {
+        const { manifest, dir } = agent({
+            carried:
+                "- **2026-08-01T10:00:00Z** The deploy pipeline waits for a manual approval gate.",
+        })
+        const { fetch, bodies } = recorder("Still here.")
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const warnings: string[] = []
+        runtime.bus.on("agent.warning", (event) => {
+            if ("code" in event.data) warnings.push(event.data.code)
+        })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:over00" })
+
+        // Far past the file's own 2,000-token budget. Boot would refuse this; a running agent must not
+        // fall over because somebody saved it.
+        const huge = Array.from(
+            { length: 900 },
+            (_, i) => `- **2026-10-01T10:00:00Z** filler note number ${i} about nothing.`,
+        ).join("\n")
+        writeFileSync(join(dir, "workspace", "MEMORY.md"), memoryFile(huge))
+        const second = await subject?.send("hello again", { sessionKey: "local:over00" })
+        const third = await subject?.send("and again", { sessionKey: "local:over00" })
+
+        expect(second?.text).toBe("Still here.")
+        expect(third?.text).toBe("Still here.")
+        // The previous complete version — never a truncated slice of the new one.
+        expect(carriedOf(bodies[1]).includes("manual approval gate")).toBe(true)
+        expect(carriedOf(bodies[1]).includes("filler note")).toBe(false)
+        // Once per bad version, not once per turn.
+        expect(warnings.filter((code) => code === "workspace_reload_refused").length).toBe(1)
+
+        // Fixed: the next turn adopts it.
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-02T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("one more", { sessionKey: "local:over00" })
+        expect(carriedOf(bodies[3]).includes("Releases ship on thursdays only.")).toBe(true)
+        await runtime.stop()
+    })
+
+    test("a static file edited mid-run is not re-read, so the cached prefix stays byte-identical", async () => {
+        // The end-to-end half of the guard: slot 0 on the wire is unchanged after a static edit, while a
+        // volatile edit in the same turn lands. This cannot catch a reload that re-reads static files —
+        // slot 0 comes from `Agent.identity`, frozen at construction, so it holds either way. That half
+        // is `reloadVolatile`'s own test in `workspace.test.ts`, which does fail when static is re-read.
+        const { manifest, dir } = agent()
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:stat00" })
+        writeFileSync(
+            join(dir, "workspace", "SOUL.md"),
+            "---\ntier: static\n---\n\nA different fixture.",
+        )
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-01T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("hello again", { sessionKey: "local:stat00" })
+
+        const firstSystem = (bodies[0]?.messages as { content?: unknown }[] | undefined)?.[0]
+            ?.content
+        const secondSystem = (bodies[1]?.messages as { content?: unknown }[] | undefined)?.[0]
+            ?.content
+        expect(String(secondSystem).includes("A test fixture.")).toBe(true)
+        expect(secondSystem).toEqual(firstSystem)
+        // While the volatile edit in the same turn did land.
+        expect(carriedOf(bodies[1]).includes("Releases ship on thursdays only.")).toBe(true)
+        await runtime.stop()
     })
 })
