@@ -1,10 +1,11 @@
 /**
  * A single agent: a manifest plus its resolved model roles, identity, and persisted sessions.
  *
- * The workspace is read **once, at load**, and its `static` tier held as one string. That is not
+ * The workspace's `static` tier is read **once, at load**, and held as one string. That is not
  * an optimization. Slot 0 is half of the cache-stable prefix, and re-reading the files per turn
  * would let an editor save change the prefix mid-session, quietly destroying prompt caching
- * with no error and no symptom other than the bill.
+ * with no error and no symptom other than the bill. The `volatile` tier is the exception and the
+ * reason it sits after breakpoint A: it is re-read when its files change (`#refreshVolatile`).
  *
  * Session history lives in the store, and there is no in-memory fallback. A second code path
  * for "no store configured" would be the one exercised by every test and none of production —
@@ -23,6 +24,7 @@ import {
     type ErrorDetail,
     envOverridden,
     type GovernorError,
+    isHarnessError,
     memoryNotConfigured,
     modelWindowFamily,
     modelWindowUnknown,
@@ -31,6 +33,7 @@ import {
     toolGatedAfterFirstUse,
     turnsAtCapacity,
     unknownRetriever,
+    workspaceReloadRefused,
 } from "../errors.ts"
 import type { EventBus } from "../events/bus.ts"
 import { newTurnId } from "../loop/ids.ts"
@@ -81,7 +84,9 @@ import { activateKnowledge, type KnowledgeBase, loadKnowledge } from "../workspa
 import {
     loadWorkspace,
     planWorkspace,
+    reloadVolatile,
     ruleBudgetFailure,
+    volatileFingerprint,
     type Workspace,
     type WorkspaceFileRef,
     writeTarget,
@@ -298,8 +303,23 @@ export class Agent {
     readonly roles: ResolvedRoles
     /** The workspace's `static` tier. Byte-stable for the lifetime of the agent. */
     readonly identity: string
-    /** Tiers, budgets, and per-file editability. Slot 0's text is `workspace.static`. */
-    readonly workspace: Workspace
+    /**
+     * Tiers, budgets, and per-file editability. Slot 0's text is `workspace.static`.
+     *
+     * Static and reminder are as loaded; the volatile tier is as of the last turn that found its files
+     * changed. See `#refreshVolatile`.
+     */
+    get workspace(): Workspace {
+        return this.#workspace
+    }
+
+    #workspace: Workspace
+    /**
+     * The volatile tier's on-disk fingerprint when it was last read, or `undefined` before the first
+     * turn — so the first turn always re-reads, which closes the window between `create` reading the
+     * files and the constructor running.
+     */
+    #volatileSeen: string | undefined = undefined
     /** Non-fatal load findings, emitted as `agent.warning` by `Runtime`. */
     readonly warnings: readonly ErrorDetail[]
     readonly store: Store
@@ -418,7 +438,7 @@ export class Agent {
         this.#env = init.loaded.env
         this.window = init.loaded.window
         this.roles = init.roles
-        this.workspace = init.workspace
+        this.#workspace = init.workspace
         this.identity = init.workspace.static
         this.warnings = init.warnings
         this.#bus = init.bus
@@ -807,6 +827,7 @@ export class Agent {
         const sessionKey = options.sessionKey ?? Agent.DEFAULT_SESSION
         const turnId = options.turnId ?? newTurnId()
         const source = options.source ?? "library"
+        this.#refreshVolatile()
 
         await this.store.sessions.ensure(this.id, sessionKey)
         const history = await this.store.messages.history(this.id, sessionKey)
@@ -837,11 +858,8 @@ export class Agent {
             history,
             identity: this.identity,
             configSummary: this.#configBlock(),
-            // Read at load, like `static`. The tier's *position* is what Phase 3.5's first half
-            // delivers — after the cache breakpoint, so that a write leaves slots 0 and 1
-            // byte-identical. Re-reading it mid-session lands with the write path that changes it,
-            // since a re-read with nothing writing is a filesystem call per turn for no observable
-            // difference.
+            // As of `#refreshVolatile` at the top of this turn. The tier sits after the cache
+            // breakpoint so that a write leaves slots 0 and 1 byte-identical.
             ...(this.workspace.examples === "" ? {} : { examples: this.workspace.examples }),
             ...(this.workspace.volatile === "" ? {} : { volatile: this.workspace.volatile }),
             ...(this.workspace.reminder === "" ? {} : { reminder: this.workspace.reminder }),
@@ -1106,6 +1124,8 @@ export class Agent {
     }> {
         const sessionKey = options.sessionKey ?? Agent.DEFAULT_SESSION
         const input = options.input ?? ""
+        // The same refresh `send` performs, or the preview would describe slot 4 as it was at boot.
+        this.#refreshVolatile()
         const history = await this.store.messages.history(this.id, sessionKey)
         const active =
             this.knowledge === undefined || input === ""
@@ -1258,6 +1278,43 @@ export class Agent {
      * cost the agent its memory for that turn, not the reply: the person asked a question, and answering
      * without slot 7 is strictly better than an error. Reported on the bus rather than swallowed.
      */
+    /**
+     * Re-read the volatile tier when its files changed on disk since the last turn looked.
+     *
+     * `memory_write` appends to the carried file, eviction trims it, and a person edits it — all while the
+     * agent runs. Recall excludes that file on the grounds that slot 4 already shows it, so a boot-time
+     * copy meant a note saved during a long-running process reached **neither** slot in any other session
+     * until a restart. The tier sits after breakpoint A so that this is free for the cache; only the
+     * volatile files are re-read, so slot 0 stays byte-identical.
+     *
+     * Per turn rather than per step: a turn reasons from one version of what it knows, which is the rule
+     * knowledge activation already follows. The note a turn saves is in that turn's history as the call
+     * that saved it. Steady-state cost is one `stat` per volatile file.
+     *
+     * A version that does not load is **warned about and not adopted**. Boot refuses a bad workspace
+     * because nothing is running yet; mid-run, refusing would take down an agent that is answering
+     * people because somebody saved an over-budget file. The fingerprint is recorded either way, so one
+     * bad version is reported once, not on every turn — and the next edit is tried afresh. Synchronous on
+     * purpose: two sessions in one process cannot interleave inside it.
+     */
+    #refreshVolatile(): void {
+        const seen = volatileFingerprint(this.#workspace)
+        if (seen === this.#volatileSeen) return
+        this.#volatileSeen = seen
+        try {
+            this.#workspace = reloadVolatile(this.#workspace, {
+                budgets: this.manifest.context.budgets,
+                style: this.roles.main.capabilities.promptStyle,
+            })
+        } catch (error) {
+            const cause = error instanceof Error ? error.message : String(error)
+            const causeHint = isHarnessError(error)
+                ? error.hint
+                : "Check that the file loads with `validate`."
+            this.#bus.emit("agent.warning", workspaceReloadRefused(cause, causeHint).toDetail())
+        }
+    }
+
     async #recall(
         input: string,
         sessionKey: string,

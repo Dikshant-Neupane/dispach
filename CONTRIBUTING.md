@@ -10,7 +10,7 @@ The contributor guide covers the complete workflow:
 - [Set up a checkout](developer-docs/contributing/development-setup.md)
 - [Understand the repository](developer-docs/contributing/repository-map.md)
 - [Make and verify a change](developer-docs/contributing/making-a-change.md)
-- [Add a channel, tool provider, or plugin](developer-docs/contributing/extending-dispach.md)
+- [Add a channel, tool provider, or plugin](developer-docs/contributing/extending.md)
 - [Run tests, benchmarks, and evaluations](developer-docs/contributing/testing-and-evaluations.md)
 
 Please report security vulnerabilities through the private process in [SECURITY.md](SECURITY.md),

@@ -35,6 +35,17 @@ models fail.
 
 ---
 
+## The carried file is current, not as it was at boot
+
+Each turn stats the volatile files and re-reads them when their modification time or size moved
+(5.54). That is what makes the exclusion below honest: recall leaves the carried file out because
+slot 4 shows it, so slot 4 has to show the version on disk — a note saved in one session, or a line a
+person deleted in an editor, is in the next turn of every session without a restart. A new version
+that fails its budget is warned about (`workspace_reload_refused`) and not adopted; the agent keeps
+the last version that loaded. Static files are never re-read, so the cached prefix does not move.
+
+---
+
 ## How a turn recalls
 
 1. `enumerateFiles` stats the archive and the carried file. Unchanged sources are not read.
