@@ -16,7 +16,6 @@ site:
           content:
             directory: ./runtime
             language: en
-
     - type: section
       key: developer-contributing
       title: Contributing
@@ -30,7 +29,6 @@ site:
           content:
             directory: ./contributing
             language: en
-
     - type: section
       key: developer-control
       title: Control Plane
@@ -44,7 +42,6 @@ site:
           content:
             directory: ./control-plane
             language: en
-
     - type: section
       key: developer-reference
       title: API Reference
