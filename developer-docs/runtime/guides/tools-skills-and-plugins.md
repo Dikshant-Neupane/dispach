@@ -21,4 +21,4 @@ Plugins extend channels, tools, lifecycle hooks, and middleware through the publ
 First-party plugins use the same public contracts as external plugins. If an integration cannot be expressed through those contracts, improve the contract instead of reaching into core internals.
 
 See the Plugin API specification and the contributor guide to [extending
-Dispach](../../contributing/extending-dispach.md).
+Dispach](../../contributing/extending.md).
