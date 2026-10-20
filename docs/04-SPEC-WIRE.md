@@ -236,6 +236,12 @@ so it is refused with a hint naming the reason. `OPTIONS` on those paths does no
 
 ## Endpoints
 
+**Experimental in 0.2.0**: participants, conversations (rooms and DMs), presence and stand-in
+actions (`/v1/participants`, `/v1/conversations`, `/v1/actions`), team memory and projects
+(`/v1/memory/*`, `/v1/projects`), export and import, the assignee routes, plugin-mounted routes and
+the `peer` capability. They are complete and tested, have no TUI or web screens yet, and may change
+within 0.2.x. Everything else here is stable.
+
 ### Health and readiness
 
 ```

@@ -10,8 +10,9 @@ hosts many agents, and scoped keys fence each one off. TypeScript, shipped on No
 
 **Where it is going: the multiplayer agent runtime.** 0.2.0 gives every user and every team in your
 product their own isolated runtime of agents. Those agents share rooms and memory with the people
-they work for, and stand in for them, openly, when they are away. That half is being built. Every
-other feature described in this README runs today.
+they work for, and stand in for them, openly, when they are away. That half ships in 0.2.0 as
+**experimental**: on the HTTP API, with no TUI or web screens yet, and it may change within 0.2.x.
+Everything else described in this README is stable.
 
 > To dispatch is to send a thing on its way with the authority to see it done — to decide
 > what handles it, hand it over, and answer for the result.
@@ -44,7 +45,7 @@ runtime from a terminal.
 
 ## Status
 
-**Pre-release, and it runs: 0.1.3**, from npm, Homebrew or the container image. Every install runs
+**0.2.0**, from npm, Homebrew or the container image. Every install runs
 under Node. [`CHANGELOG.md`](CHANGELOG.md) has what landed in each release.
 
 Built and in use:
@@ -109,7 +110,7 @@ Full rationale for every decision, including the negative ones, is in `docs/00-D
 
 ```bash
 npm i -g dispach          # the `dispach` command
-dispach --version         # 0.1.2
+dispach --version         # 0.2.0
 ```
 
 and in an application that talks to a running server:
@@ -148,7 +149,7 @@ until `brew trust moeen-mahmud/tap` is run, because a bare name carries no such 
 ### Or the container
 
 ```bash
-docker pull ghcr.io/moeen-mahmud/dispach:0.1.3
+docker pull ghcr.io/moeen-mahmud/dispach:0.2.0
 ```
 
 The [Docker](#docker) and [Compose](#hosting-with-compose) sections below have the run lines and
@@ -167,7 +168,7 @@ bun run build                       # builds every package the binary imports
 cd packages/cli && bun link         # puts `dispach` on your PATH
 cd ../..
 
-dispach --version                   # 0.1.2
+dispach --version                   # 0.2.0
 dispach --help
 ```
 
@@ -514,13 +515,13 @@ consequence: run it on a laptop and the policy is the only boundary there is.
 ## Docker
 
 ```bash
-docker pull ghcr.io/moeen-mahmud/dispach:0.1.3          # or build it: docker build -f docker/Dockerfile -t dispach .
+docker pull ghcr.io/moeen-mahmud/dispach:0.2.0          # or build it: docker build -f docker/Dockerfile -t dispach .
 docker run --rm -p 7420:7420 \
   --env-file examples/minimal/.env \
   -e DISPACH_API_TOKEN=pick-something \
   -v "$PWD/examples/minimal:/agent" \
   -v dispach-home:/home/dispach \
-  ghcr.io/moeen-mahmud/dispach:0.1.3
+  ghcr.io/moeen-mahmud/dispach:0.2.0
 ```
 
 The token is not optional and is not boilerplate. The image binds `0.0.0.0`, because a process
@@ -606,8 +607,9 @@ Public pull requests are welcome; [`CONTRIBUTING.md`](CONTRIBUTING.md) is the co
 
 Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms.
 
-Measured at **~53 ms** — 37 ms of interpreter and imports, 16 ms inside `Runtime.create` — and
-checked on every phase rather than at the end:
+Measured at **~87 ms** at 0.2.0 — 64 ms of interpreter and imports, 23 ms inside `Runtime.create` —
+and checked on every phase rather than at the end (it was ~53 ms at 0.1.3; the 0.2.0 packages
+account for the difference):
 
 ```bash
 bun run bench:boot

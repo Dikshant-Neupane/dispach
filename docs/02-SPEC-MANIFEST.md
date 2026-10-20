@@ -816,6 +816,8 @@ a person can write.
 
 #### `teams` — Microsoft Teams, from `@dispach/channel-teams`
 
+**Status: experimental in 0.2.0.** Tested against Bot Framework's documented shapes, not yet a real tenant. It may change within 0.2.x.
+
 ```yaml
 channels:
   - type: teams
@@ -837,6 +839,8 @@ messaged the bot at least once.
 
 #### `slack` — Slack, from `@dispach/channel-slack`
 
+**Status: experimental in 0.2.0.** Tested against Slack's documented shapes, not yet a real workspace. It may change within 0.2.x.
+
 ```yaml
 channels:
   - type: slack
@@ -855,6 +859,8 @@ The sender is their member id, the handle `allowFrom` matches and the acting par
 renders as written. A token in the wrong slot (`xoxb-` where `xapp-` belongs) is refused at load.
 
 ### `media`
+
+**Status: experimental in 0.2.0.** The `aws` providers have not run against a real account. It may change within 0.2.x.
 
 ```yaml
 media:
@@ -1058,6 +1064,8 @@ it was never given access to, and the browser cannot hide the name it resolved. 
 ---
 
 ### `standIn` and `delegation` (Phase 28)
+
+**Status: experimental in 0.2.0.** Multiplayer, on the HTTP API only. It may change within 0.2.x.
 
 ```yaml
 standIn:

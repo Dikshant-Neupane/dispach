@@ -28,7 +28,8 @@ result yet), **fix** (the prose and the evidence disagree), **remove** (no evide
 | Claim | Evidence | Scope | Limitation | Status |
 | --- | --- | --- | --- | --- |
 | Boot to `runtime.ready` under 1000 ms, CI fails at 1200 ms | `scripts/bench-boot.ts:18`, `.github/workflows/ci.yml` | Every CI run | Boot, not response latency | verified |
-| Boot measured at ~53 ms | README prose only | 7-run median, M-series laptop | No committed result | needs-run → `evals/boot/` |
+| Boot measured at ~87 ms (0.2.0; ~53 ms at 0.1.3) | README prose; `bench:boot` run 2026-10-20 | 7-run median, Apple M4 Pro, load average 5–8 | No committed result yet | needs-run → `evals/boot/` |
+| Container image 701 MB against an 800 MB ceiling | README prose | arm64 Docker Desktop, 0.1.3 | 0.2.0 adds `ffmpeg` (~100 MB): re-measure | needs-run |
 | `Runtime.create` 27 ms; remote provider refresh 1,474 ms | Decision 4.21 prose only | — | No committed result | needs-run |
 | The runtime Dispach replaced spends ~4 minutes on network calls during hook initialisation | None committed | OpenClaw gateway on our deployment | Needs the log evidence, or drop the number | needs-run (evidence) |
 | Idle silo: 104 / 120 / 178 MiB RSS and 118 / 151 / 516 ms cold start for 1 / 10 / 100 agents; resume 5–6 ms | `evals/tenancy/results.json` (2026-09-24) | linux/arm64 image, Node 24 | One machine | verified |

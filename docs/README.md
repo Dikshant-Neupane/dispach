@@ -50,7 +50,7 @@ subsystems are only testable end-to-end.
 
 ## Status
 
-**Shipped: `dispach@0.1.3`.** Phases 0 through 19 are built, the last being the VelaOps cutover. This section named Phase 3 as the
+**Shipped: `dispach@0.2.0`.** Phases 0 through 19 are built, the last being the VelaOps cutover, and the 0.2.0 line on top of them. This section named Phase 3 as the
 frontier and "everything from Phase 4 on" as design-only for long enough to be actively misleading,
 which is the drift the closing paragraph below warns about — so it is now a pointer rather than a
 second copy of the plan:
