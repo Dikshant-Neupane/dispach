@@ -18,7 +18,7 @@
 import type { AnyEvent, Runtime, TurnAdmission } from "@dispach/core"
 import { newTurnId } from "@dispach/core"
 import { bearerFromProtocols, PROTOCOL, withBearerHeader } from "./auth.ts"
-import { type Principal, reachesAgent, reachesSession } from "./principal.ts"
+import { type Principal, reachesAgent, reachesEventSession, senderFor } from "./principal.ts"
 
 /** Per-connection state, handed to the socket by `Bun.serve`'s upgrade. */
 export interface WsSession {
@@ -135,11 +135,7 @@ export function attachWebSocket(
              */
             if (event.agentId !== undefined && !reachesAgent(ws.data.principal, event.agentId))
                 continue
-            if (
-                event.sessionKey !== undefined &&
-                !reachesSession(ws.data.principal, event.sessionKey)
-            )
-                continue
+            if (!reachesEventSession(ws.data.principal, event)) continue
             // The per-socket half. One client asking for tokens is what puts them on the bus; this
             // is what stops them reaching the clients that did not ask.
             if (chunk && !ws.data.chunks) continue
@@ -372,6 +368,10 @@ export function attachWebSocket(
                     return
                 }
 
+                // Always succeeds: no frame claims a sender, so a bound key only ever fills one in.
+                const bound = senderFor(ws.data.principal, undefined)
+                const sender = bound.ok ? bound.from : undefined
+
                 // Asked before `ws.accepted`, which is a promise that the turn will run. Synchronous
                 // unless the agent has a token budget to read, so `ws.accepted` still arrives in the
                 // same tick as the frame for every agent that had no limits before they existed.
@@ -393,6 +393,8 @@ export function attachWebSocket(
                             sessionKey: frame.sessionKey ?? "api:default",
                             turnId,
                             source: "ws",
+                            // The socket carries no `from`; a key bound to a participant supplies one.
+                            ...(sender === undefined ? {} : { from: sender }),
                             signal: controller.signal,
                         })
                         .catch(() => {})

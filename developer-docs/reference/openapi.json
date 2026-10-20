@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "Dispach agent server",
-        "version": "0.1.3",
+        "version": "0.2.0-pilot.17",
         "description": "Generated from the router table and the request schemas — see openapi.ts. The binding contract is docs/04-SPEC-WIRE.md, which is checked against the code; @dispach/client's types are the response reference."
     },
     "servers": [
@@ -209,6 +209,341 @@
                     },
                     "404": {
                         "description": "No such agent, or it is switched off."
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete an agent for good: off this host, its rows out of the store, its directory off disk. Needs ?confirm=<id>.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "no ?confirm=<id>"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    },
+                    "409": {
+                        "description": "two sandbox directories declare this id"
+                    },
+                    "501": {
+                        "description": "this server cannot delete agents"
+                    }
+                }
+            }
+        },
+        "/v1/backup": {
+            "get": {
+                "summary": "The silo as a tar.gz: a consistent store snapshot and every hosted agent's directory, with a backup.json manifest. No .env or .git unless asked for. An admin key with no agents scope.",
+                "parameters": [
+                    {
+                        "name": "include",
+                        "in": "query",
+                        "required": false,
+                        "description": "Any of env, git, home, comma-separated: each agent's .env (its secrets), its .git directories, and the rest of the state directory under home/.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "include names something other than env, git or home, or home on a server with no state directory"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "403": {
+                        "description": "the key is scoped to some agents"
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/export": {
+            "get": {
+                "summary": "A slice of the agent as a JSON bundle: its carried memory file, memory archive and knowledge. Never the manifest, secrets or skills.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/import": {
+            "post": {
+                "summary": "Merge a bundle into the agent: memory note by note, knowledge kept or overwritten. Reloads when the carried file or knowledge changed, and restores everything if that reload refuses.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "a path a bundle cannot carry, or a bundle the agent would not load"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "bundle": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                            "type": "string"
+                                        },
+                                        "additionalProperties": {},
+                                        "code": "bundle_files_invalid",
+                                        "hint": "Send { \"bundle\": <the body GET /v1/agents/:id/export returned> }.",
+                                        "description": "A bundle from GET /v1/agents/:id/export: MEMORY.md, memory/<name>.md and knowledge/<name>.md, nothing else."
+                                    },
+                                    "mode": {
+                                        "code": "bundle_mode_invalid",
+                                        "hint": "Either \"skip\" (keep a knowledge file that exists, the default) or \"overwrite\". Memory is always merged note by note.",
+                                        "description": "What to do with a knowledge file the agent already has. Memory is merged either way.",
+                                        "type": "string",
+                                        "enum": [
+                                            "skip",
+                                            "overwrite"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "bundle"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/vars": {
+            "patch": {
+                "summary": "Apply changed template variables: re-render the files nobody edited since they were rendered, then reload.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "files changed and a turn is running: the reload lands when it ends"
+                    },
+                    "400": {
+                        "description": "a secret or undeclared variable, or a result the agent would not load (every file is put back)"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    },
+                    "409": {
+                        "description": "the agent was not made from a template on 0.2.0-pilot.5 or later"
+                    },
+                    "501": {
+                        "description": "this server has no templates"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "vars": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                            "type": "string"
+                                        },
+                                        "additionalProperties": {
+                                            "type": "string",
+                                            "code": "template_value_invalid",
+                                            "hint": "Template values are one line of text, sent as strings.",
+                                            "description": "One variable's value."
+                                        },
+                                        "code": "vars_required",
+                                        "hint": "Send { \"vars\": { \"userName\": \"…\" } }: the template variables to change. The rest keep the values the agent was made with.",
+                                        "description": "The template variables to change. Only files nobody has edited since they were rendered are rewritten."
+                                    }
+                                },
+                                "required": [
+                                    "vars"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/workspace/{file}": {
+            "put": {
+                "summary": "Replace one of the agent's declared workspace files; reload it, or diagnose it when it is not running.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "file",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "a running agent would not load with the new text (the old text is put back)"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    },
+                    "409": {
+                        "description": "an agent with no manifest file, or one whose manifest does not parse"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "content": {
+                                        "type": "string",
+                                        "code": "workspace_content_required",
+                                        "hint": "Send { \"content\": \"<the whole file>\" }. It replaces the file; frontmatter included.",
+                                        "description": "The file's new text, in full, frontmatter included."
+                                    }
+                                },
+                                "required": [
+                                    "content"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/tools/refresh": {
+            "post": {
+                "summary": "Fetch the tool providers' catalogues and schemas now, and reload the agent only if what it serves changed.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "something changed and a turn is running: the reload lands when it ends"
+                    },
+                    "400": {
+                        "description": "a provider the agent does not have, or a reload the agent refuses"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "providers": {
+                                        "code": "tools_refresh_providers_invalid",
+                                        "hint": "Name provider ids from the agent's tools.providers, e.g. { \"providers\": [\"composio\"] }, or send {} to refresh every one.",
+                                        "description": "Which providers to refresh. Omit for all of them.",
+                                        "minItems": 1,
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -464,6 +799,79 @@
                 }
             }
         },
+        "/v1/agents/{id}/deliveries": {
+            "post": {
+                "summary": "Send exact text on one of the agent's channels, with no turn. It joins that conversation's history as the agent's.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "queued, or already queued under this key"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "channel": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "delivery_channel_required",
+                                        "hint": "Name a channel id from the agent's manifest, e.g. { \"channel\": \"tg\", ... } — the id, not the type.",
+                                        "description": "The channel id to send on."
+                                    },
+                                    "to": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "delivery_recipient_required",
+                                        "hint": "The channel's own address for the conversation: a Telegram chat id, a WhatsApp JID, a Slack channel id. The peer id an inbound message arrived with is always right.",
+                                        "description": "Who to send it to, in the channel's own addressing."
+                                    },
+                                    "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "delivery_text_required",
+                                        "hint": "Send { \"text\": \"...\" }. An empty message has nothing to deliver.",
+                                        "description": "The exact text to send. No model turn runs."
+                                    },
+                                    "key": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "delivery_key_required",
+                                        "hint": "Any string unique to this send, such as your own message id. A retry with the same key is not sent or recorded twice.",
+                                        "description": "Idempotency key: a repeated key is accepted and does nothing."
+                                    }
+                                },
+                                "required": [
+                                    "channel",
+                                    "to",
+                                    "text",
+                                    "key"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/agents/{id}/messages": {
             "post": {
                 "summary": "Start a turn. Returns once accepted; the turn runs detached.",
@@ -510,6 +918,42 @@
                                         "description": "Which conversation this belongs to. Defaults to `api:default`.",
                                         "type": "string",
                                         "minLength": 1
+                                    },
+                                    "role": {
+                                        "code": "model_role_unknown",
+                                        "hint": "Name a role declared under model: in the manifest (GET /v1/agents/:id/config lists them), or omit role to run on main. A person adds one with PATCH /config path model.<name>.",
+                                        "description": "A model role to run this turn on instead of main: one declared under `model:`, as a schedule names one with `role:`. This turn only; the conversation's other turns are unaffected. Refused before the turn starts when no such role is declared.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    },
+                                    "runtimeNote": {
+                                        "code": "message_note_invalid",
+                                        "hint": "Send runtimeNote as non-empty text of at most 8000 characters: the active project, today's date in the person's zone, an attachment's extracted text.",
+                                        "description": "Your application's note about this message: shown to the model in its own block before the text, labelled as not written by the person, for this turn only. Kept on the turn record (`GET …/turns`), never in history. Refused when `from` is an agent.",
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 8000
+                                    },
+                                    "images": {
+                                        "code": "message_images_invalid",
+                                        "hint": "Send images as [{ \"path\": \"files/…/shot.png\" }] (relative to the agent's directory), or [{ \"data\": \"<base64>\", \"mediaType\": \"image/png\" }].",
+                                        "description": "Images sent with this message: PNG, JPEG, GIF or WebP, at most five, 3.75 MB each. A path inside the agent's directory, or inline base64 (within the 1 MB body limit). The model receives them on this turn; history keeps an `[image: <path>]` line.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "data": {
+                                                    "type": "string"
+                                                },
+                                                "mediaType": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "additionalProperties": false
+                                        }
                                     },
                                     "deliver": {
                                         "anyOf": [
@@ -578,6 +1022,10 @@
                                     },
                                     "chunks": {
                                         "description": "Include per-token `model.chunk` frames. Off by default — the reader decides.",
+                                        "type": "boolean"
+                                    },
+                                    "children": {
+                                        "description": "Include the events of subagents this turn runs (they carry `parentTurnId`). Off by default.",
                                         "type": "boolean"
                                     }
                                 },
@@ -811,8 +1259,8 @@
                                             },
                                             "can": {
                                                 "code": "key_scope_can_invalid",
-                                                "hint": "Send { \"can\": [\"chat\", \"read\"] }. The four are read (every GET), chat (send a message, answer an approval, stop a turn), write (schedules, phase, clearing a session) and admin (keys, provisioning, start/stop/reload). Absent means all four; an empty array means none, and is honoured as written.",
-                                                "description": "Capabilities this key may exercise. Absent means all four.",
+                                                "hint": "Send { \"can\": [\"chat\", \"read\"] }. read (every GET), chat (send a message, answer an approval, stop a turn), write (schedules, phase, clearing a session), admin (keys, provisioning, start/stop/reload), and peer (a plugin route that asks for it — an A2A endpoint — and nothing else). Absent means all five; an empty array means none, and is honoured as written.",
+                                                "description": "Capabilities this key may exercise. Absent means all of them.",
                                                 "type": "array",
                                                 "items": {
                                                     "type": "string",
@@ -820,9 +1268,17 @@
                                                         "read",
                                                         "chat",
                                                         "write",
-                                                        "admin"
+                                                        "admin",
+                                                        "peer"
                                                     ]
                                                 }
+                                            },
+                                            "participant": {
+                                                "code": "key_scope_participant_invalid",
+                                                "hint": "Send { \"participant\": \"user:018f…\" } — the id this key speaks for. Every turn it starts acts for that participant: a from naming anyone else is refused, and an omitted one is filled in. Omit it for a backend that names senders itself.",
+                                                "description": "The participant every turn this key starts acts for. Absent: any sender.",
+                                                "type": "string",
+                                                "minLength": 1
                                             },
                                             "expiresIn": {
                                                 "code": "key_scope_expires_invalid",
@@ -971,6 +1427,789 @@
                     },
                     "404": {
                         "description": "no such subscription, or one outside this key's reach"
+                    }
+                }
+            }
+        },
+        "/v1/participants": {
+            "post": {
+                "summary": "Register a human participant under the embedder's own id. No account is stored.",
+                "responses": {
+                    "201": {
+                        "description": "registered, or updated if the id existed"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "participant_id_invalid",
+                                        "hint": "A participant id as your system knows the person, e.g. \"user:018f…\". Agents are \"agent:<agentId>\".",
+                                        "description": "The participant id."
+                                    },
+                                    "name": {
+                                        "description": "A display name, shown to agents beside the id.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    },
+                                    "role": {
+                                        "code": "participant_role_invalid",
+                                        "hint": "Either \"admin\" (may assign agents to members) or \"member\". Omitted is \"member\".",
+                                        "description": "What the participant may do: \"admin\" also assigns agents.",
+                                        "type": "string",
+                                        "enum": [
+                                            "admin",
+                                            "member"
+                                        ]
+                                    },
+                                    "title": {
+                                        "description": "A job title, as the team knows the person. Told to an agent answering another member's agent about whom it represents and who is asking. Not a permission.",
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                    },
+                                    "timezone": {
+                                        "description": "An IANA timezone, such as \"Europe/London\". Told to an agent answering another member's agent, so \"tomorrow at nine\" means the right hour. Refused when the runtime does not know it.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    }
+                                },
+                                "required": [
+                                    "id"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "summary": "The registered human participants.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/participants/{participantId}": {
+            "delete": {
+                "summary": "Remove a participant and their conversation memberships.",
+                "parameters": [
+                    {
+                        "name": "participantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/conversations": {
+            "post": {
+                "summary": "Create a room or a DM among participants and agents (agent:<id>).",
+                "responses": {
+                    "201": {
+                        "description": "created"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "403": {
+                        "description": "a participant-bound key creating a conversation it is not in"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "room",
+                                            "dm"
+                                        ],
+                                        "code": "conversation_kind_invalid",
+                                        "hint": "\"dm\" is one human and one agent and is always answered; \"room\" is anyone, and an agent answers only when mentioned.",
+                                        "description": "A room or a direct conversation."
+                                    },
+                                    "members": {
+                                        "minItems": 1,
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        },
+                                        "code": "conversation_members_required",
+                                        "hint": "Participant ids: registered humans, and agents as \"agent:<agentId>\".",
+                                        "description": "Who is in it."
+                                    },
+                                    "title": {
+                                        "description": "A name for a room, for the embedder's own listing.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "members"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "summary": "The conversations this credential can see.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/conversations/{conversationId}": {
+            "get": {
+                "summary": "One conversation and its members.",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/conversations/{conversationId}/members": {
+            "patch": {
+                "summary": "Add or remove members of a room.",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "add": {
+                                        "code": "conversation_members_required",
+                                        "hint": "Participant ids to add.",
+                                        "description": "Participant ids to add.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    },
+                                    "remove": {
+                                        "code": "conversation_members_required",
+                                        "hint": "Participant ids to remove.",
+                                        "description": "Participant ids to remove.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/conversations/{conversationId}/messages": {
+            "post": {
+                "summary": "Post a human member's message. In a room only the mentioned agents answer; in a DM the agent always does. Their replies arrive as conversation.message.",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "logged; the turns it starts run behind the response"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "403": {
+                        "description": "a participant-bound key naming another author"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "message_text_required",
+                                        "hint": "Send { \"text\": \"…\" }.",
+                                        "description": "What was said."
+                                    },
+                                    "mentions": {
+                                        "code": "conversation_mention_unknown",
+                                        "hint": "Member participant ids this message addresses, e.g. [\"agent:crew\"]. In a room only a mentioned agent answers.",
+                                        "description": "Members this addresses. In a room, the agents that answer.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    },
+                                    "authorId": {
+                                        "code": "conversation_author_required",
+                                        "hint": "Who said it. A key bound to a participant fills this in and may name no one else; an unbound key must name the author.",
+                                        "description": "The human member who said it. Filled in from a participant-bound key.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    }
+                                },
+                                "required": [
+                                    "text"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "summary": "The conversation's log, oldest first, after a sequence number.",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/participants/{participantId}/presence": {
+            "put": {
+                "summary": "Push whether a person is there. In a DM between two people, an offline person's agent stands in for them.",
+                "parameters": [
+                    {
+                        "name": "participantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "403": {
+                        "description": "a participant-bound key setting someone else's presence"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "presence": {
+                                        "type": "string",
+                                        "enum": [
+                                            "online",
+                                            "offline"
+                                        ],
+                                        "code": "presence_invalid",
+                                        "hint": "Send { \"presence\": \"online\" } or \"offline\". It is pushed by you, never inferred; until it is, a person reads as online and no agent stands in for them.",
+                                        "description": "Whether the person is there. Decides whether their agent stands in for them in a DM."
+                                    }
+                                },
+                                "required": [
+                                    "presence"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/actions": {
+            "get": {
+                "summary": "Mutating calls stand-ins queued for their owners. A member-bound key sees its own.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/actions/{actionId}": {
+            "post": {
+                "summary": "Approve or decline a queued action. Approved, the exact call runs as the owner's agent and the outcome is posted in the DM.",
+                "parameters": [
+                    {
+                        "name": "actionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "no such action, or not this key's to decide"
+                    },
+                    "409": {
+                        "description": "already decided"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "approve": {
+                                        "type": "boolean",
+                                        "code": "action_decision_required",
+                                        "hint": "Send { \"approve\": true } to run the queued call as it was asked, or false to decline it.",
+                                        "description": "Run the queued call (true) or decline it (false)."
+                                    }
+                                },
+                                "required": [
+                                    "approve"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/assignee": {
+            "put": {
+                "summary": "Record which member an agent works for. An admin participant's act.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "participantId": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "participant_id_invalid",
+                                        "hint": "A participant id as your system knows the person, e.g. \"user:018f…\". Agents are \"agent:<agentId>\".",
+                                        "description": "The participant id (assignee)."
+                                    },
+                                    "channelIds": {
+                                        "code": "assignee_channel_ids_invalid",
+                                        "hint": "A list of the owner's own channel senders as a channel turn names them, e.g. [\"whatsapp:8801711223344\", \"slack:U0123ABC\"].",
+                                        "description": "The owner's own channel senders (pilot.15). A turn from one of these acts as the owner and keeps the owner's personal tools (Composio, MCP servers marked personal). Absent, no channel turn does.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "participantId"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "summary": "Who the agent is assigned to, as `{id, assignment}`; `assignment` is null when nobody.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Clear an agent's assignment.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                }
+            }
+        },
+        "/v1/memory/notes": {
+            "post": {
+                "summary": "Add a note to a shared memory scope — the space, a person's owner scope, or a project. Agents recall it when a turn is about it.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "403": {
+                        "description": "this participant may not write that scope"
+                    },
+                    "404": {
+                        "description": "the scope's owner or project does not exist"
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "scope": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "memory_scope_invalid",
+                                        "hint": "A shared scope: \"space\", \"owner:<participantId>\" or \"project:<projectId>\".",
+                                        "description": "Where the note goes. `owner:<id>` is written only by that person; `space` by an admin or the designated space writer; a project by an admin."
+                                    },
+                                    "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "memory_note_empty",
+                                        "hint": "Send { \"scope\": \"space\", \"text\": \"…\" } — one or two sentences worth remembering.",
+                                        "description": "The note. Recalled into an agent's prompt when a turn is about it."
+                                    }
+                                },
+                                "required": [
+                                    "scope",
+                                    "text"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "summary": "Every note in one shared scope, oldest first. An owner scope is readable by its owner.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/memory/notes/{noteId}": {
+            "delete": {
+                "summary": "Remove a note. Whoever may write its scope may remove it.",
+                "parameters": [
+                    {
+                        "name": "noteId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/participants/{participantId}/memory/reads": {
+            "get": {
+                "summary": "The person's audit: every time an agent recalled their owner scope for somebody else, stand-ins included.",
+                "parameters": [
+                    {
+                        "name": "participantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/projects": {
+            "get": {
+                "summary": "Projects, each with the agents that share its memory.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/projects/{projectId}": {
+            "put": {
+                "summary": "Define a project, or replace which agents share its memory. An admin's act.",
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "description": "A display name for the embedder's own listing.",
+                                        "type": "string",
+                                        "minLength": 1
+                                    },
+                                    "agents": {
+                                        "code": "project_agents_invalid",
+                                        "hint": "Agent ids, bare (\"crew\", not \"agent:crew\"). Given, it replaces the membership; omitted, it is left alone.",
+                                        "description": "The agents that share this project's memory. Replaces the list when given.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Remove a project and its notes.",
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                }
+            }
+        },
+        "/v1/memory/space/writer": {
+            "put": {
+                "summary": "Name the one non-admin who may write the space. An agent named here saves its memory_write to the space.",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "writer": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "code": "space_writer_invalid",
+                                        "hint": "A registered participant id, or \"agent:<agentId>\" for an agent whose memory_write should go to the space.",
+                                        "description": "The one non-admin who may write the space. An agent named here saves every memory_write to the space, so name one that holds nobody's private context."
+                                    }
+                                },
+                                "required": [
+                                    "writer"
+                                ]
+                            }
+                        }
                     }
                 }
             }
@@ -1277,6 +2516,62 @@
                                 },
                                 "required": [
                                     "phase"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/agents/{id}/sessions/{key}/recall": {
+            "post": {
+                "summary": "Keep a conversation out of history recall, or put it back; its messages stay.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "No credential, or one this server does not accept."
+                    },
+                    "404": {
+                        "description": "No such agent, or it is switched off."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "type": "object",
+                                "properties": {
+                                    "recall": {
+                                        "type": "boolean",
+                                        "code": "recall_invalid",
+                                        "hint": "Send { \"recall\": false } to keep this conversation out of history recall, or true to put it back. Its messages are kept either way.",
+                                        "description": "Whether this conversation is indexed for history recall."
+                                    }
+                                },
+                                "required": [
+                                    "recall"
                                 ]
                             }
                         }

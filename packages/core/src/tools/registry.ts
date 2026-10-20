@@ -74,12 +74,15 @@ export class ToolRegistry {
      * question they asked the agent precisely because they did not want to read the manifest.
      */
     readonly notEnabled: readonly ToolAvailability[]
+    /** The providers it resolved from, kept for `resolveMore`. Never the built-in one. */
+    readonly #providers: readonly ToolProvider[]
 
     private constructor(init: {
         tools: readonly Tool[]
         dropped: readonly DroppedTool[]
         warnings: readonly ErrorDetail[]
         notEnabled?: readonly ToolAvailability[]
+        providers?: readonly ToolProvider[]
     }) {
         const bySlug = new Map<string, Tool>()
         const byNormalised = new Map<string, Tool>()
@@ -93,6 +96,33 @@ export class ToolRegistry {
         this.dropped = init.dropped
         this.warnings = init.warnings
         this.notEnabled = init.notEnabled ?? []
+        this.#providers = init.providers ?? []
+    }
+
+    /**
+     * Tools for slugs pinned after load, from what the providers can answer **without the network**
+     * (pilot.14): a slug `composio_search` just cached. `resolve()` is cache-only by contract, so this
+     * is too. Trust defaults the way it does at load, a provider tool `untrusted` unless it says
+     * otherwise, and a slug already here is not resolved twice. Returns what resolved; the rest wait
+     * for the reload.
+     */
+    async resolveMore(slugs: readonly string[]): Promise<readonly Tool[]> {
+        const wanted = slugs.filter((slug) => !this.has(slug))
+        if (wanted.length === 0) return []
+        const found = new Map<string, Tool>()
+        for (const provider of this.#providers) {
+            for (const tool of await provider.resolve(wanted)) {
+                const key = normalise(tool.spec.slug)
+                if (found.has(key) || this.has(tool.spec.slug)) continue
+                found.set(
+                    key,
+                    tool.spec.trust === undefined
+                        ? { ...tool, spec: { ...tool.spec, trust: "untrusted" } }
+                        : tool,
+                )
+            }
+        }
+        return [...found.values()]
     }
 
     /** An agent with no tools configured. Distinct from one whose resolution produced nothing. */
@@ -168,7 +198,23 @@ export class ToolRegistry {
             }
         }
 
-        const missing = requested.filter((slug) => !found.has(normalise(slug)))
+        // Found and not loadable (pilot.16): named for what it is, and not reported as missing.
+        const refused = providers
+            .flatMap((provider) => provider.refused?.() ?? [])
+            .filter((entry) => !found.has(normalise(entry.slug)))
+        const refusedSlugs = new Set(refused.map((entry) => normalise(entry.slug)))
+        for (const entry of refused) {
+            const index = pinned.findIndex((slug) => normalise(slug) === normalise(entry.slug))
+            warnings.push({
+                code: "tool_schema_unsupported",
+                message: `${entry.slug} is pinned and was left out: ${entry.detail.message}`,
+                hint: `The rest of the agent loads without it. ${entry.detail.hint}`,
+                ...(index >= 0 ? { field: `tools.pinned[${index}]` } : {}),
+            })
+        }
+        const missing = requested.filter(
+            (slug) => !found.has(normalise(slug)) && !refusedSlugs.has(normalise(slug)),
+        )
         if (missing.length > 0) {
             /**
              * **Warned and omitted, never fatal.** A pinned slug nothing can resolve is almost
@@ -248,7 +294,17 @@ export class ToolRegistry {
             if (provider.available === undefined) continue
             offered.push(...(await provider.available()))
         }
-        const notEnabled = offered.filter((entry) => !found.has(normalise(entry.slug)))
+        const notEnabled = [
+            ...offered.filter(
+                (entry) =>
+                    !found.has(normalise(entry.slug)) && !refusedSlugs.has(normalise(entry.slug)),
+            ),
+            ...refused.map((entry) => ({
+                slug: entry.slug,
+                summary: "pinned, but it could not be loaded",
+                unavailable: true,
+            })),
+        ]
 
         const { kept, dropped } = applyBudget(all, budget)
         if (dropped.length > 0) {
@@ -274,7 +330,7 @@ export class ToolRegistry {
             })
         }
 
-        return new ToolRegistry({ tools: kept, dropped, warnings, notEnabled })
+        return new ToolRegistry({ tools: kept, dropped, warnings, notEnabled, providers })
     }
 
     get size(): number {
@@ -317,6 +373,26 @@ export class ToolRegistry {
             dropped: this.dropped,
             warnings: this.warnings,
             notEnabled: this.notEnabled,
+            providers: this.#providers,
+        })
+    }
+
+    /**
+     * The same registry, order and specs unchanged, with some tools replaced by `swap`.
+     *
+     * For a routed subagent: the spec is what slot 1 renders and what the policy matches, so keeping
+     * it is what keeps the cached prefix and the call's policy identity; only the handler differs.
+     */
+    withSwapped(swap: (tool: Tool) => Tool | undefined): ToolRegistry {
+        const tools = this.#order
+            .map((spec) => this.#bySlug.get(spec.slug))
+            .filter((tool): tool is Tool => tool !== undefined)
+        return new ToolRegistry({
+            tools: tools.map((tool) => swap(tool) ?? tool),
+            dropped: this.dropped,
+            warnings: this.warnings,
+            notEnabled: this.notEnabled,
+            providers: this.#providers,
         })
     }
 
@@ -339,6 +415,7 @@ export class ToolRegistry {
             dropped: this.dropped,
             warnings: this.warnings,
             notEnabled: this.notEnabled,
+            providers: this.#providers,
         })
     }
 
@@ -349,6 +426,11 @@ export class ToolRegistry {
 
     has(slug: string): boolean {
         return this.#bySlug.has(slug) || this.#byNormalised.has(normalise(slug))
+    }
+
+    /** Which provider resolved a slug, or `undefined` when nothing did. */
+    providerOf(slug: string): string | undefined {
+        return (this.#bySlug.get(slug) ?? this.#byNormalised.get(normalise(slug)))?.spec.provider
     }
 
     /**

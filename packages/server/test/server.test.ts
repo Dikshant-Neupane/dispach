@@ -18,6 +18,7 @@ import {
     cleanupWorkspaces,
     fakeSocket,
     harness,
+    MANIFEST,
     PHASED_MANIFEST,
     PINNED_MANIFEST,
     readSse,
@@ -200,15 +201,14 @@ describe("agents", () => {
         await runtime.stop()
     })
 
-    test("a reload during a turn is 409, and the turn is not killed to make room", async () => {
+    test("a reload during a turn is pending, the turn finishes on the old instance, then the swap", async () => {
         /**
-         * `dispose` refuses while `inFlight > 0`, and this route inherits that rather than
-         * deciding it. The trade is deliberate: picking up a configuration change is not worth
-         * discarding somebody's half-finished answer, and a reload that aborted a turn would be
-         * indistinguishable from the runtime crashing from the caller's side.
+         * It used to be 409, and in a team silo with a turn almost always running that meant a reload
+         * nobody could land (doc 16 R4). The trade it protected still holds: picking up a setting is
+         * not worth discarding somebody's half-finished answer, so the turn is never killed. What
+         * changed is who waits: the reload does, instead of the caller retrying.
          *
-         * The model hangs until released, which is what makes the window real — a scripted reply
-         * completes faster than the request can be made.
+         * The model hangs until released, which is what makes the window real.
          */
         let release: (() => void) | undefined
         const held = new Promise<void>((resolve) => {
@@ -223,25 +223,36 @@ describe("agents", () => {
                 )
             }) as unknown as typeof fetch,
         })
-
-        const turn = call("POST", "/v1/agents/assistant/messages", {
-            body: { text: "hello", deliver: "none" },
+        const before = runtime.agent("assistant")
+        const reloaded = new Promise<Record<string, unknown>>((resolve) => {
+            runtime.bus.on("*", (event) => {
+                if (event.type === "agent.reloaded") resolve(event.data as Record<string, unknown>)
+            })
         })
-        // Wait for the turn to actually be in flight rather than merely requested: a 409 that
-        // arrived because nothing had started yet would pass for the wrong reason.
-        for (let i = 0; i < 200 && (runtime.list()[0]?.inFlight ?? 0) === 0; i += 1) {
+
+        const accepted = (await (
+            await call("POST", "/v1/agents/assistant/messages", {
+                body: { text: "hello", deliver: "none" },
+            })
+        ).json()) as { turnId: string }
+        // In flight rather than merely requested, or "pending" would be passing for the wrong reason.
+        for (let i = 0; i < 200 && before.inFlight === 0; i += 1) {
             await new Promise((resolve) => setTimeout(resolve, 5))
         }
-        expect(runtime.list()[0]?.inFlight).toBeGreaterThan(0)
+        expect(before.inFlight).toBeGreaterThan(0)
 
         const response = await call("POST", "/v1/agents/assistant/reload")
-        expect(response.status).toBe(409)
-        const body = (await response.json()) as { error: { code: string; hint: string } }
-        expect(body.error.code).toBe("agent_turn_in_flight")
-        expect(body.error.hint).not.toBe("")
+        expect(response.status).toBe(202)
+        expect(await response.json()).toMatchObject({ status: "pending", running: 1, adopted: [] })
+        // Still the old instance: nothing was torn down under the running turn.
+        expect(runtime.agent("assistant")).toBe(before)
 
         release?.()
-        await turn
+        expect(await reloaded).toMatchObject({ ok: true, adopted: ["assistant"], disposed: true })
+        const row = await runtime.store.turns.get(accepted.turnId)
+        expect(row?.status).toBe("final")
+        expect(row?.text).toBe("done")
+        expect(runtime.agent("assistant")).not.toBe(before)
         await runtime.stop()
     })
 
@@ -255,6 +266,40 @@ describe("agents", () => {
             configured: boolean
         }
         expect(body).toEqual({ skills: [], configured: false })
+        await runtime.stop()
+    })
+
+    test("the skills listing says which skills may run their scripts (pilot.14)", async () => {
+        const skill = (name: string) =>
+            `---\nname: ${name}\ndescription: The ${name} skill does a thing.\n---\nDo it.\n`
+        const { call, runtime } = await harness({
+            manifest: `${MANIFEST}skills:\n  dir: ./skills\n  trusted: [ours]\n`,
+            files: {
+                "skills/ours/SKILL.md": skill("ours"),
+                "skills/theirs/SKILL.md": skill("theirs"),
+            },
+        })
+        const body = (await (await call("GET", "/v1/agents/assistant/skills")).json()) as {
+            skills: { name: string; trusted: boolean }[]
+        }
+        expect(Object.fromEntries(body.skills.map((entry) => [entry.name, entry.trusted]))).toEqual(
+            {
+                ours: true,
+                theirs: false,
+            },
+        )
+        await runtime.stop()
+    })
+
+    test("delivery.reply is a field PATCH /config sets (pilot.14)", async () => {
+        const { call, runtime, dir } = await harness()
+        const response = await call("PATCH", "/v1/agents/assistant/config", {
+            body: { path: "delivery.reply", value: "final" },
+        })
+        expect(response.status).toBe(200)
+        const { readFileSync } = await import("node:fs")
+        expect(readFileSync(join(dir, "agent.yaml"), "utf8")).toContain("reply: final")
+        expect(runtime.agent("assistant").manifest.delivery?.reply).toBe("final")
         await runtime.stop()
     })
 
@@ -624,6 +669,34 @@ describe("sessions", () => {
             await call("GET", "/v1/agents/assistant/sessions/api%3As")
         ).json()) as { phase?: string }
         expect(body.phase).toBe("triage")
+        await runtime.stop()
+    })
+
+    test("a session switched out of recall says so and keeps its messages (pilot.10)", async () => {
+        const { call, runtime } = await withSession()
+        const response = await call("POST", "/v1/agents/assistant/sessions/api%3As/recall", {
+            body: { recall: false },
+        })
+        expect(response.status).toBe(200)
+        const record = (await (
+            await call("GET", "/v1/agents/assistant/sessions/api%3As")
+        ).json()) as { recall?: boolean }
+        expect(record.recall).toBe(false)
+        const page = (await (
+            await call("GET", "/v1/agents/assistant/sessions/api%3As/messages")
+        ).json()) as { messages: unknown[] }
+        expect(page.messages.length).toBeGreaterThan(0)
+        const refused = await call("POST", "/v1/agents/assistant/sessions/api%3As/recall", {
+            body: { recall: "no" },
+        })
+        expect(refused.status).toBe(400)
+        expect(((await refused.json()) as { error: { code: string } }).error.code).toBe(
+            "recall_invalid",
+        )
+        const missing = await call("POST", "/v1/agents/assistant/sessions/api%3Anope/recall", {
+            body: { recall: false },
+        })
+        expect(missing.status).toBe(404)
         await runtime.stop()
     })
 

@@ -183,6 +183,25 @@ test("the observation stays small enough to survive the budget", async () => {
     expect(observation.length).toBeLessThan(2000)
 })
 
+test("a tool this runtime could not load is marked unavailable, not offered to pin (pilot.16)", async () => {
+    const broken: ComposioTool = {
+        ...schema("GMAIL_CREATE_EMAIL_DRAFT", "Creates a draft.", []),
+        input_parameters: {
+            type: "object",
+            properties: { x: { anyOf: [{ type: "object", properties: {} }, { type: "string" }] } },
+        },
+    }
+    const { context } = stub(SEARCH_DATA, {
+        schemas: { ...SCHEMAS, GMAIL_CREATE_EMAIL_DRAFT: broken },
+    })
+    const observation = await searchTool(context).handler({ use_case: "send an email" }, CONTEXT)
+    expect(observation).toContain("n/a    GMAIL_CREATE_EMAIL_DRAFT")
+    expect(observation).toContain("unavailable — do not pin it")
+    expect(observation).toContain("anyOf")
+    // The loadable ones are offered as before.
+    expect(observation).toContain("write  GMAIL_SEND_EMAIL")
+})
+
 test("the observation states the next step, which no model can infer", async () => {
     // Pin, then restart, and connect first if the account is not linked. Leaving this out is what
     // the transcript that motivated the feature looked like: a model that had the facts and could
@@ -403,4 +422,18 @@ test("the workbench observes what the code printed, not the envelope it came in"
     // Silence stated, not rendered blank — an empty observation reads as a tool that failed.
     expect(renderWorkbench({ stdout: "", stderr: "" })).toContain("printed nothing")
     expect(renderWorkbench({ stdout: "", stderr: "boom" })).toContain("stderr:\nboom")
+})
+
+test("every Composio tool is the owner's, meta tools included (pilot.15)", async () => {
+    const { ComposioProvider } = await import("../src/provider.ts")
+    const { mkdtempSync } = await import("node:fs")
+    const { tmpdir } = await import("node:os")
+    const { join } = await import("node:path")
+    const provider = new ComposioProvider({
+        dir: mkdtempSync(join(tmpdir(), "composio-personal-")),
+        env: { COMPOSIO_API_KEY: "k" },
+        fetch: async () => new Response("{}", { status: 200 }),
+    })
+    const tools = await provider.resolve(["composio_search", "composio_connect"])
+    expect(tools.map((tool) => tool.spec.personal)).toEqual([true, true])
 })

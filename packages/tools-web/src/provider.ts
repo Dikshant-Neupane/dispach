@@ -33,6 +33,7 @@ import {
 import { BACKEND_IDS, type BackendId, backend } from "./backends.ts"
 import { webConfigInvalid } from "./errors.ts"
 import { DEFAULT_MAX_BYTES, type FetchLike, fetchTool } from "./fetch.ts"
+import { crawlTool, type FirecrawlConfig, firecrawlFetchTool, mapTool } from "./firecrawl.ts"
 import { type LookupLike, systemLookup } from "./guard.ts"
 import { WEB_PROVIDER_ID } from "./paths.ts"
 import { searchTool } from "./search.ts"
@@ -52,12 +53,21 @@ export interface WebProviderOptions {
     readonly backend?: BackendId
     /** Env var *name*. Never a key. Defaults to the chosen backend's conventional variable. */
     readonly apiKeyEnv?: string
+    /** The search backend's address before its path: a relay that adds the real key (pilot.10). */
+    readonly baseUrl?: string
     readonly maxBytes?: number
+    /**
+     * Firecrawl, when configured: `web_fetch` reads through its scrape, and `web_crawl` and `web_map`
+     * exist. Absent, `web_fetch` is the plain client it always was and the other two are not offered.
+     */
+    readonly firecrawl?: FirecrawlConfig
     readonly fetch?: FetchLike
     readonly lookup?: LookupLike
 }
 
 export const WEB_TOOL_SLUGS: readonly string[] = ["web_search", "web_fetch"]
+/** Offered only with Firecrawl configured. */
+export const FIRECRAWL_TOOL_SLUGS: readonly string[] = ["web_crawl", "web_map"]
 
 function normalise(slug: string): string {
     return slug.toLowerCase().replace(/[\s_.-]+/g, "")
@@ -78,19 +88,36 @@ export class WebProvider implements ToolProvider {
             searchTool({
                 backend: id,
                 apiKeyEnv: options.apiKeyEnv ?? chosen.defaultKeyEnv,
+                ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
                 env: options.env,
                 fetch: fetchImpl,
             }),
-            fetchTool({
-                lookup,
-                fetch: fetchImpl,
-                maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
-                userAgent: USER_AGENT,
-            }),
+            ...(options.firecrawl === undefined
+                ? [
+                      fetchTool({
+                          lookup,
+                          fetch: fetchImpl,
+                          maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
+                          userAgent: USER_AGENT,
+                      }),
+                  ]
+                : (() => {
+                      const firecrawl = {
+                          config: options.firecrawl,
+                          env: options.env,
+                          fetch: fetchImpl,
+                          lookup,
+                      }
+                      return [
+                          firecrawlFetchTool(firecrawl),
+                          crawlTool(firecrawl),
+                          mapTool(firecrawl),
+                      ]
+                  })()),
         ]
     }
 
-    /** Two entries, so an agent with neither pinned can still say the capability exists. */
+    /** Every entry, so an agent with none pinned can still say the capability exists. */
     available(): Promise<readonly ToolAvailability[]> {
         return Promise.resolve(
             this.#tools.map((tool) => ({ slug: tool.spec.slug, summary: tool.spec.summary })),
@@ -107,7 +134,8 @@ export class WebProvider implements ToolProvider {
     }
 }
 
-const CONFIG_KEYS = ["backend", "apiKeyEnv", "maxBytes"] as const
+const CONFIG_KEYS = ["backend", "apiKeyEnv", "baseUrl", "maxBytes", "firecrawl"] as const
+const FIRECRAWL_KEYS = ["apiKeyEnv", "baseUrl", "onlyMainContent", "maxAge", "timeoutMs"] as const
 
 export function webFromConfig(context: ToolProviderContext): WebProvider {
     const unknown = Object.keys(context.config).filter(
@@ -146,10 +174,110 @@ export function webFromConfig(context: ToolProviderContext): WebProvider {
         throw webConfigInvalid("maxBytes", "must be a number of at least 1000.")
     }
 
+    const baseUrl = baseUrlOf(context.config.baseUrl, "baseUrl")
+    const firecrawl = firecrawlConfig(
+        context.config.firecrawl,
+        backendId === "firecrawl",
+        typeof apiKeyEnv === "string" ? apiKeyEnv : undefined,
+        baseUrl,
+    )
     return new WebProvider({
         env: context.env,
+        ...(baseUrl === undefined ? {} : { baseUrl }),
+        ...(firecrawl === undefined ? {} : { firecrawl }),
         ...(backendId === undefined ? {} : { backend: String(backendId) as BackendId }),
         ...(typeof apiKeyEnv === "string" ? { apiKeyEnv } : {}),
         ...(typeof maxBytes === "number" ? { maxBytes } : {}),
     })
+}
+
+/**
+ * `firecrawl:` read into a config, or `undefined` when Firecrawl is not in use. `backend: firecrawl`
+ * turns it on with defaults, so search and fetch never disagree about which service is configured;
+ * its key is the search key unless the block names its own.
+ */
+function firecrawlConfig(
+    raw: unknown,
+    isSearchBackend: boolean,
+    searchKeyEnv: string | undefined,
+    searchBaseUrl: string | undefined,
+): FirecrawlConfig | undefined {
+    if (raw === undefined && !isSearchBackend) return undefined
+    const block = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>
+    if (raw !== undefined && (typeof raw !== "object" || raw === null || Array.isArray(raw))) {
+        throw webConfigInvalid("firecrawl", "must be a map, e.g. `firecrawl: {}` for the defaults.")
+    }
+    const unknownKey = Object.keys(block).find(
+        (key) => !FIRECRAWL_KEYS.includes(key as (typeof FIRECRAWL_KEYS)[number]),
+    )
+    if (unknownKey !== undefined) {
+        throw webConfigInvalid(
+            `firecrawl.${unknownKey}`,
+            `is not a setting. Accepted: ${FIRECRAWL_KEYS.join(", ")}.`,
+        )
+    }
+    const keyEnv = block.apiKeyEnv
+    if (keyEnv !== undefined && (typeof keyEnv !== "string" || keyEnv === "")) {
+        throw webConfigInvalid(
+            "firecrawl.apiKeyEnv",
+            "must be the non-empty name of an environment variable.",
+        )
+    }
+    const only = block.onlyMainContent
+    if (only !== undefined && typeof only !== "boolean") {
+        throw webConfigInvalid("firecrawl.onlyMainContent", "must be true or false.")
+    }
+    const number = (key: "maxAge" | "timeoutMs", min: number, max: number) => {
+        const value = block[key]
+        if (value === undefined) return undefined
+        if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+            throw webConfigInvalid(
+                `firecrawl.${key}`,
+                `must be a number of milliseconds from ${min} to ${max}.`,
+            )
+        }
+        return value
+    }
+    const ownBase = baseUrlOf(block.baseUrl, "firecrawl.baseUrl")
+    const baseUrl = ownBase ?? (isSearchBackend ? searchBaseUrl : undefined)
+    const maxAgeMs = number("maxAge", 0, 30 * 24 * 60 * 60_000)
+    const timeoutMs = number("timeoutMs", 1_000, 300_000)
+    return {
+        apiKeyEnv:
+            typeof keyEnv === "string"
+                ? keyEnv
+                : isSearchBackend && searchKeyEnv !== undefined
+                  ? searchKeyEnv
+                  : "FIRECRAWL_API_KEY",
+        onlyMainContent: only ?? true,
+        ...(baseUrl === undefined ? {} : { baseUrl }),
+        ...(maxAgeMs === undefined ? {} : { maxAgeMs }),
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    }
+}
+
+/**
+ * A provider API's address, for a relay (pilot.10): http or https, no credentials in it, trailing slash
+ * dropped so the path appends cleanly. It is the embedder's own endpoint, so the address guard that
+ * checks what the agent asks to fetch does not apply to it — and `config_set` can never write it,
+ * since an agent that could would send its token and every query wherever it liked.
+ */
+function baseUrlOf(raw: unknown, key: string): string | undefined {
+    if (raw === undefined) return undefined
+    let url: URL
+    try {
+        url = new URL(String(raw))
+    } catch {
+        throw webConfigInvalid(key, `is not a URL: ${JSON.stringify(raw)}.`)
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+        throw webConfigInvalid(key, "must be an http or https address.")
+    }
+    if (url.username !== "" || url.password !== "") {
+        throw webConfigInvalid(
+            key,
+            "must not carry credentials. The key travels in the request's own header, from apiKeyEnv.",
+        )
+    }
+    return url.href.replace(/\/+$/, "")
 }

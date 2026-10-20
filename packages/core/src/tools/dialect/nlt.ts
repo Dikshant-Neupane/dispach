@@ -25,6 +25,7 @@
 import type { ContextBlock } from "../../context/blocks.ts"
 import { SLOT } from "../../context/blocks.ts"
 import { estimateMessageTokens } from "../../context/tokens.ts"
+import { typeWords } from "../json-schema.ts"
 import { renderTrusted } from "../trust.ts"
 import type { FieldError, JsonSchemaNode, ToolIntent, ToolResult, ToolSpec } from "../types.ts"
 import type { ParsedOutput, StreamFilter, ToolDialect } from "./dialect.ts"
@@ -135,6 +136,11 @@ const ATTEMPTED_CALL: readonly RegExp[] = [
     /tool[\u2581_]calls?[\u2581_]begin/i,
     // A bare JSON call, which several models fall back to when a text protocol confuses them.
     /^\s*\{\s*"(?:name|tool|tool_name|function)"\s*:/m,
+    // An opening call tag naming a tool, alone on its line, with nothing after it: deepseek-v4-pro wrote
+    // `<invoke name="incident_list">` and stopped (eval:subagents, pilot.6). Unclosed, so the closing-tag
+    // rule above missed it, and it was delivered as the reply. The `name=` attribute on a line of its
+    // own is what prose about markup does not write.
+    /^\s*<\s*(?:invoke|tool_call|tool_use|tool|function_call|function)\b[^>]*\bname\s*=\s*["'][^"']+["'][^>]*>\s*$/im,
 ]
 
 /**
@@ -849,9 +855,9 @@ never guess a value for a required field you have not been given.`
 function typeLabel(node: JsonSchemaNode): string {
     if (node.type === "array") {
         const item = node.items?.type
-        return item === undefined ? "list" : `list of ${item}`
+        return item === undefined ? "list" : `list of ${typeWords(item)}`
     }
-    return node.type
+    return typeWords(node.type)
 }
 
 function fieldLine(name: string, node: JsonSchemaNode, required: boolean, pad: number): string {
@@ -870,8 +876,30 @@ function fieldLine(name: string, node: JsonSchemaNode, required: boolean, pad: n
         notes.push(`one of: ${node.enum.map((value) => String(value)).join(" | ")}`)
     }
     if (node.default !== undefined) notes.push(`defaults to ${JSON.stringify(node.default)}`)
+    const shape = objectShape(node.type === "array" ? node.items : node)
+    if (shape !== undefined) {
+        notes.push(
+            node.type === "array"
+                ? `write it as a JSON list of objects, each with ${shape}`
+                : `write it as a JSON object with ${shape}`,
+        )
+    }
 
     return notes.length === 0 ? head : `${head} ${notes.join("; ")}`
+}
+
+/**
+ * An object's own fields, for a field whose value is one: `list of object` alone left a model to
+ * guess every key, and a guessed key is a call the tool refuses.
+ */
+function objectShape(node: JsonSchemaNode | undefined): string | undefined {
+    if (node?.type !== "object" || node.properties === undefined) return undefined
+    const required = new Set(node.required ?? [])
+    const fields = Object.entries(node.properties).map(([name, child]) => {
+        const kind = child.type === "string" ? "" : `, ${typeLabel(child)}`
+        return `"${name}" (${required.has(name) ? "required" : "optional"}${kind})`
+    })
+    return fields.length === 0 ? undefined : fields.join(", ")
 }
 
 const NO_NEGATIVE_GUIDANCE =

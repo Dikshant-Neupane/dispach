@@ -27,6 +27,7 @@ import {
     endedBadly,
     endNote,
     HarnessError,
+    isChildSession,
     processAlive,
     Runtime as RuntimeClass,
     VERSION,
@@ -57,7 +58,14 @@ import { agentIdFor, hostToken, liveHostOf } from "#lib/lifecycle"
 import { ENABLE_MOUSE } from "#lib/mouse"
 import { resolveModeFromProcess } from "#lib/output"
 import { offeredCommands } from "#lib/palette"
-import { BUILT_IN_PLUGINS, CHANNELS, scriptRunner, TOOL_PROVIDERS } from "#lib/providers"
+import {
+    BUILT_IN_PLUGINS,
+    CHANNELS,
+    MEDIA_PROVIDERS,
+    MODEL_TRANSPORTS,
+    scriptRunner,
+    TOOL_PROVIDERS,
+} from "#lib/providers"
 import { keyValue } from "#lib/render"
 import { priorMessages, reopenNote, resumeNotice } from "#lib/resume"
 import { listAgents, pluginRoot, storePath } from "#lib/sandbox"
@@ -289,6 +297,8 @@ export async function runCommand(options: RunOptions): Promise<number> {
         const runtime = await RuntimeClass.create({
             agents: [options.manifestPath],
             toolProviders: TOOL_PROVIDERS,
+            modelTransports: MODEL_TRANSPORTS,
+            mediaProviders: MEDIA_PROVIDERS,
             builtInPlugins: BUILT_IN_PLUGINS,
             pluginRoot: pluginRoot(),
             scriptRunner: scriptRunner(),
@@ -311,7 +321,10 @@ export async function runCommand(options: RunOptions): Promise<number> {
         // `/restart` rebuilds the agent and stays in the same conversation.
         if (session.current === undefined || session.current === "") {
             const resolved = await resolveSession({
-                list: () => source.sessions(),
+                // The store, not `source`: that is built below, once the session is known, and
+                // reaching for it here threw `Cannot access 'source' before initialization` on every
+                // `--continue` and bare `--session` with no host running (since 3f7fe85).
+                list: async () => withoutChildren(await agent.store.sessions.list(agent.id)),
                 mode,
                 asked: session.current,
                 wantsContinue: options.continueSession === true,
@@ -763,6 +776,17 @@ async function runAttached(
     })
 
     const described = await client.agent(agentId).describe()
+    // A stopped agent's resource answers with `status: "disabled"` since pilot.5 rather than 404. Only
+    // reachable in a race (the lease was read, then the agent was stopped), since a stop releases the
+    // lease and `run` attaches only to a holder. Refused here rather than attaching to an agent that
+    // will 404 every send.
+    if (described.status === "disabled") {
+        throw new HarnessError({
+            code: "agent_disabled",
+            message: `${agentId} was stopped while this run was attaching.`,
+            hint: `Start it with \`${BRAND.slug} start ${agentId}\`, then run again.`,
+        })
+    }
     const source = remoteSource({
         client,
         agentId,
@@ -795,7 +819,7 @@ async function runAttached(
     for (;;) {
         if (input.session.current === undefined || input.session.current === "") {
             const resolved = await resolveSession({
-                list: () => source.sessions(),
+                list: () => conversations(source),
                 mode: input.mode,
                 asked: input.session.current,
                 wantsContinue: input.continueSession === true,
@@ -975,7 +999,7 @@ async function runRich(wired: Wired): Promise<RunOutcome> {
                 // rather than whatever a local store happens to hold. That is the whole reason an
                 // attached run opens no database: two readings of "which conversations exist" can
                 // disagree while both look correct, and only one of them is being written to.
-                const stored = await wired.source.sessions()
+                const stored = await conversations(wired.source)
                 return [...stored].sort(byRecency).map((row) => ({
                     sessionKey: row.sessionKey,
                     messages: row.messages,
@@ -1100,6 +1124,10 @@ async function runPlain(wired: Wired): Promise<RunOutcome> {
      * had to remember to ask.
      */
     const unsubscribe = wired.source.subscribe((event: AnyEvent) => {
+        // This conversation's events only, as the rich path filters: a channel turn for another peer
+        // shares the bus, and so does a subagent, whose own streamed text would otherwise print into
+        // this reply. An event with no session key is runtime-wide.
+        if (event.sessionKey !== undefined && event.sessionKey !== sessionKey) return
         switch (event.type) {
             case "model.result":
                 show(filter.endStep())
@@ -1489,6 +1517,17 @@ async function sessionStatus(embedded: {
  * what is printed — with the pid and address, because "somewhere else" is not an answer somebody
  * can act on.
  */
+/** The sessions a person had, without the ones a delegation created (`isChildSession`). */
+function withoutChildren<T extends { readonly sessionKey: string }>(
+    rows: readonly T[],
+): readonly T[] {
+    return rows.filter((row) => !isChildSession(row.sessionKey))
+}
+
+async function conversations(source: AgentSource): Promise<readonly SourceSession[]> {
+    return withoutChildren(await source.sessions())
+}
+
 async function attachedStatus(source: AgentSource): Promise<string> {
     const described = source.describe()
     const host = source.host

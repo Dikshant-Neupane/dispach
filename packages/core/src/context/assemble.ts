@@ -11,9 +11,18 @@
  * something that summarizes before it forgets.
  */
 
+import { IMAGE_TOKENS } from "../media/image-input.ts"
 import { isSessionSource, SESSION_SOURCE_PREFIX } from "../memory/conversation.ts"
-import type { ChatMessage } from "../model/provider.ts"
-import { type ContextBlock, SLOT, skillHeader, VOLATILE_HEADER } from "./blocks.ts"
+import { describeScope, scopeOfSource } from "../memory/scopes.ts"
+import type { ChatMessage, ImageInput } from "../model/provider.ts"
+import {
+    type ContextBlock,
+    NOTE_HEADER,
+    REMINDER_HEADER,
+    SLOT,
+    skillHeader,
+    VOLATILE_HEADER,
+} from "./blocks.ts"
 import { isTurnStart } from "./compaction/stages.ts"
 import { estimateMessageTokens, estimateTokens } from "./tokens.ts"
 
@@ -121,7 +130,20 @@ export interface AssembleInput {
      * Optional because `previewContext` has no turn in flight and nothing to protect.
      */
     readonly protectedTail?: number
+    /**
+     * Put the turn's own trace (the protected tail) *after* the input and its per-turn blocks, rather
+     * than inside the history before them (pilot.13). For a model whose signed thinking is replayed:
+     * Claude 5.x binds each block to everything before it, so with the input after the trace, step two
+     * moved the input behind the step-one call and every replayed block was refused ("bound to a
+     * different conversation"). Off, the order is what it always was: small models keep the question
+     * last, after the observations.
+     */
+    readonly traceAfterInput?: boolean
     readonly input: string
+    /** The embedder's note about this message, in `SLOT.note`. Trusted, this turn only. */
+    readonly note?: string
+    /** Images on the input message. Charged `IMAGE_TOKENS` each, since the estimate cannot see them. */
+    readonly inputImages?: readonly ImageInput[]
     /** Surfaced in the pinned error slot so a failure survives compaction. */
     readonly lastError?: string
     /** Total window, after capability resolution. */
@@ -226,14 +248,21 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     // frame is a fact a small model will not connect to the question. Structure only — the passage's own
     // words are untouched, which is the line decision 4.19 draws.
     //
+    // The excerpt also says it is *not this conversation* (pilot.13, VelaCrew). "From an earlier
+    // conversation in this session's store", read immediately before the input, was taken by Nova as
+    // its own unfinished work: a brand-new chat re-proposed another chat's task until `no_progress`.
+    //
     // `isSessionSource` is imported rather than a `kind` field being threaded down from `#recall`,
     // deliberately: five separate debugging rounds here have gone to a field declared in one place and
     // dropped by a conditional spread in another, and the source string already carries the answer.
     for (const passage of input.memory ?? []) {
         if (passage.text.trim() === "") continue
+        const scope = scopeOfSource(passage.source)
         const provenance = isSessionSource(passage.source)
-            ? `From an earlier conversation in this session's store (${passage.source.slice(SESSION_SOURCE_PREFIX.length)}), on ${passage.at}:`
-            : `From ${passage.source}, learned ${passage.at}:`
+            ? `From a different, earlier conversation (${passage.source.slice(SESSION_SOURCE_PREFIX.length)}), on ${passage.at}. It is not part of this conversation: use it as background, and do not continue its task unless asked to:`
+            : scope !== undefined
+              ? `From ${describeScope(scope)}, noted ${passage.at}:`
+              : `From ${passage.source}, learned ${passage.at}:`
         const because =
             passage.because === undefined || passage.because.trim() === ""
                 ? ""
@@ -249,9 +278,32 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         )
     }
     if (input.reminder !== undefined && input.reminder.trim() !== "") {
-        pinned.push(block(SLOT.reminder, "system", input.reminder, true, "workspace-reminder"))
+        pinned.push(
+            block(
+                SLOT.reminder,
+                "system",
+                `${REMINDER_HEADER}\n\n${input.reminder}`,
+                true,
+                "workspace-reminder",
+            ),
+        )
     }
-    const inputBlock = block(SLOT.input, "user", input.input, true, "input")
+    if (input.note !== undefined && input.note !== "") {
+        pinned.push(block(SLOT.note, "system", `${NOTE_HEADER}\n\n${input.note}`, true, "note"))
+    }
+    const plainInput = block(SLOT.input, "user", input.input, true, "input")
+    const inputBlock =
+        input.inputImages === undefined || input.inputImages.length === 0
+            ? plainInput
+            : {
+                  ...plainInput,
+                  tokens: plainInput.tokens + IMAGE_TOKENS * input.inputImages.length,
+                  message: {
+                      role: "user" as const,
+                      content: input.input,
+                      images: input.inputImages,
+                  },
+              }
     pinned.push(inputBlock)
     if (input.lastError !== undefined && input.lastError !== "") {
         pinned.push(
@@ -330,8 +382,18 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         message,
     }))
 
+    // The trace is always kept whole (the walk never drops inside the tail), so it is the last
+    // `protectedTail` history blocks.
+    const traceCount =
+        input.traceAfterInput === true
+            ? Math.min(historyBlocks.length, Math.max(0, input.protectedTail ?? 0))
+            : 0
+    const priorBlocks = historyBlocks.slice(0, historyBlocks.length - traceCount)
+    const traceBlocks = historyBlocks.slice(historyBlocks.length - traceCount)
+
     // Slot order, not insertion order: 0–3 lead so the cached prefix is the same bytes every
     // turn, 4 opens the uncached region, and the pinned tail follows the history it applies to.
+    // With `traceAfterInput` the turn's trace follows the input, so each step only appends.
     const blocks = [
         ...pinned.filter((b) => b.slot === SLOT.identity),
         ...pinned.filter((b) => b.slot === SLOT.tools),
@@ -340,10 +402,14 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         ...pinned.filter((b) => b.slot === SLOT.volatile),
         ...pinned.filter((b) => b.slot === SLOT.skill),
         ...pinned.filter((b) => b.slot === SLOT.knowledge),
-        ...historyBlocks,
+        ...priorBlocks,
         ...pinned.filter((b) => b.slot === SLOT.reminder),
         ...pinned.filter((b) => b.slot === SLOT.memory),
-        ...pinned.filter((b) => b.slot === SLOT.input || b.slot === SLOT.error),
+        ...pinned.filter((b) => b.slot === SLOT.note),
+        ...pinned.filter((b) => b.slot === SLOT.input),
+        ...traceBlocks,
+        // A repair note is per step, so it goes last whichever order is in use.
+        ...pinned.filter((b) => b.slot === SLOT.error),
     ]
 
     // Every block that was built must appear in the output, and this is a real defect it catches
@@ -366,11 +432,36 @@ export function assembleContext(input: AssembleInput): AssembledContext {
 
     return {
         blocks,
-        messages: blocks.map((b) => b.message ?? { role: b.role, content: b.content }),
+        messages: messagesOf(blocks),
         totalTokens: blocks.reduce((sum, b) => sum + b.tokens, 0),
         promptBudget,
         droppedMessages,
     }
+}
+
+/**
+ * The messages a set of blocks sends, with the cache breakpoints marked.
+ *
+ * One function for `assembleContext` and `reassemble`, so a middleware that returns blocks cannot
+ * lose the markers. Breakpoint A is the last message of the static slots (identity through examples);
+ * breakpoint B is the active skill. Marked whatever the model's cache protocol, because the marker is
+ * harness metadata: `chat-completions` never sends it, and a transport with an explicit cache protocol
+ * is the one that knows whether to act on it.
+ */
+function messagesOf(blocks: readonly ContextBlock[]): ChatMessage[] {
+    let lastStatic = -1
+    let skill = -1
+    blocks.forEach((b, index) => {
+        if (b.slot <= SLOT.examples) lastStatic = index
+        if (b.slot === SLOT.skill) skill = index
+    })
+    return blocks.map((b, index) => {
+        const plain = b.message ?? { role: b.role, content: b.content }
+        const message = b.slot === SLOT.input ? { ...plain, turnInput: true as const } : plain
+        return index === lastStatic || index === skill
+            ? { ...message, cacheBreakpoint: true as const }
+            : message
+    })
 }
 
 /**
@@ -402,7 +493,7 @@ export function reassemble(
     )
     return {
         blocks: counted,
-        messages: counted.map((b) => b.message ?? { role: b.role, content: b.content }),
+        messages: messagesOf(counted),
         totalTokens: counted.reduce((sum, b) => sum + b.tokens, 0),
         promptBudget,
         droppedMessages,

@@ -8,7 +8,14 @@
  */
 
 import { expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import {
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    symlinkSync,
+    writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { toolContext } from "@dispach/core"
@@ -33,9 +40,9 @@ function tempDir(): string {
     return mkdtempSync(join(tmpdir(), "files-test-"))
 }
 
-function tools(agentDir: string, writeRoots: readonly string[] = []) {
+function tools(agentDir: string, writeRoots: readonly string[] = [], confineReads = false) {
     const sessions = new ShellSessions()
-    const roots = resolveRoots(agentDir, writeRoots)
+    const roots = resolveRoots(agentDir, writeRoots, confineReads)
     const options = { sessions, agentDir, roots }
     return {
         sessions,
@@ -353,6 +360,32 @@ test("the walk is breadth-first, so a cut-off answer is the shallow files", asyn
     expect(result.files[0]).toBe("top.txt")
 })
 
+// ─── secrets are never read ──────────────────────────────────────────────────────────────
+
+test("file_read refuses a secret by name, through a symlink, and a process's environment (QA pilot.3)", async () => {
+    // Reads were unconfined: an agent could read its own .env or /proc/self/environ and put every
+    // secret the silo holds into its context.
+    const dir = tempDir()
+    writeFileSync(join(dir, ".env"), "MODEL_API_KEY=sk-live\n")
+    symlinkSync(join(dir, ".env"), join(dir, "notes.txt"))
+    writeFileSync(join(dir, "plain.txt"), "fine\n")
+    const read = (path: string) => tools(dir).read({ path }, toolContext({ dir }))
+    await expect(read(".env")).rejects.toThrow(/holds secrets/)
+    await expect(read("notes.txt")).rejects.toThrow(/holds secrets/)
+    await expect(read("/proc/self/environ")).rejects.toThrow(/environment/)
+    expect(await read("plain.txt")).toContain("fine")
+})
+
+test("grep never searches a secret file, so a match cannot quote one", async () => {
+    const dir = tempDir()
+    // Not a dotfile, which the walk skips anyway: `deploy.key` is reached, and must not be read.
+    writeFileSync(join(dir, "deploy.key"), "API_KEY=sk-live\n")
+    writeFileSync(join(dir, "app.ts"), "const API_KEY = process.env.API_KEY\n")
+    const output = await tools(dir).grep({ pattern: "API_KEY" }, toolContext({ dir }))
+    expect(output).toContain("app.ts:1:")
+    expect(output).not.toContain("sk-live")
+})
+
 // ─── grep ────────────────────────────────────────────────────────────────────────────────
 
 test("grep reports file, line number, and the matching line", async () => {
@@ -596,4 +629,43 @@ test("a tilde is expanded before the root check, not resolved into the workspace
         tools(dir).write({ path: "~/sample/x.txt", content: "hi" }, toolContext({ dir })),
     ).rejects.toThrow(/outside the directories this agent may change/)
     expect(existsSync(join(dir, "workspace", "~"))).toBe(false)
+})
+
+test("confineReads keeps file_read, glob and grep inside the agent's roots, a symlink out included (pilot.14)", async () => {
+    const silo = tempDir()
+    const mine = join(silo, "agents", "me")
+    const theirs = join(silo, "agents", "them")
+    mkdirSync(mine, { recursive: true })
+    mkdirSync(theirs, { recursive: true })
+    writeFileSync(join(mine, "notes.md"), "mine")
+    writeFileSync(join(theirs, "MEMORY.md"), "their private notes")
+    symlinkSync(join(theirs, "MEMORY.md"), join(mine, "link.md"))
+    const refused = async (run: () => unknown) => {
+        try {
+            await run()
+            return undefined
+        } catch (error) {
+            return (error as { code?: string }).code
+        }
+    }
+    const confined = tools(mine, [], true)
+    const context = toolContext({})
+    expect(String(await confined.read({ path: "notes.md" }, context))).toContain("mine")
+    expect(await refused(() => confined.read({ path: join(theirs, "MEMORY.md") }, context))).toBe(
+        "file_read_outside_root",
+    )
+    expect(await refused(() => confined.read({ path: "link.md" }, context))).toBe(
+        "file_read_outside_root",
+    )
+    expect(await refused(() => confined.glob({ pattern: "*.md", path: theirs }, context))).toBe(
+        "file_read_outside_root",
+    )
+    expect(await refused(() => confined.grep({ pattern: "private", path: theirs }, context))).toBe(
+        "file_read_outside_root",
+    )
+    // Unconfined, as every agent was before: the same read goes through.
+    const open = tools(mine)
+    expect(String(await open.read({ path: join(theirs, "MEMORY.md") }, context))).toContain(
+        "their private notes",
+    )
 })

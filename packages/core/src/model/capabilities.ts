@@ -47,12 +47,30 @@ export interface ModelCapabilities {
      * `context.reserveOutput` has to be generous enough for reasoning plus the reply.
      */
     readonly thinking: "none" | "anthropic" | "openai" | "deepseek"
-    /** Prompt-cache protocol, which determines where breakpoints go. */
-    readonly promptCache: "none" | "anthropic" | "openai"
+    /**
+     * Prompt-cache protocol. Assembly marks breakpoints A and B on every request regardless
+     * (`ChatMessage.cacheBreakpoint`); this says whether the endpoint acts on them. `bedrock` is
+     * Converse's explicit `cachePoint`, placed after each marked message by that transport.
+     */
+    readonly promptCache: "none" | "anthropic" | "openai" | "bedrock"
     readonly parallelToolCalls: boolean
     readonly contextWindow: number
     /** Max completion tokens. Never derive this from the window — see the note above. */
     readonly maxOutput: number
+    /**
+     * Whether the model reads images sent with a message. Optional, and absent means no: a turn with
+     * an image is refused with `model_no_vision` rather than sent to a model that would drop it or
+     * answer as if it saw nothing. Set only on families documented to take images.
+     */
+    readonly vision?: boolean
+    /**
+     * Put the turn's own tool trace after the input, as Claude-thinking and Bedrock-caching roles
+     * already have it (pilot.15). Set by a transport, never by the registry: it is a fact about how
+     * that transport lays out messages. Converse merges a tool result and the restated question into
+     * one user message, and GPT-6 on Bedrock read that as a new request and called the tool again
+     * until `no_progress`. Absent means today's order.
+     */
+    readonly traceAfterInput?: boolean
     /**
      * How authored workspace files are rendered for this model.
      *
@@ -131,7 +149,17 @@ const CONSERVATIVE: RegistryCapabilities = {
  * "Anthropic, via its OpenAI-compatible endpoint" — and directly beneath `strictSchema: false`,
  * whose comment had already made this exact argument for the field above it.
  */
+const NOVA_BASE = {
+    nativeTools: true,
+    strictSchema: false,
+    thinking: "none",
+    promptCache: "none",
+    parallelToolCalls: false,
+    maxOutput: 5000,
+} as const
+
 const CLAUDE_BASE = {
+    vision: true,
     nativeTools: true,
     strictSchema: false,
     thinking: "anthropic",
@@ -147,6 +175,7 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
     {
         pattern: "gpt-4o*",
         capabilities: {
+            vision: true,
             nativeTools: true,
             strictSchema: true,
             thinking: "none",
@@ -159,6 +188,7 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
     {
         pattern: "gpt-4.1*",
         capabilities: {
+            vision: true,
             nativeTools: true,
             strictSchema: true,
             thinking: "none",
@@ -193,8 +223,25 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
         },
     },
     {
+        pattern: "gpt-6*",
+        capabilities: {
+            vision: true,
+            nativeTools: true,
+            strictSchema: true,
+            thinking: "openai",
+            promptCache: "openai",
+            parallelToolCalls: true,
+            contextWindow: 1_050_000,
+            maxOutput: 128_000,
+        },
+        // Window, output, native tools and vision are VelaCrew's figures from their model-tier plan
+        // (pilot.6), not read off OpenAI's own documentation here. `model probe` can settle the window.
+        note: "Window and output from VelaCrew's tier plan, unverified here. Override if your endpoint says otherwise.",
+    },
+    {
         pattern: "gpt-5*",
         capabilities: {
+            vision: true,
             nativeTools: true,
             strictSchema: true,
             thinking: "openai",
@@ -269,6 +316,8 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
             "claude-opus-4-6*",
             "claude-sonnet-5*",
             "claude-sonnet-4-6*",
+            // Haiku joined the 1M generation at 5.5 (read 2026-10-12); earlier Haikus keep the row below.
+            "claude-haiku-5*",
         ] as const
     ).map((pattern) => ({
         // 1M context, 128K output — Anthropic's model comparison table, read 2026-08-29.
@@ -277,8 +326,10 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
         note: CLAUDE_NOTE,
     })),
     {
-        // 200K context, 64K output — same table, same date.
+        // 200K context, 64K output — same table, same date. A net now that Haiku 5.5 has its own
+        // row above: it stands in for the 4.x Haikus, so a 4.x id reports `family`, not `registry`.
         pattern: "claude-haiku-*",
+        family: true,
         capabilities: { ...CLAUDE_BASE, contextWindow: 200_000, maxOutput: 64_000 },
         note: CLAUDE_NOTE,
     },
@@ -291,11 +342,32 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
         note: CLAUDE_NOTE,
     },
 
+    // ── Amazon Nova, on Bedrock only ───────────────────────────────────────────────────────
+    //
+    // From the Bedrock model cards (read 2026-10-02): Micro is text-only with a 128K window, Lite and
+    // Pro take images with 300K, and all three cap output at 5K and support client-side tool calling.
+    // `promptCache: none` for the same reason as the Claude rows: the bedrock-converse transport
+    // upgrades it to `bedrock` for an `amazon.nova` id. `parallelToolCalls: false` because nothing
+    // here has measured it. `eu.amazon.nova-lite-v1:0` reaches these patterns through `bedrockName`.
+    {
+        pattern: "nova-micro*",
+        capabilities: { ...NOVA_BASE, contextWindow: 128_000 },
+    },
+    {
+        pattern: "nova-lite*",
+        capabilities: { ...NOVA_BASE, contextWindow: 300_000, vision: true },
+    },
+    {
+        pattern: "nova-pro*",
+        capabilities: { ...NOVA_BASE, contextWindow: 300_000, vision: true },
+    },
+
     // ── Google, via its OpenAI-compatible endpoint ─────────────────────────────────────────
     {
         pattern: "gemini*",
         family: true,
         capabilities: {
+            vision: true,
             nativeTools: true,
             strictSchema: false,
             thinking: "none",
@@ -585,7 +657,24 @@ function candidateIds(modelId: string): string[] {
         const bareColon = bare.indexOf(":")
         if (bareColon !== -1) candidates.push(bare.slice(0, bareColon))
     }
+    candidates.push(bedrockName(bare ?? modelId))
     return candidates.filter((id): id is string => id !== undefined && id !== "")
+}
+
+/**
+ * A Bedrock id as the model name the registry knows: `eu.anthropic.claude-sonnet-4-6` and
+ * `eu.anthropic.claude-haiku-4-5-20251001-v1:0` are `claude-sonnet-4-6` and `claude-haiku-4-5-20251001`. Strips a cross-region geography prefix, the vendor prefix and the version
+ * suffix; an inference-profile ARN arrives here already cut at its last `/`. Without this every
+ * Bedrock Claude id matched nothing and resolved to the conservative 8,192-token row with native
+ * tools off — found by writing the first Bedrock template, which had to state its capabilities by
+ * hand to boot at all.
+ */
+function bedrockName(id: string): string | undefined {
+    const match =
+        /^(?:(?:us|eu|apac|global|us-gov|ca|jp|au)\.)?(?:anthropic|amazon|meta|mistral|cohere|ai21|deepseek|openai|qwen|writer)\.(.+?)(?:-v\d+(?::\d+)?)?$/.exec(
+            id,
+        )
+    return match?.[1]
 }
 
 /**

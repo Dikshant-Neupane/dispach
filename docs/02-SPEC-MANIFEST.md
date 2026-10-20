@@ -139,7 +139,7 @@ server:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `apiVersion` | `"dispach/v1"` | yes | Refused if unknown. Never silently upgraded. |
-| `id` | string | yes | Slug. Unique within a runtime. Used in session keys and API paths. |
+| `id` | string | yes | Slug. Unique within a runtime. Used in session keys and API paths. May not start with `~`, which keys a shared memory scope (Phase 29). |
 | `name` | string | no | Display only. |
 | `extends` | string | no | Path to a base manifest. Shallow merge, arrays replace. |
 
@@ -150,14 +150,17 @@ Three roles. `main` required; `selector` and `compactor` fall back to `main`.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Sent verbatim as the `model` parameter. |
-| `baseUrl` | string | Must end at the version segment, e.g. `.../v1`. Requests go to `{baseUrl}/chat/completions`, so a URL pasted from a provider's docs **with** that path is refused — by the wizard, by the loader, and by a comment in the generated file. Any OpenAI-compatible endpoint works and there is no provider branch in the transport; `init --preset` carries the ones worth not typing from memory (OpenAI, Anthropic, DeepSeek, OpenRouter, Groq, NVIDIA NIM, Ollama local and hosted), and `custom` is a first-class answer rather than a fight with the nearest preset. |
+| `api` | string | Which transport speaks to the model. **Omitted, `chat-completions`**, so every manifest written before this field existed is unchanged. `bedrock-converse` is AWS Bedrock (Phase 26c). An unknown value refuses the load, naming the registered transports. |
+| `options` | map | Transport settings, checked by that transport at load. `bedrock-converse` takes `region` and an optional `profile`. Never a credential. |
+| `baseUrl` | string | **Required for `chat-completions`** and ignored by a transport that addresses its endpoint another way. Must end at the version segment, e.g. `.../v1`. Requests go to `{baseUrl}/chat/completions`, so a URL pasted from a provider's docs **with** that path is refused — by the wizard, by the loader, and by a comment in the generated file. Any OpenAI-compatible endpoint works and there is no provider branch in the transport; `init --preset` carries the ones worth not typing from memory (OpenAI, Anthropic, DeepSeek, OpenRouter, Groq, NVIDIA NIM, Ollama local and hosted), and `custom` is a first-class answer rather than a fight with the nearest preset. |
 | `apiKeyEnv` | string | **Name of the env var**, never the key itself. A literal key in the manifest fails validation. **Omit it entirely for an endpoint that needs no key** — a local Ollama — and the provider then sends no `authorization` header at all. Absent and empty are different things: absent is a keyless endpoint, and a named variable that is unset fails the load. |
 | `temperature`, `topP` | number | Optional passthrough. |
 | `maxTokens` | number | The cap on what the endpoint may generate. **Omitted from the request entirely when unset** — not derived from `reserveOutput`, which answers a different question. Bounded by `capabilities.maxOutput` and by the window. |
-| `reasoningEffort` | `none \| minimal \| low \| medium \| high` | Sent as OpenAI's `reasoning_effort`; omitted entirely when unset. Worth setting to `none` on a reasoning model doing short, well-specified work — measured on `qwen3.5:9b`, six simultaneous rules with reasoning on burned 2,000 output tokens in 104 s and returned **empty content**, while `none` answered correctly in 2.1 s. It is the other half of the `reserveOutput` lever. Not universally honoured, and an endpoint that ignores it is silent about it. |
+| `reasoningEffort` | `none \| minimal \| low \| medium \| high \| xhigh \| max` | Sent as OpenAI's `reasoning_effort` over chat-completions; omitted entirely when unset. Under `bedrock-converse` it is mapped per model (since 0.2.0-pilot.6): Claude 4.7 and later take adaptive thinking with that effort (`minimal` is `low`), and `none` is the model's own off switch (`disabled`, Sonnet 5.5's `between_tools`), or low effort on Opus 5.5, Fable and Mythos, which cannot turn thinking off (a load warning says so); Claude 4.6 and older take a thinking budget (`xhigh` and `max` are `high`); `openai.*` models take `reasoning: {effort}` (a top-level `reasoning_effort` is refused there). Claude 4.7 and later are sent no `temperature` or `topP`, which they refuse, and the load warns when either is set. Worth setting to `none` on a reasoning model doing short, well-specified work — measured on `qwen3.5:9b`, six simultaneous rules with reasoning on burned 2,000 output tokens in 104 s and returned **empty content**, while `none` answered correctly in 2.1 s. It is the other half of the `reserveOutput` lever. Not universally honoured, and an endpoint that ignores it is silent about it. |
 | `headers` | map | Extra headers. Values may use `${ENV_VAR}`. |
 | `streamUsage` | bool | Ask for token usage in a streamed response. **On by default**; set `false` to stop asking. |
 | `capabilities` | object | Override the shipped registry. See below. |
+| `fallbacks` | list of roles | Tried in order when this role's model fails in a way that is the endpoint's: unreachable, a 5xx, or 408/429 once its retries are spent. Only before the first chunk. **Never on another 4xx, and never on a 403**, which an embedder may use as its budget stop. Each entry is a whole role (`id`, `api`, `baseUrl` or `options`, `apiKeyEnv`), so a fallback can be another provider. The primary's capabilities, dialect and window govern the turn; a smaller fallback is a warning. The answering model is reported in `model.fallback` and billed under its own id (Phase 26c). |
 
 `streamUsage` sends `stream_options: {include_usage: true}`, which is an OpenAI extension rather than
 part of `/chat/completions`, so an endpoint that does not know it may reject the whole request. It was
@@ -183,10 +186,11 @@ capabilities:
   nativeTools: false
   strictSchema: false
   thinking: none          # none | anthropic | openai | deepseek
-  promptCache: none       # none | anthropic | openai
+  promptCache: none       # none | anthropic | openai | bedrock
   parallelToolCalls: false
   contextWindow: 32768
   maxOutput: 4096
+  vision: false           # reads images sent with a message; absent is false (since 0.2.0-pilot.5)
   promptStyle:            # workspace rendering. Every field optional and merged individually
     delimiters: plain     # xml | markdown | plain
     intensity: emphatic   # emphatic | neutral | soft
@@ -246,6 +250,7 @@ the provider caches nothing: DeepSeek caches context automatically server-side a
 | `window` | from capabilities | Total token budget. |
 | `reserveOutput` | 4096 | How much of the window to keep free for the reply, so the prompt cannot crowd it out. A **prompt-budget** number: it never becomes `max_tokens`. |
 | `observationMaxTokens` | 2000 | Above this a single tool observation is trimmed to head+tail with an artifact pointer. |
+| `modelIdentity` | `shown` | `hidden` keeps the agent from seeing which model it runs on (pilot.15). The prompt's settings summary keeps the dialect and window and drops the model id. `config_read` shows `(hidden by the operator)` for `model.<role>` (fallbacks too) `id`, `api`, `baseUrl`, `options` and `apiKeyEnv`, and `media.<section>` `provider`, `model`, `baseUrl`, `options` and `apiKeyEnv`, whether read whole or by path; every other setting, model tuning included, stays readable and settable. Person-only: `config_set` refuses it. Events and the HTTP API keep the real ids. Not covered: `file_read` or `exec` on `agent.yaml`, and an error text that names the model. |
 | `files` | `[]` | **Deprecated.** Alias for `static`, warning at load and naming the replacement. Keeps resolving against the *manifest* directory rather than `workspace`, which is what makes it an alias rather than a rename. Setting both `files` and `static` is a load failure, not a merge. |
 | `thresholds` | `snip .60 · micro .70 · collapse .80 · reset .88 · trim .95` | Compaction ladder trigger fractions **of the prompt budget** — `window` minus `reserveOutput`, not of the whole window. Measured against the window, a large reserve lets `assembleContext`'s oldest-first trim run while the ladder still reports mild pressure, which is the common case on a reasoning model. Must be strictly ascending **in stage order** and within `(0, 1)`; validated. The stage order is `snip → micro → collapse → reset → trim`, ordered by how much information each rung destroys rather than how many bytes it frees: `snip` and `micro` leave an `artifact_read` pointer, `collapse` and `reset` leave the meaning as a digest, `trim` leaves nothing. So `trim` is last despite freeing the most, and it is the fallback for the case where a digest would have grown the prompt and the no-growth guard refused it. A manifest ordered for the pre-reorder ladder (`trim` first) is refused by name, with the rewrite in the hint. |
 
@@ -296,12 +301,13 @@ case-insensitive and whole-word against the current input. See `07-SPEC-WORKSPAC
 | `budget.reserveWrite` | 6 | Slots held for mutating tools so reads cannot starve writes. |
 | `pinned` | `[]` | Slugs resolved at load. **An unknown slug is a warning and the tool is absent** (0.1.3), with the slug and provider named — unless a provider claims it with `explainUnresolved()`, which is consulted only once a slug is missing after *every* provider has answered. Warned rather than refused because the commonest cause is a missing *credential*, not a typo; `available()` is what tells the model it was not given a tool its manifest asks for. A cold Composio cache reports itself and names the warm command; the generic nearest-match message would blame correct slugs. |
 | `search.enabled` | false | Exposes a provider search meta-tool as an escape hatch. Off by default: search-then-execute is two-hop reasoning and small models fail it. |
-| `local` | `[]` | Built-in tools: `artifact_read`, `memory_write`, `phase_set`, `handoff`, `now`. `artifact_read` follows the pointer compaction leaves behind, so an agent with compaction enabled and this tool unpinned can see that detail was removed and cannot retrieve it. |
+| `local` | `[]` | Built-in tools: `artifact_read`, `memory_write`, `memory_forget`, `phase_set`, `handoff`, `now`. `artifact_read` follows the pointer compaction leaves behind, so an agent with compaction enabled and this tool unpinned can see that detail was removed and cannot retrieve it. |
 | `policy.mode` | `allow` | What happens to a call no rule mentions. `allow` because **pinning is the primary authorization** — an agent has only the tools its manifest pinned. `ask` on an unattended run means `onNoApprover` answers it, so a schedule would do nothing. |
 | `policy.allow` / `policy.deny` | `[]` | `Tool` or `Tool(pattern)`. Evaluated **deny → allow, first match, specificity never reorders** — so a deny carries no exceptions. A rule naming a primary content field (`exec(command:…)`) is refused: a compound command defeats it. |
 | `policy.onNoApprover` | `deny` | What `ask` means with nobody to ask — a schedule, a pipe, a channel with no approver. |
 | `model.<name>` | — | Beyond `main`, `selector` and `compactor`, any key under `model:` is a **custom role** a schedule may name with `role:`. A role nothing references is warned about, because that is also what a misspelled `compactor` looks like. |
 | `untrusted.onMutate` | `refuse` | What to do when untrusted content is in the turn and a mutating tool is requested: `refuse \| confirm \| allow`. A tainted mutating call needs **explicit** authorization — a matching `policy.allow` rule or a live approval; `mode: allow` is the absence of a rule, not one. `confirm` asks when an approver is reachable and refuses when none is. |
+| `eventDetail` | `none` | Since 0.2.0-pilot.5. `redacted` adds the call's arguments to `tool.call` and the first 2 KB of its output to `tool.result`. Values under credential-named keys (`token`, `password`, `apiKey`, …) and the values of secret-named environment variables (`*_KEY`, `*_TOKEN`, …) are replaced with `[redacted]` wherever they appear. That is a floor, not a guarantee: a secret the agent was told in conversation is in neither list. Settable by a person over `PATCH /config`, not by the agent. |
 
 **Configuring a remote provider and pinning nothing from it is a valid, startable agent.** A remote
 provider resolves from an on-disk cache during boot, where hard rule 4 permits no network call, so
@@ -355,6 +361,23 @@ permission rules; `write` is files **without** a shell, which is the only config
 
 `tools.providers.system` accepts `writeRoots` (extra writable directories) and `protect` (extra
 refused paths). Both widen their respective set; nothing narrows either.
+
+`tools.providers.system.confineReads: true` (since pilot.14) confines `file_read`, `glob` and `grep`
+to the same roots as writes: the agent's directory (its `workspace/` when there is one) and its
+`writeRoots`, compared on real paths, so a symlink pointing out of the workspace is refused too. Off,
+the default, a read may go anywhere except a secret, as before. In a silo shared by several agents
+that means one agent can read another's `MEMORY.md`, and this setting is what prevents it. The
+refusal is `file_read_outside_root`. `exec` is not bound by it, as it is not bound by any root, and
+`config_set` cannot set it.
+
+`tools.providers.system.env` (since pilot.9) decides what `exec` and a skill's scripts see of the
+environment: `inherit` (the default, and every agent before it), `scrub` (`PATH`, `HOME`, `USER`,
+`LOGNAME`, `SHELL`, `LANG`, `LANGUAGE`, `LC_*`, `TZ`, `TERM`, `TMPDIR` and nothing else), or a list of
+names, which scrubs and passes those too. It is the agent's containment, so `config_set` refuses it by
+path and nested in a `tools.providers` value. It cannot stop a command reading the runtime's own
+`/proc/<pid>/environ`, since both run as one user: pass secrets as files (`X_FILE`, which the CLI
+reads into `X` at start without putting the value in the process's environment block) or mount `/proc`
+with `hidepid=2`.
 
 `exec` takes `command`, `workdir`, `timeoutMs`, `pty`, and `background`. It takes **no `env`
 argument**, deliberately: a per-call environment map is invisible to the policy engine, which matches
@@ -438,11 +461,64 @@ put the security fields out of reach; and two edits are refused whatever the pol
 | refused edit | why |
 | --- | --- |
 | a `writeRoots` list anywhere — `tools.providers.<id>.writeRoots`, or nested inside a `tools.providers` value | where the agent may write is the person's decision. Asked to create a file, an agent granted itself the whole home directory and wrote there |
+| any provider's `baseUrl` (Composio's, the web search backend's, Firecrawl's), by path or nested inside a `tools.providers` value | where a provider sends its requests is where its credential goes; an agent that could set it could send its token and every query anywhere |
+| the system provider's `confineReads`, by path or nested inside a `tools.providers` value | which files the agent may read is the person's; an agent that could turn it off could read the other agents' notes it keeps out of reach (pilot.14) |
+| the system provider's `env`, by path or nested inside a `tools.providers` value | what a command can see of the environment is containment; an agent that could set `inherit` back could hand its shell every secret the scrub keeps out |
 | replacing `tools.policy.deny` | its only purpose is removing a restriction someone set deliberately |
 | `tools.untrusted.onMutate: allow` | it turns off the check on outside content driving a write |
 
 A guard the agent can switch off on request is not a guard. Everything else, including `onMutate:
 confirm`, is settable.
+
+### The `mcp` provider
+
+Tools from remote MCP servers over **Streamable HTTP**, from `@dispach/tools-mcp`. Registered by the
+`dispach` binary and the container, so a manifest needs no `plugins:` entry.
+
+```yaml
+tools:
+  providers:
+    mcp:
+      servers:
+        huly:
+          url: http://127.0.0.1:3000/mcp
+          headersEnv: { Authorization: HULY_MCP_AUTH }   # header → env var NAME, never a value
+          participantHeader: X-Acting-Participant        # the person the turn acts for
+          policyArgs: { invoke_tool: toolName }          # what a policy rule matches, per tool
+          timeoutMs: 30000                                # default
+  pinned: [huly__search_tools, huly__get_tool_schema, huly__invoke_tool]
+  policy:
+    deny: ["huly__invoke_tool(delete_*)"]
+```
+
+| Field | Notes |
+| --- | --- |
+| `servers.<name>` | Lowercase letters, digits and hyphens. It prefixes every tool: `<name>__<tool>`, the separator being two underscores because a native tool name may not contain a dot. |
+| `url` | `http` or `https`. A URL carrying a credential is refused; put it in `headersEnv`. stdio is not supported: give the server an HTTP front. |
+| `headersEnv` | Header name → the variable holding its value, from the environment the agent loaded with. A missing variable fails the call that needs it, naming the variable. |
+| `participantHeader` | Sent with every call as the turn's acting participant id, and absent for a schedule, a peer agent or the operator, which is how the server tells the two apart. |
+| `turnHeader` | Since pilot.9. Sent with every call as the turn id, with the call id in `<turnHeader>-Call`, so a server can trace a write to the answer that made it. |
+| `personal` | Since pilot.15. `true` when the server acts as the agent's owner (their account, their data): its tools are then offered only to turns that act for the owner, like Composio's. Absent, they are shared. |
+| `policyArgs` | Tool name → the argument a `tools.policy` rule matches. For a proxy tool (`invoke_tool(toolName, arguments)`) this is the inner tool's name, so a rule can reach the call the proxy would make. |
+
+Tools are **pinned by name** like every other provider's, never exposed wholesale, so a server adding
+a tool changes nothing until a manifest pins it. A tool is **mutating unless the server annotates it
+`readOnlyHint: true`**, and its output is **untrusted**, so the write gate and the fence apply. Boot
+resolves from `.dispach/mcp.cache.json` and contacts no server, so a server that is down cannot hold
+`runtime.ready`; `tools --warm` fills a cold cache, and the post-ready refresh keeps it current. A
+server's refusal (`isError`) reaches the model as a failed call carrying the server's own words.
+
+**Configured through settings, not `init`.** `tools.providers` and `tools.pinned` are settings on the
+TUI editor, the web app and `PATCH /v1/agents/:id/config`. A value the provider refuses (a malformed
+server, a credential in a URL) is refused **before** it is written, with the provider's own error.
+Adding a server and pinning its tools needs no `tools --warm`: the agent loads without them, the
+post-ready refresh fetches them, and the agent reloads itself once to pick them up (`agent.reloaded`).
+
+**A proxy tool is only as narrow as the server makes it.** Measured on `@firfi/huly-mcp` 0.52.6: in
+its default proxy mode `TOOLS=list_issues` adds `list_issues` to the listing and **does not stop**
+`invoke_tool` dispatching `delete_issue`. Only `HULY_TOOL_MODE=native` with `TOOLS` enforces the
+list (`Unknown tool: delete_issue`, and no `invoke_tool` at all). With proxy mode, a `policy.deny`
+rule on `invoke_tool` is the guard.
 
 ### Tools that exist and were not enabled
 
@@ -552,6 +628,7 @@ Measured, and the figure is not the one the rationale predicts: on a frontier mo
 | --- | --- | --- |
 | `dir` | `./skills` | Scanned for `*/SKILL.md`. Frontmatter only at boot; a configured directory that does not exist is a load failure. |
 | `maxActive` | 1 | Skill bodies injected per turn, into `SLOT.skill`. |
+| `trusted` | none | The skills whose scripts may run (pilot.14). Absent, every skill's scripts become tools while it is active, as before. Present, a skill not named here is still selected and its body read, but its scripts are listed as documentation only and are not tools. The operator's list: `config_set` cannot change it, and a skill arriving by `git pull` or an upload cannot add itself. Scripts run with the system provider's `env` policy, so `scrub` applies to them too. |
 | `threshold` | 0.35 | Normalised BM25 floor. Below it, no skill activates. Calibrated to the normalisation in `skills/select.ts`, where the shipped fixtures score 0.369–0.600 — **changing that formula invalidates this default**. |
 
 There is deliberately **no `budget` field** either. `maxActive` is the only limit on skills: a turn activates
@@ -581,6 +658,25 @@ in the `volatile` tier, present in slot 4 on every turn — and when that file p
 oldest notes move into `dir`, where only retrieval reaches them. So a fact said a minute ago is still
 carried, and one from June is found by searching. Nothing is deleted at either step.
 
+`memory_forget` (pilot.15, pinned like `memory_write` and mutating) is the person's way to take a note
+back, in two calls: `{query}` lists the notes containing every word of it, with ids, and deletes
+nothing; `{ids}` deletes exactly those. It reaches what `memory_write` would write on that turn — the
+carried file and `dir` on a private turn, the `space` for the space writer — and is refused in a room or
+a stand-in (`memory_forget_refused`). Only top-level list items are notes; headings and prose stay. A
+person's `owner:` and `project:` notes are deleted over `DELETE /v1/memory/notes/:id`. On a private
+turn the listing also shows past conversation messages (`msg_<id>`, "said to you" or "your reply")
+from turns the acting participant took — their own, never another member's; the owner also reaches
+turns that record no participant, which is every API turn before migration 31, and a turn with no
+participant reaches every session. Deleting one **redacts** it in place: the message text and its
+turn row's input, reply and reasoning become `[forgotten at the person's request]`, so recall, a
+rebuild and an export cannot bring it back, and it cannot be undone. The conversation in which the
+person asked to forget is redacted the same way when a deletion lands, because its listing quoted
+what was found; its tool calls keep their id and name, so a native trace still replays, and every
+argument value is replaced. The forgotten text is then looked for in every other message within the
+same reach, tool calls and results included (`memory_write`'s call carries the note verbatim): a
+message containing it is redacted, and a tool argument containing it is replaced with the call kept.
+Text under 12 characters is not looked for elsewhere. A turn whose `memory_write` call saved a deleted note is redacted whole, its reply included, because a reply restating the note in the agent's own words is found by no text match. The memory index is re-read as part of the delete. The silo's own webhook delivery log (`webhook_deliveries.body`) is scrubbed the same way, envelope kept; the copy a receiver already holds is theirs. Emits `memory.forgotten`.
+
 | Field | Default | Notes |
 | --- | --- | --- |
 | `retriever` | `fts5` | The seam. `fts5` is the only implementation; an unknown name is refused at load rather than retrieving nothing. |
@@ -589,6 +685,15 @@ carried, and one from June is found by searching. Nothing is deleted at either s
 | `threshold` | 0.20 | Score floor after original-query coverage and recency. `memory search` exposes all three terms. |
 | `budget` | 2000 | Total tokens across injected passages. Outside the workspace cap — this tier is retrieved, not carried. |
 | `includeHistory` | true | Index the person's messages and clean agent replies as well as the notes, under `session:<key>`. Never tool observations, runtime-authored messages, or tainted assistant prose. |
+
+**Shared scopes (Phase 29) need no field.** Beside its own memory — everything above, which is the
+agent's *private* scope — an agent recalls the team's shared scopes: its owner's (`owner:<participant>`,
+from the agent's assignment), the `space`, and each `project:<id>` it belongs to. They are written over
+`/v1/memory/notes` (`04-SPEC-WIRE.md`), recalled with the same `maxActive`, `threshold` and `budget`,
+and framed in slot 10 as shared memory. What a turn reads depends on where it came from: a stand-in
+reads its owner's scope and the space and never private; a room turn reads shared scopes only; the
+agent's DM with its owner, and every other turn, read everything. A turn that may not read private
+memory also goes without the `volatile` tier, since that tier is private memory too.
 
 **`maxActive` and `budget` were raised from 3 and 600 when `includeHistory` was implemented**, and the
 change was required rather than generous. Those numbers were sized for note bullets, which are one
@@ -665,6 +770,7 @@ Common fields; type-specific fields are validated by the channel's own schema.
 | `id` | Unique within the agent. Used in session keys and delivery targets. |
 | `allowFrom` | Inbound allowlist. `["*"]` permits anyone. **Inbound only** — it has no effect on outbound delivery. |
 | `enabled` | Default true. |
+| `role` | A model role declared under `model:` that this channel's turns run on (pilot.14), e.g. WhatsApp on a cheaper role than the web chat. Absent is `main`. A role that is not declared refuses the manifest, in `validate`, at load and in a `config_set` edit, rather than falling back. An API turn picks a role per message with `POST …/messages {role}`. |
 
 Telegram: `tokenEnv`, `mode` (`longpoll` \| `webhook`), `webhookPath`, `secretTokenEnv`.
 
@@ -706,6 +812,104 @@ person's by definition — the same rule that floors `writeRoots`. A `config_set
 `tokenEnv` reports that the agent will not start until that variable is set in the `.env`, which only
 a person can write.
 
+#### `teams` — Microsoft Teams, from `@dispach/channel-teams`
+
+```yaml
+channels:
+  - type: teams
+    id: teams
+    appId: 00000000-0000-0000-0000-000000000000    # the Azure Bot's Microsoft App ID (not a secret)
+    passwordEnv: TEAMS_APP_PASSWORD                # its client secret, by env var name (default)
+    tenantId: 11111111-1111-1111-1111-111111111111  # single-tenant bots; also drops other tenants
+    allowFrom: ["*"]                               # or Entra object ids
+```
+
+Webhook only: register the bot's messaging endpoint as `https://<host>/v1/channels/<id>/webhook/<agent>`.
+Every activity's Bot Framework JWT is verified (issuer, audience = `appId`, lifetime, the key's
+channel endorsement, and the signed `serviceUrl` the reply goes to) before a word of it is read.
+The agent answers every message in a personal chat and, in a group chat or a channel, only when it
+is **@mentioned**, replying in that thread, which is its own session. The sender is their Entra
+object id, the handle `allowFrom` matches and the acting participant (`teams:<id>`). Where each
+conversation's replies go is kept beside the agent, so a schedule can deliver to a chat that has
+messaged the bot at least once.
+
+#### `slack` — Slack, from `@dispach/channel-slack`
+
+```yaml
+channels:
+  - type: slack
+    id: slack
+    appTokenEnv: SLACK_APP_TOKEN   # xapp-…, scope connections:write (default name)
+    botTokenEnv: SLACK_BOT_TOKEN   # xoxb-…, scope chat:write (default name)
+    allowFrom: ["*"]               # or member ids (U…)
+```
+
+Socket Mode: the app-level token opens a WebSocket that Slack pushes events down, so no public
+endpoint is needed. Enable Socket Mode on the app and subscribe to the bot events `message.im` and
+`app_mention`. The agent answers every direct message and, in a channel or group DM, only when
+**@mentioned**, replying in that thread, which is its own session (`slack:<channel>:<thread ts>`).
+The sender is their member id, the handle `allowFrom` matches and the acting participant
+(`slack:<id>`). Replies go through `chat.postMessage` as a `markdown` block, so the model's markdown
+renders as written. A token in the wrong slot (`xoxb-` where `xapp-` belongs) is refused at load.
+
+### `media`
+
+```yaml
+media:
+  transcription:                 # voice notes on channels become text before the turn
+    provider: openai             # openai (any /audio/transcriptions endpoint) | aws (media-aws)
+    model: whisper-1
+    baseUrl: https://api.openai.com/v1
+    apiKeyEnv: OPENAI_API_KEY    # a variable name, never a key
+    timeoutMs: 60000             # hard: download and transcription together
+    maxBytes: 26214400           # refused before downloading when the channel reports a size
+  speech:                        # a voice note is answered with a voice note too (pilot.15)
+    provider: aws                # aws (Polly) | openai (any /audio/speech endpoint)
+    options: { region: eu-west-2, voiceId: Amy, engine: neural }
+    timeoutMs: 60000             # per voice note
+    maxCharacters: 3000          # a longer reply becomes several notes, split at sentences
+  image:                         # declaring it registers the image_generate tool
+    provider: aws
+    model: amazon.nova-canvas-v1:0
+    options: { region: eu-west-1 }
+    size: 1024x1024
+    timeoutMs: 120000
+```
+
+Every section is optional and each names its own provider, so voice can go to one backend and
+images to another. `aws` takes `options: {region, profile?, languageCode?, sampleRate?, voiceId?,
+engine?}` and the default AWS credential chain. Transcribe streaming reads OGG/Opus (Telegram,
+WhatsApp) and FLAC as they are; anything else, Slack's WebM clips and Teams' M4A memos among them, is
+decoded to 16 kHz PCM by `ffmpeg` first (pilot.15), which the image carries. Without `ffmpeg` on the
+PATH those notes are refused with a hint naming it. `openai` takes every format directly.
+
+**A spoken reply** (`speech`, pilot.15) follows the text reply to a turn that began as a voice note,
+and only such a turn: a typed message is never answered in audio. The text is delivered first, so
+nobody waits on the synthesis to read the answer. Markdown is removed before it is spoken, code
+blocks are left out, and a reply over `maxCharacters` becomes several voice notes split at sentence
+ends. The audio is Ogg/Opus, sent as a voice note on WhatsApp (`ptt`) and Telegram (`sendVoice`) and
+as an audio file on Slack. Teams gets the text alone. A failed synthesis costs the voice note only:
+the sender already has the text, and `agent.channel.error` carries the cause. `aws` is Polly
+(`voiceId` default `Joanna`, `engine` default `neural`; the role needs `polly:SynthesizeSpeech`);
+`openai` takes `options.voice` (default `alloy`) and `model` (default `gpt-4o-mini-tts`). Each note is
+a `media.result` with `kind: speech` and `characters`.
+
+**A voice note** is transcribed after `allowFrom` and before the turn, framed for the model as
+`[Voice note, transcribed]` and followed by any caption. If no transcription is configured, the
+download or the provider fails, or the deadline passes, the sender gets a short reply saying so and
+`agent.channel.error` carries the cause and its hint. No turn runs. A provider that never answers is
+abandoned at `timeoutMs`, so the conversation is never stuck behind it.
+
+**`image_generate`** takes one argument, `prompt`, saves a PNG under the agent's `media/` and attaches
+it to the reply: Telegram, WhatsApp and Slack send it after the text; on Teams (which shows only
+images at a URL it can fetch) and on any channel without attachments, the reply names the file.
+`turn.end` lists it for an API client. It is `mutating`, so it serialises and is never retried.
+
+Each call is a usage row: `images` or `audioSeconds` in `/v1/usage`, and a `media.result` event with
+its `callId`. `media` is a setting like `channels`: `config_set`, the `config` command, the settings
+editor and `PATCH /v1/agents/:id/config` all write it, and a provider that does not exist is refused
+before anything is written. `init` does not ask about it.
+
 ### `delivery`
 
 ```yaml
@@ -717,6 +921,11 @@ delivery:
 
 `default` names the channel used when a turn has no originating channel — scheduled runs,
 API-initiated turns.
+
+`reply` (since pilot.14) is what a channel reply carries: `all`, the default, is every step's prose
+joined, as before; `final` is the last step's alone (`finalText`) when there is one, so a lead-in the
+model repeats before each tool call reaches the person once. An API caller reads `finalText` from the
+turn's result or `turn.end` instead.
 
 ### `schedules`
 
@@ -731,6 +940,21 @@ API-initiated turns.
 | `enabled` | no | Default true. Disabled schedules are listed by default. |
 | `timezone` | no | IANA name. Defaults to `TZ` then UTC. Applies to `cron` only: `every` is interval-anchored and does not participate in DST. |
 | `role` | no | A model role from `model:` to run this turn on instead of `main`. Omit for `main`. |
+| `tools.allow` | no | Since 0.2.0-pilot.5. The agent's own tools this run may use, in the phase grammar: a slug, `tag:<name>`, or `*`. It narrows the catalogue the run's model is shown; a skill's scripts and a turn's own tools still apply. An entry naming nothing the agent has is refused (`schedule_tool_unknown`), at load for a manifest schedule and at write for an API one. |
+| `timeoutMs` | no | Since 0.2.0-pilot.5. This run's turn timeout. Capped by `limits.turnTimeoutMs`: a schedule may lower it, never raise it, since the agent can write its own schedules. A run that runs out ends `turn_timeout`. |
+| `maxSteps` | no | Since 0.2.0-pilot.5. This run's step cap, capped by `limits.maxSteps` the same way. |
+
+**A run that does not finish is recorded as an error.** Since 0.2.0-pilot.5 a run whose turn ends
+`timeout`, `max_steps`, `no_progress` or `error` sets the schedule's `lastStatus` to `error` and
+emits `schedule.error` with the turn's own code (`turn_timeout`, `turn_max_steps`, …). Whatever text
+the turn produced is still delivered first. Before, such a run was recorded `ok`.
+
+**A recurring schedule fires a little after its time, on purpose.** `cron` and `every` carry a fixed
+offset of up to a tenth of their interval, capped at 15 minutes: a daily `0 8 * * *` fires somewhere
+between 08:00 and 08:15, the same minute every day, and a `15m` moves by at most 90 seconds. It is
+derived from the schedule's `id` (decision 9.10), so it never moves between runs or restarts, and
+`dispach schedules` shows the real next run. It keeps a fleet of agents from all calling the model
+at 08:00:00. An `at` carries none, because a person who wrote an instant meant that instant.
 
 **Timing.** `cron` is wall-clock-anchored and `every` is interval-anchored. On a DST spring-forward a
 `cron` occurrence whose local time does not exist is **skipped entirely** — a daily 02:15 does not
@@ -795,10 +1019,13 @@ Load order is manifest order; middleware composes outermost-first. A plugin whos
 | --- | --- | --- |
 | `maxSteps` | 40 | Steps per turn before forced termination. Hitting it emits `turn.end` with `reason: max_steps` — an honest failure, not a silent truncation. Generous, because a step budget is not a plan: real work recovers, and each recovery costs a step. A six-step budget cut a live agent off one step after it had installed the dependency it needed, its reply ending on "Let me install it". `noProgress` is what stops a loop; this only stops a runaway. |
 | `noProgress.identicalCalls` | 3 | Identical consecutive tool calls — same slug **and** same arguments — before the turn ends as `reason: no_progress`. This is the guard a small `maxSteps` was standing in for, and it is better at the job: the same call with the same arguments cannot return a different answer, so the remaining steps would only repeat it. Two is a retry, which is often correct; three is a pattern. Compared before the calls run, because a loop that has already executed twice has had its side effects twice. |
+| `noProgress.sameTool` | none | Calls to any one tool in a turn, whatever the arguments, before the turn ends as `reason: no_progress` (pilot.13). For churn `identicalCalls` cannot see: a mail delta or a lookup called again and again with new arguments. Absent means no limit. Checked before the calls run, and counted per call. A person sets `limits.noProgress` or removes `limits.noProgress.sameTool` with `PATCH /config`; the agent's `config_set` cannot loosen its own loop guard (pilot.15). |
 | `turnTimeoutMs` | 1800000 | 30 min. Must exceed any upstream timeout on the model endpoint. |
 | `toolTimeoutMs` | 120000 | Per tool execution. |
 | `maxParallelTools` | 4 | Read-only tools only; mutating tools always serialise. |
 | `maxConcurrentTurns` | unlimited | Turns of this agent running at once, across sessions. Over it a new turn is **refused, not queued**: `429 agent_at_capacity` over HTTP, a short reply on a channel, an error on a schedule run. Nothing is recorded for a refused turn. Not settable by `config_set` — an agent cannot raise its own cap. |
+| `maxHops` | 4 | In a room, how many agent replies deep a message may be and still make this agent answer. A human's message is hop 0 and each agent reply one more; past it the agent reads the message and does not answer, and `conversation.skipped` says why. The guard against agents replying to each other forever — a count, not a check on names. |
+| `reloadHoldMs` | 30000 | While a reload waits for running turns, how long new turns keep running on the old settings before they wait for the swap and start on the new ones. The bound that stops a busy agent postponing a reload forever; `0` holds new turns at once. Running turns always finish on the settings they started with. See `POST /v1/agents/:id/reload`. |
 | `tokens` | unlimited | `{ max, windowMs }`: prompt + output tokens across every metered model call (compactor included) in a rolling window. Checked when a turn **starts**, so a running turn is never cut off and the overshoot is at most one turn. Over it: `429 agent_token_budget_exhausted`, same paths as above. Not settable by `config_set`. |
 
 ### `server`
@@ -808,7 +1035,7 @@ Load order is manifest order; middleware composes outermost-first. A plugin whos
 | `enabled` | false | Library use needs no server, so the **schema** default is off. **`init` writes `true`** since 0.1.2 — an always-on server is the product and the TUI and web UI are views onto it, so it stopped being a question; `--server none` is the opt-out. The two defaults answer different questions: this one is "what does an embedder get when the block is absent", and that one is "what does a generated agent get". |
 | `port` | 7420 | |
 | `host` | `127.0.0.1` | Binds loopback by default. Public binding is explicit. |
-| `tokenEnv` | `DISPACH_API_TOKEN` | Bearer token env var name. Server refuses to start on a non-loopback host without a token. |
+| `tokenEnv` | `DISPACH_API_TOKEN` | Bearer token env var name. Server refuses to start on a non-loopback host without a token. For an agent in the sandbox, the token is the sandbox's, in `agents/.api-token`: one host serves every agent there. `init` writes the same value into each `.env`, an exported variable still wins, and on upgrade the file takes the token the host was already using. |
 | `allowedOrigins` | `[]` | Origins a browser may call from, written in full (`https://app.example.com`). **No wildcard.** Only widens what is already allowed. |
 | `allowedHosts` | `[]` | Extra `Host` values a **loopback** bind will answer to. Ignored on a public bind. |
 
@@ -827,6 +1054,106 @@ it was never given access to, and the browser cannot hide the name it resolved. 
 **before** authentication, because `POST /v1/channels/…` needs no credential and changes state.
 
 ---
+
+### `standIn` and `delegation` (Phase 28)
+
+```yaml
+standIn:
+  enabled: true           # answer for my assigned owner in a DM while they are offline
+  escalateAfterMs: 0      # how long an offline owner's silence lasts before I answer; 0 = at once
+
+delegation:
+  offer:                  # what I take on for other members' agents
+    task: Looks things up in the research archive.
+    artifact:
+      type: object
+      properties: { finding: { type: string } }
+      required: [finding]
+  to: "*"                 # or [agent ids]: whom I may delegate to (only agents that offer)
+```
+
+**`standIn`** applies only in a DM between two people, and only to the agent assigned to the absent
+one (`PUT /v1/agents/:id/assignee`). It answers when its owner's pushed presence is `offline` and
+stays so for `escalateAfterMs` after the message; the owner coming online, or writing in the DM,
+withdraws it and the agent only reads the message. Presence nobody pushed reads as online. Each reply
+is marked `onBehalfOf` the owner and its first carries a disclosure the runtime writes, not the model
+(`(Ada's agent, answering while Ada is away.)`). **It never commits**: every mutating call is queued as
+an action for the owner, whatever `policy.allow` says (a `deny` rule still refuses), and runs only
+when they approve it with `POST /v1/actions/:actionId`, its outcome posted in the DM.
+
+**`delegation`** lets a coordinator hand work to another member's agent in the silo. The handoff is
+the team one — `handoff(member, task)`, a fresh session, a typed artifact through `submit_artifact`,
+the same depth limit — resolved among agents that declare an `offer` and match `to`. The delegate's
+turn acts for the person who asked the coordinator, so they stay accountable. Since pilot.7 a
+delegation is a **peer ask, one hop**: the asked agent's turn has no `handoff` (no peers, no team of
+its own), so `A` and `B` may each list the other and nothing can loop. The asked turn reads like a
+stand-in: its owner's shared notes and the space, never private memory, unless the person it acts
+for is its own owner. Targets are fixed when the coordinator loads; an agent adopted later is
+reachable after the coordinator reloads. A person sets both fields with `PATCH /config`
+(`delegation.offer`, `delegation.to`); an agent's `config_set` cannot.
+
+### `subagents` (since 0.2.0-pilot.6)
+
+Throwaway children of this agent that run a routed tool call in a context of their own. **The harness
+routes, never the model:** a call to a slug under `route.tools` goes through the policy, the write
+gate and a stand-in's deferral exactly as it would without a child, and only then does the child run
+in place of the tool. The parent's observation is the child's artifact; the raw output stays in the
+child's `subagent:<runId>` session.
+
+```yaml
+model:
+  main: { id: deepseek-v4-pro, baseUrl: https://api.deepseek.com/v1, apiKeyEnv: MODEL_API_KEY }
+  subagent: { id: deepseek-v4-flash, baseUrl: https://api.deepseek.com/v1, apiKeyEnv: MODEL_API_KEY }
+
+subagents:
+  - name: inbox
+    task: Read the mailbox and report what needs attention.
+    tools: [GMAIL_FETCH_EMAILS, GMAIL_GET_THREAD]   # a subset of tools.pinned / tools.local
+    route:
+      tools: [GMAIL_FETCH_EMAILS]                    # calls to these run the child
+    # artifact:   a JSON Schema object, as for team.members; default {summary}
+    # model:      a role under model:; default model.subagent when declared, else main
+    # maxSteps:   lowers limits.maxSteps for the child
+```
+
+| Field | |
+| --- | --- |
+| `name` | Required, unique. Names the child in events, sessions and usage. |
+| `task` | Required. What the child is for, written ahead of the call it is handed. |
+| `tools` | Required. Exact slugs, each in `tools.pinned` or `tools.local` (`subagent_tool_not_pinned`). A child only narrows its parent. Its catalogue is these plus `submit_artifact`. |
+| `route.tools` | Required. Each slug must be in this child's `tools` (`subagent_route_outside_tools`), and a slug is routed by one child only (`subagent_route_duplicate`). |
+| `artifact` | Optional JSON Schema object. Absent: `{summary: string}`, told to keep every id, name, date and amount exactly. One string, because a list is the field a model formats wrong. |
+| `model` | Optional role name (`subagent_role_unknown` when undeclared). Absent: `model.subagent`, else `main`. Usage rows and `model.result` say `role: subagent` either way, with `model` naming the endpoint. |
+| `maxSteps` | Optional. Lowers `limits.maxSteps` for the child, never raises it. |
+| `timeoutMs` | Optional (pilot.15). The routed call's bound in place of `limits.toolTimeoutMs`, for this child's `route.tools` only, so a child making fifteen slow reads can have five minutes without `exec` getting five minutes too. The child is still ended a second before it, so it reports a timeout instead of being abandoned. |
+
+`subagents` is set as a whole list by a person or an embedder: `PATCH /config` (alone or in
+`changes[]`) and the `config` command, checked exactly as at load. The agent's `config_set` cannot set
+it. Every edit is checked against it, so unpinning a slug a child still uses is refused too. An engine
+that rebuilds both writes `tools.pinned` first when adding a child's tools and `subagents` first when
+removing them, or sends both in one `changes[]` in that order.
+
+**What a child inherits, and nothing more.** The parent's taint (a child of a turn that read
+untrusted content starts tainted, so `untrusted.onMutate` applies from its first step), its
+stand-in deferral (a child of a stand-in turn queues its writes for the owner), its acting
+participant, its policy, and its cancellation. It gets no history, no volatile tier, no knowledge,
+skills or recalled memory. **Depth is 1**: a child's calls run the tool, never another child.
+
+**Trust of the artifact.** Untrusted when the routed tool is declared untrusted, or when the child read
+untrusted output; trusted otherwise.
+
+**A child reads its call's whole output.** Its observation cap is the larger of
+`context.observationMaxTokens` and three quarters of its own prompt budget (its model's window less
+`reserveOutput`), because reading all of it is the child's job and it holds nothing else. Past that
+it is cut as any observation is.
+
+**Limits.** A routed call is one tool call, so it is bounded by `limits.toolTimeoutMs`: the child is
+ended a second before the call would be abandoned and reports `subagent_budget`. Children run one at
+a time. The child's spend is the parent agent's, under `limits.tokens` like any other turn.
+
+Slot 1 is unchanged by routing — a routed tool keeps its spec, so the cached prefix and the policy
+identity are the same as without a child. The child's narrowed catalogue is its own slot 1, which
+gets no cache hit on the parent's prefix; its session is fresh, so there is none to protect.
 
 ### `team`
 

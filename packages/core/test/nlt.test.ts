@@ -61,6 +61,32 @@ describe("the parser finds blocks", () => {
         expect(parsed.text).toBe("Nothing to do here — the answer is 4.")
     })
 
+    test("a field holding objects names their fields, so a model is not left to guess the keys", () => {
+        const entry = renderNltEntry({
+            ...SPEC,
+            slug: "plan_day",
+            parameters: {
+                type: "object",
+                properties: {
+                    tasks: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                title: { type: "string" },
+                                minutes: { type: "integer" },
+                            },
+                            required: ["title"],
+                        },
+                    },
+                },
+            },
+        })
+        expect(entry).toContain(
+            'write it as a JSON list of objects, each with "title" (required), "minutes" (optional, integer)',
+        )
+    })
+
     test("one block, one field", () => {
         const parsed = parseNlt("ACTION: now\ntimezone: UTC\nEND")
         expect(parsed.intents).toEqual([{ callId: "c1", slug: "now", args: { timezone: "UTC" } }])
@@ -694,6 +720,21 @@ describe("a tool call in some other protocol's format", () => {
         expect(parsed.malformed?.length).toBe(1)
         // The repair has to teach the format, since the model clearly does not have it.
         expect(parsed.malformed?.[0]?.hint).toContain("ACTION:")
+    })
+
+    test("an unclosed call tag naming a tool counts, and prose about markup does not", () => {
+        // deepseek-v4-pro wrote this and stopped, in eval:subagents; it was delivered as the reply.
+        for (const text of [
+            '<invoke name="incident_list">',
+            'Let me pull up the incident list.\n\n<invoke name="incident_list">',
+        ]) {
+            const parsed = parseNlt(text)
+            expect(parsed.intents).toEqual([])
+            expect(parsed.malformed?.length).toBe(1)
+        }
+        expect(
+            parseNlt('An `<invoke name="x">` element is how some APIs spell a call.').malformed,
+        ).toBeUndefined()
     })
 
     test("a vendor's own tool tokens count too", () => {

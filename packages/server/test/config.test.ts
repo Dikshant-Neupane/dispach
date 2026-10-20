@@ -12,7 +12,7 @@
  */
 
 import { afterAll, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { cleanupWorkspaces, harness, MANIFEST } from "./harness.ts"
 
@@ -131,6 +131,27 @@ test("a path this surface does not set is refused by name, with the nearest one"
     expect(body.error.hint).toContain("limits.maxSteps")
 })
 
+test("a batch names every unknown path by its index and writes nothing (pilot.16)", async () => {
+    const { call, dir } = await harness({ manifest: EDITABLE })
+    const before = readFileSync(join(dir, "agent.yaml"), "utf8")
+    const body = (await (
+        await call("PATCH", "/v1/agents/assistant/config", {
+            body: {
+                changes: [
+                    { path: "limits.maxSteps", value: "30" },
+                    { path: "media.speach", value: "{}" },
+                    { path: "limits.maxStep", value: "40" },
+                ],
+            },
+        })
+    ).json()) as { error: { code: string; message: string; field: string } }
+    expect(body.error.code).toBe("config_path_unknown")
+    expect(body.error.message).toContain('"media.speach" (changes.1.path)')
+    expect(body.error.message).toContain('"limits.maxStep" (changes.2.path)')
+    expect(body.error.field).toBe("changes.1.path")
+    expect(readFileSync(join(dir, "agent.yaml"), "utf8")).toBe(before)
+})
+
 test("allowFrom names the action that sets it rather than denying it exists", async () => {
     // It is a real field in `SETTINGS` and a real thing to want to change. Answering "no such
     // setting" would send somebody looking for a typo in the one field whose absence is almost
@@ -215,4 +236,154 @@ test("a schedule the API created is still fully editable", async () => {
     expect(((await patched.json()) as { task: string }).task).toBe("Check the queue twice.")
 
     expect((await call("DELETE", "/v1/agents/assistant/schedules/hourly")).status).toBe(200)
+})
+
+test("a misread rule count no longer wedges the agent: onExceed is settable to warn (pilot.5)", async () => {
+    // VelaCrew: one "I never…" line in AGENTS.md put the rule count over budget, so every reload's
+    // trial build refused and every PATCH stayed unapplied. The count is a heuristic, so the person
+    // gets the escape over the wire; the agent itself still can't relax it.
+    const { call, dir } = await harness({
+        manifest: `${MANIFEST}context:
+  workspace: .
+  static: [AGENTS.md]
+  rules:
+    perRuleSuccess: 0.9
+    reliabilityTarget: 0.85
+`,
+        files: { "AGENTS.md": "You help." },
+    })
+    writeFileSync(
+        join(dir, "AGENTS.md"),
+        "You must reply in English.\nNever share keys.\nAlways cite sources.\nI never guess.",
+    )
+
+    const stuck = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "limits.maxSteps", value: "12" },
+    })
+    const stuckBody = JSON.stringify(await stuck.json())
+    expect(stuckBody).toContain("workspace_rule_budget")
+    expect(stuckBody).toContain("AGENTS.md: Never share keys.")
+
+    const freed = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "context.rules.onExceed", value: "warn" },
+    })
+    expect(freed.status).toBe(200)
+    expect(await freed.json()).toMatchObject({ after: "warn", applied: true })
+})
+
+/** Counts `agent.reloaded` on a runtime, so a test asserts the reload rather than the reply. */
+function reloads(runtime: Awaited<ReturnType<typeof harness>>["runtime"]): () => number {
+    let count = 0
+    runtime.bus.on("agent.reloaded", () => {
+        count += 1
+    })
+    return () => count
+}
+
+test("a value already in the file writes nothing and reloads nothing (pilot.15)", async () => {
+    const { call, dir, runtime } = await harness({ manifest: EDITABLE })
+    const count = reloads(runtime)
+    const before = readFileSync(join(dir, "agent.yaml"), "utf8")
+    const same = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "limits.maxSteps", value: "6" },
+    })
+    expect(same.status).toBe(200)
+    expect(await same.json()).toMatchObject({ changed: false, reloaded: false, applied: true })
+    // Removing what is not there is the same no-op.
+    const absent = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "model.main.temperature", remove: true },
+    })
+    expect(await absent.json()).toMatchObject({ changed: false, reloaded: false })
+    expect(readFileSync(join(dir, "agent.yaml"), "utf8")).toBe(before)
+    expect(count()).toBe(0)
+
+    const changed = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "limits.maxSteps", value: "7" },
+    })
+    expect(await changed.json()).toMatchObject({ changed: true, reloaded: true })
+    expect(count()).toBe(1)
+})
+
+test("several changes are one write and one reload, and a refused one writes none (pilot.15)", async () => {
+    const { call, dir, runtime } = await harness({
+        manifest: EDITABLE.replace(
+            "  maxSteps: 6\n",
+            "  maxSteps: 6\n  noProgress:\n    sameTool: 6\n",
+        ),
+    })
+    const count = reloads(runtime)
+    const response = await call("PATCH", "/v1/agents/assistant/config", {
+        body: {
+            changes: [
+                { path: "limits.maxSteps", value: "500" },
+                { path: "limits.noProgress.sameTool", remove: true },
+                { path: "tools.pinned", value: "[now]" },
+            ],
+        },
+    })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+        changes: { path: string; changed: boolean }[]
+        reloaded: boolean
+    }
+    expect(body.changes.map((change) => [change.path, change.changed])).toEqual([
+        ["limits.maxSteps", true],
+        ["limits.noProgress.sameTool", true],
+        ["tools.pinned", false],
+    ])
+    expect(body.reloaded).toBe(true)
+    expect(count()).toBe(1)
+    const limits = runtime.list()[0]?.manifest.limits
+    expect(limits?.maxSteps).toBe(500)
+    expect(limits?.noProgress.sameTool).toBeUndefined()
+
+    const file = readFileSync(join(dir, "agent.yaml"), "utf8")
+    const refused = await call("PATCH", "/v1/agents/assistant/config", {
+        body: {
+            changes: [
+                { path: "limits.maxSteps", value: "9" },
+                { path: "limits.maxSteps", value: "not a number" },
+            ],
+        },
+    })
+    expect(refused.status).toBe(400)
+    expect(readFileSync(join(dir, "agent.yaml"), "utf8")).toBe(file)
+    expect(count()).toBe(1)
+
+    const both = await call("PATCH", "/v1/agents/assistant/config", {
+        body: {
+            path: "limits.maxSteps",
+            value: "9",
+            changes: [{ path: "limits.maxSteps", value: "9" }],
+        },
+    })
+    expect(((await both.json()) as { error: { code: string } }).error.code).toBe(
+        "config_changes_invalid",
+    )
+})
+
+test("subagents is settable as a whole list, checked as at load (pilot.15)", async () => {
+    const { call, dir, runtime } = await harness({ manifest: EDITABLE })
+    const set = (value: string) =>
+        call("PATCH", "/v1/agents/assistant/config", { body: { path: "subagents", value } })
+    const ok = await set(
+        '[{name: clock, task: "Tell the time.", tools: [now], route: {tools: [now]}, timeoutMs: 300000}]',
+    )
+    expect(ok.status).toBe(200)
+    expect(runtime.list()[0]?.manifest.subagents?.[0]?.timeoutMs).toBe(300000)
+
+    const before = readFileSync(join(dir, "agent.yaml"), "utf8")
+    const outside = await set(
+        '[{name: mail, task: "Read mail.", tools: [mail_send], route: {tools: [mail_send]}}]',
+    )
+    expect(outside.status).toBe(400)
+    expect(((await outside.json()) as { error: { message: string } }).error.message).toContain(
+        "does not pin",
+    )
+    // Unpinning a slug a child still uses is the same failure, from the other side.
+    const unpin = await call("PATCH", "/v1/agents/assistant/config", {
+        body: { path: "tools.pinned", value: "[memory_write]" },
+    })
+    expect(unpin.status).toBe(400)
+    expect(readFileSync(join(dir, "agent.yaml"), "utf8")).toBe(before)
 })

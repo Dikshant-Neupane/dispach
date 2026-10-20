@@ -29,6 +29,12 @@ export const INIT_LOCAL_TOOLS: readonly { readonly slug: string; readonly note: 
         note: "mutating: serialises, holds a reserved write slot, never retried",
     },
     {
+        slug: "memory_forget",
+        // Kept out of the generated `policy.allow` on purpose: a delete the person asked for happens in
+        // a clean turn, and one prompted by a page or a file the agent just read is refused.
+        note: "mutating: lists by query, deletes only the ids it listed",
+    },
+    {
         slug: "artifact_read",
         // Pinned by default rather than offered as a choice, and that is not the usual bias here.
         // Compaction is always on — the thresholds are manifest values with defaults — so a generated
@@ -2351,7 +2357,10 @@ function envFor(answers: InitAnswers): string {
     // exactly what someone does by hand at this point.
     if (answers.serverToken !== undefined && answers.serverToken !== "") {
         lines.push("")
-        lines.push(`# The HTTP API's bearer token. Generated — replace it whenever you like.`)
+        lines.push(
+            `# The HTTP API's bearer token. Generated. In the sandbox every agent shares the host's,`,
+        )
+        lines.push(`# kept in agents/.api-token — change it there and restart the server.`)
         lines.push(`${BRAND.envPrefix}API_TOKEN=${answers.serverToken}`)
     }
     return `${lines.join("\n")}\n`

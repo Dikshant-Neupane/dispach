@@ -74,14 +74,14 @@ function fakeBaileys(): {
     emit: (update: ConnectionUpdate) => void
     deliver: (upsert: MessagesUpsert) => void
     saveCreds: () => Promise<void>
-    sent: { jid: string; text: string }[]
+    sent: { jid: string; text: string; image?: string; voice?: boolean }[]
 } {
     const handlers: {
         update?: (update: ConnectionUpdate) => void
         creds?: () => void | Promise<void>
         messages?: (upsert: MessagesUpsert) => void
     } = {}
-    const sent: { jid: string; text: string }[] = []
+    const sent: { jid: string; text: string; image?: string; voice?: boolean }[] = []
     const state = { connects: 0 }
 
     const socket: WhatsAppSocket = {
@@ -97,7 +97,13 @@ function fakeBaileys(): {
             },
         } as unknown as WhatsAppSocket["ev"],
         sendMessage: async (jid, content) => {
-            sent.push({ jid, text: content.text })
+            sent.push(
+                "text" in content
+                    ? { jid, text: content.text }
+                    : "audio" in content
+                      ? { jid, text: "", voice: content.ptt && content.mimetype.includes("opus") }
+                      : { jid, text: content.caption ?? "", image: content.mimetype },
+            )
             return { key: { id: "WA1" } }
         },
         sendPresenceUpdate: async () => {},
@@ -107,6 +113,7 @@ function fakeBaileys(): {
 
     return {
         api: {
+            download: async () => new Uint8Array([7, 7]),
             connect: async ({ onUpdate, onCreds, onMessages }) => {
                 state.connects += 1
                 socket.ev.on("connection.update", onUpdate)
@@ -212,6 +219,30 @@ describe("logged out is the one close that is not transient", () => {
             errors.some((error) => (error as { code: string }).code === "whatsapp_logged_out"),
         ).toBe(true)
         await channel.stop()
+    })
+
+    test("a 515 restart-required close reconnects without reporting a disconnect (pilot.13)", async () => {
+        const closeWith = async (statusCode: number) => {
+            const fake = fakeBaileys()
+            const { host, states } = recorder()
+            const channel = transport(fake.api)
+            await channel.start(host)
+            await settle()
+            const before = fake.connects
+            fake.emit({
+                connection: "close",
+                lastDisconnect: { error: { output: { statusCode } } },
+            })
+            for (let i = 0; i < 40 && fake.connects === before; i += 1) await settle()
+            const reconnected = fake.connects > before
+            // Read before `stop()`, which reports its own disconnect.
+            const disconnected = states.some((state) => state.status === "disconnected")
+            await channel.stop()
+            return { reconnected, disconnected }
+        }
+        expect(await closeWith(515)).toEqual({ reconnected: true, disconnected: false })
+        // Any other close still says so.
+        expect((await closeWith(503)).disconnected).toBe(true)
     })
 
     test("any other close keeps the session and reconnects", async () => {
@@ -865,5 +896,128 @@ describe("deviceName is the bracket of the Linked-devices label", () => {
                 }),
             ).toThrow(/deviceName/)
         }
+    })
+})
+
+describe("media", () => {
+    const base = { key: { remoteJid: "8801711223344@s.whatsapp.net", id: "V1" } }
+
+    test("a voice note arrives as audio with no words, and its bytes come from Baileys on demand", async () => {
+        const fake = fakeBaileys()
+        const { host, received } = recorder()
+        const channel = transport(fake.api)
+        await channel.start(host)
+        await settle()
+        fake.deliver({
+            type: "notify",
+            messages: [
+                {
+                    ...base,
+                    message: {
+                        audioMessage: {
+                            mimetype: "audio/ogg; codecs=opus",
+                            seconds: 4,
+                            fileLength: 1200,
+                        },
+                    },
+                },
+            ],
+        })
+        const raw = received[0] as {
+            text: string
+            audio?: {
+                mimeType: string
+                durationS?: number
+                sizeBytes?: number
+                fetch(signal: AbortSignal): Promise<Uint8Array>
+            }
+        }
+        expect(raw.text).toBe("")
+        expect(raw.audio?.mimeType).toBe("audio/ogg; codecs=opus")
+        expect(raw.audio?.durationS).toBe(4)
+        expect(raw.audio?.sizeBytes).toBe(1200)
+        expect([...((await raw.audio?.fetch(new AbortController().signal)) ?? [])]).toEqual([7, 7])
+        await channel.stop()
+    })
+
+    test("a photo arrives as an image, with or without a caption, and its bytes come from Baileys on demand", async () => {
+        const fake = fakeBaileys()
+        const { host, received } = recorder()
+        const channel = transport(fake.api)
+        await channel.start(host)
+        await settle()
+        fake.deliver({
+            type: "notify",
+            messages: [
+                { ...base, message: { imageMessage: { caption: "look", fileLength: 5000 } } },
+                { ...base, key: { ...base.key, id: "V2" }, message: { imageMessage: {} } },
+                {
+                    ...base,
+                    key: { ...base.key, id: "V3" },
+                    message: { documentMessage: { mimetype: "application/pdf" } },
+                },
+            ],
+        })
+        const raws = received as {
+            text: string
+            images?: { sizeBytes?: number; fetch(signal: AbortSignal): Promise<Uint8Array> }[]
+        }[]
+        expect(raws.map((raw) => [raw.text, raw.images?.length])).toEqual([
+            ["look", 1],
+            ["", 1],
+        ])
+        expect(raws[0]?.images?.[0]?.sizeBytes).toBe(5000)
+        const bytes = await raws[1]?.images?.[0]?.fetch(new AbortController().signal)
+        expect([...(bytes ?? [])]).toEqual([7, 7])
+        await channel.stop()
+    })
+
+    test("an attachment is sent as an image, captioned by the chunk's text", async () => {
+        const fake = fakeBaileys()
+        const { host } = recorder()
+        const channel = transport(fake.api)
+        await channel.start(host)
+        await settle()
+        const path = join(authDir, "cube.png")
+        writeFileSync(path, new Uint8Array([0x89, 0x50]))
+        const result = await channel.send({
+            channelId: "wa",
+            recipient: "8801711223344",
+            text: "",
+            attachment: { path, mimeType: "image/png" },
+            idempotencyKey: "k1",
+            chunkIndex: 1,
+            chunkTotal: 2,
+        })
+        expect(result.ok).toBe(true)
+        expect(fake.sent[0]).toEqual({
+            jid: "8801711223344@s.whatsapp.net",
+            text: "",
+            image: "image/png",
+        })
+        await channel.stop()
+    })
+
+    test("an audio attachment goes out as a voice note (ptt, Ogg/Opus) (pilot.15)", async () => {
+        const fake = fakeBaileys()
+        const { host } = recorder()
+        const channel = transport(fake.api)
+        await channel.start(host)
+        await settle()
+        const path = join(authDir, "reply.ogg")
+        writeFileSync(path, new Uint8Array([0x4f, 0x67]))
+        const result = await channel.send({
+            channelId: "wa",
+            recipient: "8801711223344",
+            text: "",
+            attachment: { path, mimeType: "audio/ogg" },
+            idempotencyKey: "k1",
+            chunkIndex: 0,
+            chunkTotal: 1,
+        })
+        expect(result.ok).toBe(true)
+        expect(fake.sent[0]).toEqual({ jid: "8801711223344@s.whatsapp.net", text: "", voice: true })
+        expect(channel.limits.voiceNotes).toBe(true)
+        await channel.stop()
     })
 })

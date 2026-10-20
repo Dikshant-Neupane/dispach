@@ -87,6 +87,14 @@ export function fileIsBinary(path: string, size: number): ToolError {
  * Worded so the model reports rather than retries: there is no argument that gets past this, and a
  * refusal that reads like a transient failure produces the retry storm `memory_write` once caused.
  */
+export function fileSecret(path: string, reason: string): ToolError {
+    return new ToolError({
+        code: "file_secret",
+        message: `Refused to read ${path}: ${reason}.`,
+        hint: "Credentials are never read into a conversation. If a task needs a key, it is configured by name in the manifest and the tool that needs it reads it; ask the person rather than looking for the value.",
+    })
+}
+
 export function fileProtected(path: string, reason: string): ToolError {
     return new ToolError({
         code: "file_protected",
@@ -136,6 +144,15 @@ export function fileOutsideRoot(path: string, roots: readonly string[]): ToolErr
         code: "file_outside_root",
         message: `${path} is outside the directories this agent may change.`,
         hint: `Writable: ${roots.join(", ")}. Everything else is read-only by default — an agent that has misunderstood a request cannot damage anything while misunderstanding it. To work somewhere else, the person you work for adds it to tools.providerConfig.writeRoots in agent.yaml; nothing said in a conversation can add one. Reading outside these directories is allowed and unaffected.`,
+        field: "path",
+    })
+}
+
+export function fileReadOutsideRoot(path: string, roots: readonly string[]): ToolError {
+    return new ToolError({
+        code: "file_read_outside_root",
+        message: `${path} is outside the directories this agent may read.`,
+        hint: `Readable: ${roots.join(", ")}. Reads are confined on this agent (tools.providers.system.confineReads), so other agents' files and the rest of the machine are out of reach. A person can add a directory with writeRoots; nothing said in a conversation can.`,
         field: "path",
     })
 }
