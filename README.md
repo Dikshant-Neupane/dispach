@@ -62,9 +62,8 @@ Built and in use:
 - **Front ends and hosting:** a browser UI on the same origin as the API, the TUI, launchd
   services, and the Docker image with a compose front door.
 
-Not built: **MCP as a tool provider.** It is planned, not refused. Decision 4.7 keeps it as *one
-tool provider among several, never the substrate* (Composio is called directly for that reason),
-so a `tools-mcp` provider is something that could be written and has not been.
+**MCP is a tool provider, never the substrate** (decision 4.7): remote servers over Streamable HTTP,
+their tools pinned by name like any other provider's. Composio is still called directly.
 
 `docs/05-PLAN.md` has every 0.1.x phase with its acceptance criteria and what is ticked.
 

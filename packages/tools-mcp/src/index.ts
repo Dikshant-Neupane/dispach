@@ -44,7 +44,7 @@ export default {
     version: VERSION,
     dispachApi: "^0.2",
     permissions: [
-        // Whatever servers the manifest names; loopback in VelaCrew's shape.
+        // Whatever servers the manifest names.
         { kind: "network", hosts: ["<tools.providers.mcp.servers.*.url>"] },
         { kind: "fs", paths: ["<state>/mcp.cache.json"], mode: "write" },
     ],

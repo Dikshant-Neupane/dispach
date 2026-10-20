@@ -480,15 +480,15 @@ tools:
   providers:
     mcp:
       servers:
-        huly:
+        tracker:
           url: http://127.0.0.1:3000/mcp
-          headersEnv: { Authorization: HULY_MCP_AUTH }   # header → env var NAME, never a value
+          headersEnv: { Authorization: TRACKER_MCP_TOKEN }   # header → env var NAME, never a value
           participantHeader: X-Acting-Participant        # the person the turn acts for
           policyArgs: { invoke_tool: toolName }          # what a policy rule matches, per tool
           timeoutMs: 30000                                # default
-  pinned: [huly__search_tools, huly__get_tool_schema, huly__invoke_tool]
+  pinned: [tracker__search_tools, tracker__get_tool_schema, tracker__invoke_tool]
   policy:
-    deny: ["huly__invoke_tool(delete_*)"]
+    deny: ["tracker__invoke_tool(delete_*)"]
 ```
 
 | Field | Notes |

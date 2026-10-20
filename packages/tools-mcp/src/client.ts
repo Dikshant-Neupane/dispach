@@ -4,8 +4,7 @@
  *
  * Hand-written rather than the SDK, because this is all of it: one POST per JSON-RPC message, a
  * response that is either JSON or an SSE stream carrying it, and a session id to echo. No stdio
- * (VelaCrew keeps credentials inside the server, so HTTP to loopback is the only form needed), no
- * server-initiated requests, no resumption. Verified against a live `@firfi/huly-mcp` 0.52.6.
+ * (give a stdio server an HTTP front), no server-initiated requests, no resumption. Verified against a live `@firfi/huly-mcp` 0.52.6.
  *
  * **A stale session is re-initialized once.** The spec answers an expired `Mcp-Session-Id` with 404,
  * and a server restart does exactly that to every client — so the first call after one retries on a

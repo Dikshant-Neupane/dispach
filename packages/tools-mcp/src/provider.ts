@@ -6,14 +6,14 @@
  *   providers:
  *     mcp:
  *       servers:
- *         huly:
+ *         tracker:
  *           url: http://127.0.0.1:3000/mcp
- *           headersEnv: { Authorization: HULY_MCP_AUTH }   # header → env var NAME
+ *           headersEnv: { Authorization: TRACKER_MCP_TOKEN }   # header → env var NAME
  *           participantHeader: X-Acting-Participant        # who the turn acts for (doc 16 R7)
  *           turnHeader: X-Dispach-Turn                     # which turn made the call (pilot.9)
  *           policyArgs: { invoke_tool: toolName }          # a proxy tool's inner tool, for policy
  *           personal: true                                 # acts as the owner: only their turns (pilot.15)
- *   pinned: [huly__search_tools, huly__get_tool_schema, huly__invoke_tool]
+ *   pinned: [tracker__search_tools, tracker__get_tool_schema, tracker__invoke_tool]
  * ```
  *
  * The same shape as Composio, on purpose (decision 14.22): **boot resolves from the cache and
@@ -53,7 +53,7 @@ export interface McpServerConfig {
     readonly participantHeader?: string
     /**
      * A header carrying the turn id, and one carrying the call id beside it as `<header>-Call`
-     * (pilot.9, VelaCrew): so a server's writes can be traced to the answer that made them, where
+     * (pilot.9): so a server's writes can be traced to the answer that made them, where
      * matching by agent and time window mixes two turns that ran at once.
      */
     readonly turnHeader?: string
@@ -95,7 +95,7 @@ function stringMap(value: unknown, field: string, check?: RegExp): Record<string
             `${field} must map names to ${check === undefined ? "strings" : "environment variable names"}.`,
             check === undefined
                 ? `Write it as a map, e.g. { invoke_tool: toolName }.`
-                : `Write it as { Authorization: HULY_MCP_AUTH }: the header name, then the variable holding its value. A value never goes in the manifest.`,
+                : `Write it as { Authorization: TRACKER_MCP_TOKEN }: the header name, then the variable holding its value. A value never goes in the manifest.`,
             field,
         )
     }
@@ -115,7 +115,7 @@ export function parseServers(config: Readonly<Record<string, unknown>>): McpServ
     if (servers === undefined || Object.keys(servers).length === 0) {
         throw mcpConfigInvalid(
             "tools.providers.mcp names no servers.",
-            "Add servers.<name>.url, e.g. servers: { huly: { url: http://127.0.0.1:3000/mcp } }.",
+            "Add servers.<name>.url, e.g. servers: { tracker: { url: http://127.0.0.1:3000/mcp } }.",
             "tools.providers.mcp.servers",
         )
     }
@@ -125,7 +125,7 @@ export function parseServers(config: Readonly<Record<string, unknown>>): McpServ
         if (!/^[a-z][a-z0-9-]{0,23}$/.test(name)) {
             throw mcpConfigInvalid(
                 `The MCP server name "${name}" is not usable in a tool slug.`,
-                "Use lowercase letters, digits and hyphens, starting with a letter, at most 24 characters. It prefixes every tool: huly → huly__search_tools.",
+                "Use lowercase letters, digits and hyphens, starting with a letter, at most 24 characters. It prefixes every tool: tracker → tracker__search_tools.",
                 field,
             )
         }
@@ -160,7 +160,7 @@ export function parseServers(config: Readonly<Record<string, unknown>>): McpServ
         if (url.username !== "" || url.password !== "") {
             throw mcpConfigInvalid(
                 `${field}.url carries a credential.`,
-                "A manifest never holds a secret. Put it in an env var and name it in headersEnv, e.g. { Authorization: HULY_MCP_AUTH }.",
+                "A manifest never holds a secret. Put it in an env var and name it in headersEnv, e.g. { Authorization: TRACKER_MCP_TOKEN }.",
                 `${field}.url`,
             )
         }

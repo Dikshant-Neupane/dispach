@@ -37,7 +37,7 @@ function firstSentence(text: string): string {
 
 /**
  * `policyArg` names the argument a policy rule matches, and for a proxy tool that is the inner
- * tool's name — so `deny huly__invoke_tool(delete_issue)` reaches the call the proxy would make.
+ * tool's name — so `deny tracker__invoke_tool(delete_issue)` reaches the call the proxy would make.
  */
 /**
  * The one-line summary, without converting the schema. `available()` lists every cached tool, and
