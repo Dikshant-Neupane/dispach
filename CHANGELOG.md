@@ -15,6 +15,7 @@ and backups. Rooms, stand-ins and team memory ship as experimental, API-only. Ev
 - An agent `id` may no longer start with `~`.
 - Store migrations 20–31 run on first boot, with no down-migration. Back up `store.db` first.
 - The first turn after upgrading misses the prompt cache once, because workspace files now reach the model labelled with their names.
+- Nothing in an existing `agent.yaml` has to change: a 0.1.3 agent and store boot on 0.2.0 as they are, history included.
 
 ### Models
 

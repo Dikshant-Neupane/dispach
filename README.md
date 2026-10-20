@@ -550,8 +550,8 @@ deliberately. A Telegram outage must not read as an unhealthy container and get 
 the same outage, so the probe answers "can it serve a turn" rather than "is everything connected".
 Channel state lives on the agent resource instead.
 
-Measured on an arm64 Docker Desktop at 0.1.3: the image is **701 MB** against an 800 MB ceiling,
-and `docker compose up -d --wait` reaches healthy in about six seconds — readiness is tens of
+Measured on an arm64 Docker Desktop at 0.2.0: the image is **867 MB** (701 MB at 0.1.3; the static
+`ffmpeg` for voice notes is 104 MB of the difference), and `docker compose up -d --wait` reaches healthy in about six seconds — readiness is tens of
 milliseconds in-process and almost all of that is waiting for the first healthcheck probe. Where the
 size goes: 110 MB Debian, 160 MB of Node (with npm and corepack, kept so the agent's shell has a
 Node toolchain), 158 MB of apt packages (of which `git` alone is **92 MB**, because Debian's git
