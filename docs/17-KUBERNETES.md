@@ -1,8 +1,7 @@
 # 17 — Running a silo on Kubernetes
 
-What a pod needs from the stock image to run well rather than merely run. Written for VelaCrew's team
-plane (doc 16, R9: one silo per team space on EKS), and generic: nothing here is specific to EKS
-except where it says so. `examples/kubernetes/silo.yaml` is a working starting point.
+What a pod needs from the stock image to run well rather than merely run, for one silo per pod.
+Nothing here is specific to EKS except where it says so. `examples/kubernetes/silo.yaml` is a working starting point.
 
 The image is the same one Docker Compose runs (`ghcr.io/moeen-mahmud/dispach`). It runs `serve
 --host 0.0.0.0` as uid 1000, from `/home/dispach`.

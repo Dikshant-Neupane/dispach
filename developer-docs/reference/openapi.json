@@ -394,7 +394,7 @@
                         "description": "No such agent, or it is switched off."
                     },
                     "409": {
-                        "description": "the agent was not made from a template on 0.2.0-pilot.5 or later"
+                        "description": "the agent was not made from a template on 0.2.0 or later"
                     },
                     "501": {
                         "description": "this server has no templates"

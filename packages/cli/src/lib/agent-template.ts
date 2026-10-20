@@ -339,7 +339,7 @@ export function rerenderFromTemplate(input: {
         throw new HarnessError({
             code: "agent_not_from_template",
             message: "This agent has no record of the template it was made from.",
-            hint: "Only an agent created with POST /v1/agents {template} on 0.2.0-pilot.5 or later carries one, because re-rendering needs the hash of every file as it was rendered. For an older agent, edit the files directly or create it again from the template.",
+            hint: "Only an agent created with POST /v1/agents {template} on 0.2.0 or later carries one, because re-rendering needs the hash of every file as it was rendered. For an older agent, edit the files directly or create it again from the template.",
         })
     }
     const record = JSON.parse(readFileSync(recordPath, "utf8")) as Provenance

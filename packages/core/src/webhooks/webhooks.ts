@@ -115,7 +115,7 @@ export interface WebhookAllowlist {
 
 export const EMPTY_ALLOWLIST: WebhookAllowlist = { hosts: new Set(), ranges: [] }
 
-/** Parse `velacrew-api, 172.16.0.0/12, fd00::/8`. Throws naming the entry it cannot read. */
+/** Parse `internal-api, 172.16.0.0/12, fd00::/8`. Throws naming the entry it cannot read. */
 export function parseWebhookAllowlist(raw: string | undefined, source: string): WebhookAllowlist {
     if (raw === undefined || raw.trim() === "") return EMPTY_ALLOWLIST
     const hosts = new Set<string>()
@@ -135,7 +135,7 @@ export function parseWebhookAllowlist(raw: string | undefined, source: string): 
             throw new HarnessError({
                 code: "webhook_allowlist_invalid",
                 message: `${source} has an entry that is neither a hostname nor an address range: "${entry}".`,
-                hint: "List hostnames and CIDR ranges, comma-separated: velacrew-api, 172.16.0.0/12, fd00::/8. A link-local range is refused whatever this says.",
+                hint: "List hostnames and CIDR ranges, comma-separated: internal-api, 172.16.0.0/12, fd00::/8. A link-local range is refused whatever this says.",
                 field: source,
             })
         }

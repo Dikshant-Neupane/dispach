@@ -155,7 +155,7 @@ const DOCS: Readonly<Record<string, RouteDoc>> = {
                 code: 400,
                 when: "a secret or undeclared variable, or a result the agent would not load (every file is put back)",
             },
-            { code: 409, when: "the agent was not made from a template on 0.2.0-pilot.5 or later" },
+            { code: 409, when: "the agent was not made from a template on 0.2.0 or later" },
             { code: 501, when: "this server has no templates" },
         ],
     },

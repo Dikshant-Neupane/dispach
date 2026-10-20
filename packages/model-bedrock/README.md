@@ -9,7 +9,7 @@ model:
     api: bedrock-converse
     options:
       region: eu-west-1
-      # profile: velacrew                     # a named AWS profile, optionally
+      # profile: my-profile                   # a named AWS profile, optionally
     fallbacks:
       - id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
         api: bedrock-converse

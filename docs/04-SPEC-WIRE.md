@@ -515,7 +515,7 @@ webhook-signature: v1,<base64 HMAC-SHA256 of "{id}.{timestamp}.{body}", keyed by
 - **Where it may go.** Every address the host resolves to is checked, at subscribe and before
   every send. The public internet is allowed. Private, loopback and CGNAT addresses are refused
   unless the operator lists the hostname or range in the server's `<PREFIX>WEBHOOK_ALLOW`
-  (`velacrew-api, 172.16.0.0/12`), because a self-hosted receiver is usually on the same network.
+  (`internal-api, 172.16.0.0/12`), because a self-hosted receiver is usually on the same network.
   Link-local, where cloud metadata lives, is refused whatever is listed. A redirect is not
   followed. DNS rebinding is not covered: the check and the connection resolve separately.
 - **Retries.** A non-2xx or a timeout retries at 30 s, 2 min, 10 min, 1 h and 6 h, then the delivery

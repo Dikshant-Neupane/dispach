@@ -234,9 +234,9 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
             contextWindow: 1_050_000,
             maxOutput: 128_000,
         },
-        // Window, output, native tools and vision are VelaCrew's figures from their model-tier plan
-        // (pilot.6), not read off OpenAI's own documentation here. `model probe` can settle the window.
-        note: "Window and output from VelaCrew's tier plan, unverified here. Override if your endpoint says otherwise.",
+        // Window, output, native tools and vision are a deployment's reported figures (pilot.6), not
+        // read off OpenAI's own documentation here. `model probe` can settle the window.
+        note: "Window and output are reported figures, unverified here. Run `model probe` or override if your endpoint says otherwise.",
     },
     {
         pattern: "gpt-5*",

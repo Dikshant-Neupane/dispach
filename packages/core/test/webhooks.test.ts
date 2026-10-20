@@ -91,19 +91,19 @@ describe("the target", () => {
 
     test("private is refused unless the operator lists the host or the range", async () => {
         const docker = resolvesTo("172.18.0.5")
-        expect(await codeOf("http://velacrew-api:3000/hooks", docker)).toBe(
+        expect(await codeOf("http://internal-api:3000/hooks", docker)).toBe(
             "webhook_target_refused",
         )
         expect(
             await codeOf(
-                "http://velacrew-api:3000/hooks",
+                "http://internal-api:3000/hooks",
                 docker,
-                parseWebhookAllowlist("velacrew-api", "t"),
+                parseWebhookAllowlist("internal-api", "t"),
             ),
         ).toBe("ok")
         expect(
             await codeOf(
-                "http://velacrew-api:3000/hooks",
+                "http://internal-api:3000/hooks",
                 docker,
                 parseWebhookAllowlist("172.16.0.0/12", "t"),
             ),
