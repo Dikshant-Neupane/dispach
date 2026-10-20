@@ -743,6 +743,29 @@ describe("hard rule 3 — the brand lives in one file", () => {
         expect(offenders).toEqual([])
     })
 
+    test("no web source file spells the product name either", () => {
+        // The check above reads `packages/cli/src` only, and the browser UI grew three storage keys
+        // and a wordmark before anything looked. The client's own exported names are its public API
+        // and are exempt here by derivation; the other packages are a backlog item (docs/05-PLAN.md).
+        const web = resolve(SRC, "..", "..", "web", "src")
+        const offenders = sourceFiles(web)
+            .concat(
+                readdirSync(web)
+                    .filter((name) => name.endsWith(".css"))
+                    .map((name) => join(web, name)),
+            )
+            .filter((path) =>
+                readFileSync(path, "utf8")
+                    .replaceAll(BRAND.packageScope, "")
+                    .replaceAll(`${BRAND.name}Client`, "")
+                    .replaceAll(`${BRAND.name}Error`, "")
+                    .toLowerCase()
+                    .includes(BRAND.slug),
+            )
+            .map((path) => relative(web, path))
+        expect(offenders).toEqual([])
+    })
+
     /**
      * The root config files a rename has to carry with it, guarded by their **consequence** rather
      * than by the rename script's own classification.

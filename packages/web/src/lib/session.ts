@@ -7,6 +7,8 @@
  * alphabet with the confusable letters removed, because a key is something people read back.
  */
 
+import { DEFAULT_BRAND } from "@dispach/core/wire"
+
 const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz"
 
 export function newConversationKey(random: (count: number) => Uint8Array): string {
@@ -14,7 +16,7 @@ export function newConversationKey(random: (count: number) => Uint8Array): strin
 }
 
 /** The conversation this tab had open, so a reload reopens it rather than a blank "new conversation". */
-export const OPEN_SESSION = "dispach.session"
+export const OPEN_SESSION = `${DEFAULT_BRAND.slug}.session`
 
 export function rememberedSession(stored: string | null, agentId: string): string | undefined {
     if (stored === null) return undefined

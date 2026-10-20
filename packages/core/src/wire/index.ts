@@ -35,6 +35,12 @@
  */
 
 /**
+ * The brand a browser can read. `BRAND` resolves an override from `process.env`, which a browser
+ * does not have, so a page shows the default brand even under a runtime started with an override.
+ * The rename script moves the default, which is what a rename is.
+ */
+export { DEFAULT_BRAND } from "../brand.ts"
+/**
  * The channel vocabulary, because a browser is what renders `needs_input`.
  *
  * Type-only, so it is erased and costs the bundle nothing — `channels/channel.ts` imports one type

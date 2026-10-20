@@ -28,7 +28,7 @@ import type {
     ToolSummary,
 } from "@dispach/client"
 import { DispachError } from "@dispach/client"
-import { isChildSession } from "@dispach/core/wire"
+import { DEFAULT_BRAND, isChildSession } from "@dispach/core/wire"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Composer, Rows } from "./chat.tsx"
 import { Keys } from "./keys.tsx"
@@ -65,7 +65,7 @@ import {
 } from "./panels.tsx"
 
 /** Where a live turn id is parked so a refresh can reattach. Per tab, not per browser. */
-const LIVE_TURN = "dispach.turn"
+const LIVE_TURN = `${DEFAULT_BRAND.slug}.turn`
 
 export function App(props: { readonly baseUrl: string }): React.ReactElement {
     const [credential, setCredential] = useState<Credential | undefined>()
@@ -157,8 +157,8 @@ function PasteCredential(props: {
                 onChange={(event) => setValue(event.target.value)}
             />
             <p className="hint" style={{ margin: "8px 0 12px" }}>
-                <code>dispach serve</code> prints a one-time claim at boot while no key exists. A
-                claim is exchanged for a key this browser keeps; a key is used directly.
+                <code>{DEFAULT_BRAND.slug} serve</code> prints a one-time claim at boot while no key
+                exists. A claim is exchanged for a key this browser keeps; a key is used directly.
             </p>
             <div className="ask">
                 <div className="buttons">
@@ -336,7 +336,7 @@ function Workspace(props: {
                     ...previous,
                     filter: emptyFor(first.dialect ?? "nlt").filter,
                 }))
-                document.title = `${first.name} · Dispach`
+                document.title = `${first.name} · ${DEFAULT_BRAND.name}`
             })
             .catch((caught: unknown) => setError(describe(caught)))
     }, [])
@@ -895,7 +895,7 @@ function Workspace(props: {
         <div className="shell">
             <aside className="side">
                 <header>
-                    <div className="brand">Dispach</div>
+                    <div className="brand">{DEFAULT_BRAND.name}</div>
                     <div style={{ fontSize: 12, color: "var(--dim)" }}>{agentName ?? "…"}</div>
                 </header>
                 <nav>
@@ -905,7 +905,7 @@ function Workspace(props: {
                      * A picker on a single-agent server is a control with one option — noise on the
                      * shape this runtime is most often deployed in, one agent per container. The
                      * *stopped* rows are the exception: those appear whatever the count, because an
-                     * agent that is off and invisible is the failure `dispach stop` was designed
+                     * agent that is off and invisible is the failure the CLI's `stop` was designed
                      * around, and here it would leave a blank page with nothing explaining it.
                      */}
                     {agents.length > 1 || agents.some((entry) => entry.status === "disabled") ? (
@@ -1255,7 +1255,7 @@ async function history(
 /**
  * One sentence for the screen — and **it does not re-append the hint**.
  *
- * `DispachError`'s constructor already embeds it: `super(`${message}\n  hint: ${hint}`)`. Appending
+ * The client error's constructor already embeds it: `super(`${message}\n  hint: ${hint}`)`. Appending
  * `— ${hint}` on top of that rendered every transport failure with the hint printed twice, in one
  * paragraph, which is how the sessions banner came to read `hint: Check the base URL … — Check the
  * base URL …`. `message` is the whole readable error; `detail` is the part before the hint.
