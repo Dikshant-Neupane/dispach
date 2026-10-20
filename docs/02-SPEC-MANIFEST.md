@@ -463,6 +463,7 @@ put the security fields out of reach; and two edits are refused whatever the pol
 | a `writeRoots` list anywhere — `tools.providers.<id>.writeRoots`, or nested inside a `tools.providers` value | where the agent may write is the person's decision. Asked to create a file, an agent granted itself the whole home directory and wrote there |
 | any provider's `baseUrl` (Composio's, the web search backend's, Firecrawl's), by path or nested inside a `tools.providers` value | where a provider sends its requests is where its credential goes; an agent that could set it could send its token and every query anywhere |
 | the system provider's `confineReads`, by path or nested inside a `tools.providers` value | which files the agent may read is the person's; an agent that could turn it off could read the other agents' notes it keeps out of reach (pilot.14) |
+| any provider's `personal` flag (Composio's, an MCP server's), by path or nested inside a `tools.providers` value | whose turns may use the owner's connected accounts is the person's; an agent in a room that could set it to `false` would hand those accounts to everyone there |
 | the system provider's `env`, by path or nested inside a `tools.providers` value | what a command can see of the environment is containment; an agent that could set `inherit` back could hand its shell every secret the scrub keeps out |
 | replacing `tools.policy.deny` | its only purpose is removing a restriction someone set deliberately |
 | `tools.untrusted.onMutate: allow` | it turns off the check on outside content driving a write |
@@ -575,8 +576,9 @@ The consequence is that a cold agent must be warmed once — `dispach tools <man
 empty cache fails the load naming the slugs and that command, rather than making the call it is not
 allowed to make. A warmed agent boots and serves its catalogue with no API key present at all.
 
-`tools.providers.composio` accepts `apiKeyEnv` (default `COMPOSIO_API_KEY`), `userId`, and
-`baseUrl`. Anything else is refused: the schema keeps this a free-form record, so nothing upstream
+`tools.providers.composio` accepts `apiKeyEnv` (default `COMPOSIO_API_KEY`), `userId`, `baseUrl`,
+and `personal` (default `true`: every Composio tool acts as the agent's owner and is offered only to
+turns acting for them; `false` for an entity a team shares on purpose). Anything else is refused: the schema keeps this a free-form record, so nothing upstream
 catches `userid` for `userId`, and a silently ignored setting is a configuration that looks applied
 and is not.
 

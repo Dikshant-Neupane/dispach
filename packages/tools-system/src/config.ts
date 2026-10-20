@@ -187,6 +187,12 @@ function floorRefusal(path: string, value?: unknown): string | undefined {
     if (key.startsWith("tools.providers") && key.split(".").includes("confinereads"))
         return READ_REACH
     if (key.startsWith("tools.providers") && containsKey(value, "confinereads")) return READ_REACH
+    // Whose turns may use the owner's accounts: an agent in a room that could set a provider's
+    // `personal` to false would hand the owner's connected accounts to everyone in it.
+    const OWNER_REACH =
+        "who may use your owner's connected accounts is not yours to widen. A person sets a provider's personal flag"
+    if (key.startsWith("tools.providers") && key.split(".").includes("personal")) return OWNER_REACH
+    if (key.startsWith("tools.providers") && containsKey(value, "personal")) return OWNER_REACH
     if (key.startsWith("tools.providers") && key.split(".").includes("env")) return CHILD_ENV
     if (key.startsWith("tools.providers") && containsKey(value, "env")) return CHILD_ENV
     // Same two shapes as `writeRoots`: the path itself, and the key hidden inside a value. `channels`
@@ -362,7 +368,7 @@ export function configReadHandler(options: ConfigOptions): ToolHandler {
             ...contextFiles(doc),
             "Anything not on this list is not settable from a conversation. A change takes effect when the agent next starts, not in the current conversation.",
             "",
-            "Some edits are refused whatever the rules say. Removing a check: replacing tools.policy.deny, or setting tools.untrusted.onMutate to allow. Deciding reach: a writeRoots list anywhere, the system provider's env, any provider's baseUrl, a channel's allowFrom, and server.host or server.tokenEnv. Enabling a capability is what a person asks you for; where you may write, who may talk to you, and what address you listen on are theirs — name what you need and why, and let them add it.",
+            "Some edits are refused whatever the rules say. Removing a check: replacing tools.policy.deny, or setting tools.untrusted.onMutate to allow. Deciding reach: a writeRoots list anywhere, the system provider's env, any provider's baseUrl or personal flag, a channel's allowFrom, and server.host or server.tokenEnv. Enabling a capability is what a person asks you for; where you may write, who may talk to you, and what address you listen on are theirs — name what you need and why, and let them add it.",
             "",
             // Hidden (pilot.15): pointing at the raw file would point past the redaction above.
             ...(hidden(doc)

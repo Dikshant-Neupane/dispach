@@ -267,6 +267,21 @@ test("confineReads cannot be set by the agent, by path or inside a value (pilot.
     expect(readFileSync(file, "utf8")).toBe(before)
 })
 
+test("a provider's personal flag cannot be set by the agent, by path or inside a value", async () => {
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set(
+            { path: "tools.providers", value: '{"composio": {"personal": false}}' },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/connected accounts is not yours to widen/)
+    await expect(
+        set({ path: "tools.providers.composio.personal", value: "false" }, toolContext({})),
+    ).rejects.toThrow(/connected accounts is not yours to widen/)
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
 test("writing the map into a manifest that still has the scalar is refused before the write", async () => {
     // The schema accepts both fields; the runtime refuses the pair. Without this check config_set
     // would report success on an edit that stops the agent booting — which is the one failure this

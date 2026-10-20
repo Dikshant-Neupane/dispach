@@ -22,7 +22,7 @@ import { join } from "node:path"
 import { BRAND, renderNotEnabledText, ToolRegistry } from "@dispach/core"
 import { cachePath, readCache, writeCache } from "../src/cache.ts"
 import { type ComposioTool, isMutating, isUnannotated, mapTool } from "../src/map.ts"
-import { ComposioProvider } from "../src/provider.ts"
+import { ComposioProvider, composioFromConfig } from "../src/provider.ts"
 
 function tempDir(): string {
     return mkdtempSync(join(tmpdir(), "composio-test-"))
@@ -307,6 +307,23 @@ test("resolve serves the cache and makes no network call", async () => {
         "GMAIL_SEND_EMAIL",
         "GMAIL_FETCH_EMAILS",
     ])
+})
+
+test("every tool is the owner's by default, and a shared entity can say it is not", async () => {
+    const dir = tempDir()
+    seed(dir, [GMAIL_SEND])
+    const context = { dir, env: { COMPOSIO_API_KEY: "test-key" }, agentId: "a" }
+    const [owned] = await composioFromConfig({ ...context, config: {} }).resolve([
+        "GMAIL_SEND_EMAIL",
+    ])
+    expect(owned?.spec.personal).toBe(true)
+    const [shared] = await composioFromConfig({ ...context, config: { personal: false } }).resolve([
+        "GMAIL_SEND_EMAIL",
+    ])
+    expect(shared?.spec.personal).toBeUndefined()
+    expect(() => composioFromConfig({ ...context, config: { personal: "no" } })).toThrow(
+        "personal must be true or false",
+    )
 })
 
 test("an uncached slug is omitted, not thrown — the registry diffs and names them all at once", async () => {
