@@ -670,6 +670,24 @@ export function workspaceBudgetExceeded(init: WorkspaceBudgetInit): ConfigError 
     })
 }
 
+/**
+ * A volatile file changed while the agent was running and the new version does not load.
+ *
+ * A warning rather than a failure, and the asymmetry with boot is deliberate. At boot a bad workspace
+ * refuses to start, because nothing is running yet and refusing is the loudest signal available. Mid-run
+ * the agent is answering people, and a person saving an over-budget `MEMORY.md` from a UI must not take
+ * it down — so it keeps the last version that loaded and says so. Nothing is truncated either way: the
+ * model sees one complete, valid version or the other, never half of the new one.
+ */
+export function workspaceReloadRefused(cause: string, causeHint: string): ConfigError {
+    return new ConfigError({
+        code: "workspace_reload_refused",
+        message: `A volatile workspace file changed but the new version does not load, so the agent keeps the previous one: ${cause}`,
+        hint: `${causeHint} The change takes effect on the next turn after the file loads again; until then, and at the next start, the agent will not use it — a start refuses this workspace outright.`,
+        field: "context.volatile",
+    })
+}
+
 export function workspaceTierMismatch(name: string, declared: string, listed: string): ConfigError {
     return new ConfigError({
         code: "workspace_tier_mismatch",
