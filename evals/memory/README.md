@@ -5,7 +5,8 @@ bun run eval:memory                      # 5,000 passages, 5 repeats
 bun scripts/eval-memory.ts --passages 200
 ```
 
-No endpoint, no model, no network. The script writes `results.json` locally; do not commit it.
+No endpoint, no model, no network. The script writes `results.json` with the commit and machine it
+ran on, and that file is committed: `evals/CLAIMS.md` cites it.
 
 Both claims are local: that retrieval stays inside its latency budget over a corpus far larger
 than any real one, and that the shipped `memory.threshold` admits the answers a person would call

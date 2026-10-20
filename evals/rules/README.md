@@ -53,6 +53,12 @@ and `SMALL_MODEL_BASE_URL` to a hosted open-weight endpoint.
 No figure is reported until a run finishes and writes `results.json`. `evals/tools/` is the
 precedent: a killed run is reported as killed, never estimated.
 
+**The committed `results.json` disagrees with this section, and is not quoted.** It holds a
+`qwen3.5:9b` run (pooled `perRuleSuccess` 0.990, usable, `reasoningEffort: none`, `maxTokens` 2000)
+committed together with the paragraph above, which says no such run finished. Nothing records which
+of the two is current, so neither is a result until a run against `SMALL_MODEL_BASE_URL` settles it
+(`evals/CLAIMS.md`).
+
 #### The first run, and why its 0.688 was worthless
 
 Worth keeping, because the failure looked exactly like a measurement.

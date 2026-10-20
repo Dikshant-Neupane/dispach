@@ -47,3 +47,6 @@ load reads one JSON file and stats each skill directory, a cold one parses every
 counts its tokens. `eval-skills.ts` asserts that the cold pass reports `cached: false` and the warm
 pass `cached: true` before it reports any timing, because a "warm" figure taken from a second cold
 scan measures nothing and looks like a fast cache.
+
+`bun run eval:skills` writes `results.json` with the commit and machine it ran on. The tables above
+are dated measurements; `results.json` is the latest.

@@ -22,6 +22,7 @@ import { MEMORY_QUESTIONS, memoryCorpus, PADDING_TOPICS } from "../evals/fixture
 import { fts5Retriever, syncFiles } from "../packages/core/src/memory/fts5.ts"
 import { retrieveWithContext, selectPassages } from "../packages/core/src/memory/retriever.ts"
 import { openMemoryStore } from "../packages/core/src/store/sqlite/store.ts"
+import { provenance } from "./lib/provenance.ts"
 
 const args = process.argv.slice(2)
 function flag(name: string, fallback: number): number {
@@ -199,6 +200,7 @@ writeFileSync(
     out,
     `${JSON.stringify(
         {
+            ...provenance(),
             corpus: { passages: stats.passages, averageLength: stats.totalLength / stats.passages },
             settings: {
                 threshold: THRESHOLD,

@@ -84,9 +84,12 @@ a workflow engine, a RAG pipeline, a vector database, or a model gateway.
 
 The ones that would otherwise look like mistakes:
 
-- **Natural-language tool calling is the default dialect**, not native function calling.
-  Published replication across 14 models: +14.9pp accuracy, 93% fewer critical errors, −25%
-  tokens; +24 to +43pp on small models specifically. `native` is an explicit opt-in.
+- **Natural-language tool calling is the default dialect**, not native function calling. Measured
+  here on 37 single-call fixtures (routing and arguments, no tool executed): NLT ahead on all three
+  models tried, by one fixture on qwen3.5:9b and by 10.8pp on deepseek-chat, with 21–23% fewer
+  prompt tokens ([`evals/tools`](evals/tools/)). A 14-model replication reports +14.9pp and 93% fewer
+  critical errors, with smaller or reversed gains on frontier models
+  ([arXiv 2607.03953](https://arxiv.org/abs/2607.03953)). `native` is an explicit opt-in.
 - **The tool dialect is config and never auto-detected.** Behaviour must not change silently
   when the model changes.
 - **Tools are pinned at load, not searched at runtime.** Search-then-execute is two-hop
@@ -605,7 +608,8 @@ Public pull requests are welcome; [`CONTRIBUTING.md`](CONTRIBUTING.md) is the co
 
 ## Boot budget
 
-Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms.
+Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms. Every number in this
+README has a row in [`evals/CLAIMS.md`](evals/CLAIMS.md) naming the file it comes from.
 
 Measured at **~87 ms** at 0.2.0 — 64 ms of interpreter and imports, 23 ms inside `Runtime.create` —
 and checked on every phase rather than at the end (it was ~53 ms at 0.1.3; the 0.2.0 packages
@@ -621,8 +625,9 @@ average of ~5, and the same tree measured 58 ms with four builds running beside 
 three orders of magnitude of headroom, so the reason to say this is not the arithmetic — it is that
 a regression is only visible against a figure you can reproduce.
 
-This single number is why the project exists: the runtime it replaces spends roughly four minutes on
-network calls during hook initialisation. Nothing here touches the network before readiness.
+This single number is why the project exists: the gateway it replaced blocked for minutes on
+network calls during hook initialisation, observed on our own deployment and not measured in
+[`evals/`](evals/). Nothing here touches the network before readiness.
 
 If you ever see a boot in the tens of seconds, check `uptime` before profiling. Twice it has been the
 machine being saturated — once by orphaned shells this runtime had itself failed to reap — and not the

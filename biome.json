@@ -8,7 +8,8 @@
             "!**/node_modules",
             "!**/*.tsbuildinfo",
             "!developer-docs/reference/openapi.json",
-            "!evals/**/results.json"
+            "!evals/**/results.json",
+            "!evals/index.json"
         ]
     },
     "formatter": {
