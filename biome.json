@@ -53,6 +53,10 @@
         {
             "includes": ["**/tsconfig*.json"],
             "json": { "parser": { "allowComments": true } }
+        },
+        {
+            "includes": ["site/**/*.css"],
+            "css": { "parser": { "tailwindDirectives": true } }
         }
     ]
 }
