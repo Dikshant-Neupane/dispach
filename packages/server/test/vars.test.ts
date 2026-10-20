@@ -1,5 +1,5 @@
 /**
- * `PATCH /v1/agents/:id/vars` (pilot.5, VelaCrew #21). The re-render itself is the CLI's test; this
+ * `PATCH /v1/agents/:id/vars` (pilot.5). The re-render itself is the CLI's test; this
  * proves the route: the gate, the reload, and that a result the agent refuses is put back.
  */
 

@@ -248,7 +248,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     // frame is a fact a small model will not connect to the question. Structure only — the passage's own
     // words are untouched, which is the line decision 4.19 draws.
     //
-    // The excerpt also says it is *not this conversation* (pilot.13, VelaCrew). "From an earlier
+    // The excerpt also says it is *not this conversation* (pilot.13). "From an earlier
     // conversation in this session's store", read immediately before the input, was taken by Nova as
     // its own unfinished work: a brand-new chat re-proposed another chat's task until `no_progress`.
     //

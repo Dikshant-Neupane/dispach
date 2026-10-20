@@ -51,7 +51,7 @@ import { renderNotEnabledBlock } from "./not-enabled.ts"
  *
  * One rewrite is made, and only one: a dot becomes `__`, because skill scripts are named
  * `skill.<skill>.<script>` and they join the catalogue when their skill activates, so a native agent
- * loaded fine and failed on the first turn that picked a scripted skill (VelaCrew, pilot.4). The slug
+ * loaded fine and failed on the first turn that picked a scripted skill (pilot.4). The slug
  * is unchanged everywhere else (policy, events, the store); only the name on the wire differs.
  *
  * The way back needs no map. The model's reply names the wire form, and `ToolRegistry.resolve` finds

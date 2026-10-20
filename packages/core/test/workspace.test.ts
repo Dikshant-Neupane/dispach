@@ -501,7 +501,7 @@ describe("soul rule counting", () => {
 
     test("the refusal names each counted line and its file in the message the wire carries", () => {
         // pilot.5: the lines were only in `details`, which `toDetail()` drops, so an embedder whose
-        // reload was refused saw a count and nothing to act on (VelaCrew).
+        // reload was refused saw a count and nothing to act on (a pilot).
         const dir = workspaceDir({
             "IDENTITY.md": "You are a helper.",
             "AGENTS.md":

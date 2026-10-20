@@ -259,7 +259,7 @@ describe("secrets", () => {
     })
 })
 
-describe("rerenderFromTemplate (pilot.5, VelaCrew #21)", () => {
+describe("rerenderFromTemplate (pilot.5)", () => {
     function made() {
         const box = sandbox()
         const memory = join(box.templates, "support", "workspace", "MEMORY.md")

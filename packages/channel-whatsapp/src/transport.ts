@@ -98,7 +98,7 @@ const LOGGED_OUT = 401
 /**
  * WhatsApp asking the client to reconnect, as it does right after pairing and now and then on a
  * healthy session (Baileys' `restartRequired`). Planned, so it is neither a failure nor a disconnect
- * worth showing (pilot.13, VelaCrew): it read as a brief "disconnected" on every occurrence.
+ * worth showing (pilot.13): it read as a brief "disconnected" on every occurrence.
  */
 const RESTART_REQUIRED = 515
 

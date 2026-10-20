@@ -1,6 +1,6 @@
 /**
- * A template placeholder that reached the model unrendered is a warning on the agent (pilot.14,
- * VelaCrew): a REMINDER.md copied raw carried `{{vars.userName}}`, and the model told the person they
+ * A template placeholder that reached the model unrendered is a warning on the agent (pilot.14):
+ * a REMINDER.md copied raw carried `{{vars.userName}}`, and the model told the person they
  * had pasted its instructions. One check, in `resolveWorkspace`, so `validate` says the same.
  */
 

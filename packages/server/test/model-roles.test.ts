@@ -1,5 +1,5 @@
 /**
- * Named model roles over the wire (pilot.7, VelaCrew): a person adds one with `PATCH /config path
+ * Named model roles over the wire (pilot.7): a person adds one with `PATCH /config path
  * model.<name>`, and a message runs one turn on it with `POST /messages {role}`.
  */
 
@@ -50,7 +50,7 @@ describe("a named role", () => {
     })
 
     test("main is replaced whole by a person, in one write and one reload (pilot.16)", async () => {
-        // Revises 14.78 (VelaCrew's bring-your-own key): a provider switch changes the transport,
+        // Revises 14.78 (bring-your-own key): a provider switch changes the transport,
         // endpoint and key variable together, and each step in between would not load.
         const { models, fetch } = recording()
         const { call, dir, runtime } = await harness({ manifest: MANIFEST, fetch })

@@ -94,7 +94,7 @@ export const SLOT = {
      * in the person's zone. Pinned, for this turn only, never stored in history.
      *
      * Its own block rather than prepended to the input, because prepended it was stored as if the
-     * person had typed it and the model quoted it back as theirs (VelaCrew). Just before the input,
+     * person had typed it and the model quoted it back as theirs (a pilot). Just before the input,
      * so the cached prefix is untouched and the note sits beside the text it is about.
      */
     note: 11,
@@ -153,7 +153,7 @@ export const NOTE_HEADER =
     "From the application this conversation runs in, about the next message. The person did not write this."
 
 /**
- * The reminder tier's frame (pilot.14, VelaCrew). It was the one block after the history with none,
+ * The reminder tier's frame (pilot.14). It was the one block after the history with none,
  * and on a transport that turns a later system message into user text it read as something the
  * person had pasted: asked "how are you", Haiku told them they had pasted its instructions.
  */

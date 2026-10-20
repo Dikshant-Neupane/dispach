@@ -50,7 +50,7 @@ describe("stopping an agent over the wire", () => {
         await call("POST", "/v1/agents/assistant/stop", { body: { reason: "quiet" } })
 
         // pilot.5: the resource used to answer 404 here, so a client holding the id saw the listing
-        // call it `disabled` and the resource call it nonexistent (VelaCrew).
+        // call it `disabled` and the resource call it nonexistent (a pilot).
         const resource = await call("GET", "/v1/agents/assistant")
         expect(resource.status).toBe(200)
         expect(await resource.json()).toEqual({

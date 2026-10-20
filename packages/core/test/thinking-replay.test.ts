@@ -89,7 +89,7 @@ describe("thinking replay", () => {
     test("each step only appends: step two opens with step one's request, byte for byte (pilot.13)", async () => {
         // Claude 5.x binds a signed block to everything before it. With the input after the trace,
         // step two moved the question behind the step-one call and Bedrock refused the replay as
-        // "bound to a different conversation" (VelaCrew).
+        // "bound to a different conversation" (a pilot).
         const { requests } = await turn("anthropic")
         const first = requests[0]?.messages ?? []
         const second = requests[1]?.messages ?? []

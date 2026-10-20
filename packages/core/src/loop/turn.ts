@@ -330,7 +330,7 @@ export interface TurnResult {
     readonly turnId: string
     readonly text: string
     /**
-     * The last step's prose alone (pilot.14, VelaCrew). `text` joins every step's prose, so a model
+     * The last step's prose alone (pilot.14). `text` joins every step's prose, so a model
      * that writes the same lead-in before each tool call ("Yes, Outlook. Let me try…") says it once
      * per step there. Absent when no step wrote any, and when a `wrapTurn` middleware rewrote `text`,
      * since it could still hold what that middleware removed.

@@ -1,7 +1,7 @@
 /**
- * The embedder's note about one message (pilot.5, VelaCrew #13).
+ * The embedder's note about one message (pilot.5).
  *
- * VelaCrew prepended its context block to the text, so it was stored as if the person typed it and the
+ * An embedder prepended its context block to the text, so it was stored as if the person typed it and the
  * model quoted it back as theirs. Read off request bodies and the store, because the field crosses
  * `Agent.send`, `TurnInput`, assembly and the turn row.
  */

@@ -1119,7 +1119,7 @@ CREATE INDEX memory_reads_by_scope ON memory_reads (scope, at);
         version: 25,
         name: "schedule_limits",
         /**
-         * Limits per schedule (pilot.5, VelaCrew #15): a tool allow-list (JSON array), a turn timeout
+         * Limits per schedule (pilot.5): a tool allow-list (JSON array), a turn timeout
          * and a step cap. Nullable, and null is "the agent's own", so every existing row keeps
          * running exactly as it did.
          */
@@ -1133,7 +1133,7 @@ ALTER TABLE schedules ADD COLUMN max_steps INTEGER;
         version: 26,
         name: "turn_note",
         /**
-         * The embedder's note about one message (pilot.5, VelaCrew #13), kept on the turn row for
+         * The embedder's note about one message (pilot.5), kept on the turn row for
          * debugging and replay. Never in `messages`: it is about the message, not part of it.
          */
         sql: `
@@ -1144,7 +1144,7 @@ ALTER TABLE turns ADD COLUMN note TEXT;
         version: 27,
         name: "participant_profile",
         /**
-         * A person's job title and IANA timezone (pilot.9, VelaCrew): what an agent answering another
+         * A person's job title and IANA timezone (pilot.9): what an agent answering another
          * member's agent is told about whom it represents and who is asking. Both optional.
          */
         sql: `
@@ -1156,7 +1156,7 @@ ALTER TABLE participants ADD COLUMN timezone TEXT;
         version: 28,
         name: "session_recall",
         /**
-         * Whether a conversation is indexed for history recall (pilot.10, VelaCrew). 1 for every
+         * Whether a conversation is indexed for history recall (pilot.10). 1 for every
          * existing row, so nothing recalled before stops being recalled. 0 keeps the history and
          * drops its passages, for an old exchange that keeps steering new answers.
          */
@@ -1168,7 +1168,7 @@ ALTER TABLE sessions ADD COLUMN recall INTEGER NOT NULL DEFAULT 1;
         version: 29,
         name: "turn_error_detail",
         /**
-         * A failed turn's provider text, verbatim (pilot.14, VelaCrew): kept beside the message
+         * A failed turn's provider text, verbatim (pilot.14): kept beside the message
          * rather than in it, because AWS's text names the assumed-role ARN. NULL for every row before.
          */
         sql: `

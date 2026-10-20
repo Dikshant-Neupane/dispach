@@ -258,7 +258,7 @@ function assemble(
         })
     }
 
-    // Each file is labelled with its name in the active delimiter style (pilot.15, VelaCrew). With the
+    // Each file is labelled with its name in the active delimiter style (pilot.15). With the
     // contents joined bare, a model asked whether SOUL.md was loaded had no way to tie the text it was
     // reading to that name, answered that it was not, and re-read every file until `no_progress`.
     // A label is structure, never a rewrite of the author's prose.
@@ -323,7 +323,7 @@ export function ruleBudgetFailure(
     if (check.withinBudget) return undefined
     // Counted over the joined text, as it always was, so no agent's verdict changes; each line is
     // then attributed to the file it sits in. Without the file, "I never…" names a line somebody
-    // has to grep five files for (VelaCrew, pilot.4).
+    // has to grep five files for (pilot.4).
     const starts: { readonly name: string; readonly from: number }[] = []
     let from = 1
     for (const part of parts) {

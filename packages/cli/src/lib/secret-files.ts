@@ -1,5 +1,5 @@
 /**
- * `X_FILE=/run/secrets/x` sets `X` from that file, unless `X` is already set (pilot.9, VelaCrew).
+ * `X_FILE=/run/secrets/x` sets `X` from that file, unless `X` is already set (pilot.9).
  *
  * The container convention, and the point is where the value does *not* end up: assigning
  * `process.env` changes what this process reads, never the environment block the kernel shows at

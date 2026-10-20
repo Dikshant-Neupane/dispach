@@ -2,7 +2,7 @@
  * The terminal UI's two packages, when an install left them out.
  *
  * `ink` and `react` are optional dependencies since 0.2.0-pilot.5, so an application embedding the
- * client can install the package with `--omit=optional` and go without them (VelaCrew #26). npm installs them by
+ * client can install the package with `--omit=optional` and go without them. npm installs them by
  * default, so the CLI is whole for everybody else; this names the case that is not, instead of a
  * module-resolution stack trace pointing into a chunk.
  */

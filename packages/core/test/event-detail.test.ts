@@ -1,5 +1,5 @@
 /**
- * Tool events with `tools.eventDetail: redacted` (pilot.5, VelaCrew #16).
+ * Tool events with `tools.eventDetail: redacted` (pilot.5).
  *
  * Read off the bus inside a real turn, because the redactor crosses the manifest, the agent, the tool
  * runtime and the executor, and a conditional spread anywhere on that path drops it with nothing

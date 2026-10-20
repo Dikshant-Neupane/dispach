@@ -239,7 +239,7 @@ test("a schedule the API created is still fully editable", async () => {
 })
 
 test("a misread rule count no longer wedges the agent: onExceed is settable to warn (pilot.5)", async () => {
-    // VelaCrew: one "I never…" line in AGENTS.md put the rule count over budget, so every reload's
+    // From a pilot: one "I never…" line in AGENTS.md put the rule count over budget, so every reload's
     // trial build refused and every PATCH stayed unapplied. The count is a heuristic, so the person
     // gets the escape over the wire; the agent itself still can't relax it.
     const { call, dir } = await harness({

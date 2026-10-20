@@ -141,7 +141,7 @@ describe("request mapping", () => {
         expect(input.inferenceConfig).toEqual({ maxTokens: 8192 + 16_384 })
     })
 
-    describe("reasoning effort by model (VelaCrew tiers, pilot.6)", () => {
+    describe("reasoning effort by model (pilot.6)", () => {
         const fields = (
             model: string,
             effort: ChatRequest["reasoningEffort"],
@@ -236,7 +236,7 @@ describe("request mapping", () => {
             ).toBeUndefined()
         })
 
-        test("GPT-6 is never sent a temperature; gpt-oss and Nova still are (VelaCrew, pilot.6)", () => {
+        test("GPT-6 is never sent a temperature; gpt-oss and Nova still are (pilot.6)", () => {
             // Bedrock: "This model doesn't support the temperature field" on every turn of Luna.
             expect(
                 fields("global.openai.gpt-6-luna", undefined, 0.3).inferenceConfig,
@@ -735,7 +735,7 @@ describe("an NLT tool turn on Nova", () => {
         { messageStop: { stopReason: "end_turn" } },
     ]
 
-    test("every request starts with a user message, step two included (VelaCrew, pilot.5)", async () => {
+    test("every request starts with a user message, step two included (pilot.5)", async () => {
         const dir = mkdtempSync(join(tmpdir(), "bedrock-nova-"))
         writeFileSync(
             join(dir, "agent.yaml"),

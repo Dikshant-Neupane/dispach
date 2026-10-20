@@ -70,7 +70,7 @@ export interface ExecuteInput {
     /**
      * Stores the whole of an observation that was cut, so its marker can name an id `artifact_read`
      * follows. Without it the marker only says how much was cut, and a model that needs the middle
-     * re-runs the call until `no_progress` (VelaCrew's field report: a project plan's ids were in the
+     * re-runs the call until `no_progress` (a pilot's field report: a project plan's ids were in the
      * cut middle). Used only when `artifact_read` is in the catalogue: a marker naming a tool the agent
      * lacks is an instruction it can't follow.
      */

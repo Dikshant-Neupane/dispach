@@ -381,7 +381,7 @@ export function configReadHandler(options: ConfigOptions): ToolHandler {
 }
 
 /**
- * The workspace files the manifest loads, read-only (pilot.15, VelaCrew). Told "check your config",
+ * The workspace files the manifest loads, read-only (pilot.15). Told "check your config",
  * a model called this tool, found no context section, and concluded that nothing loaded its files,
  * trusting the tool over the files' own text in its prompt. So the section names them and says
  * where they already are. Not settable here: which files define the agent is the person's.

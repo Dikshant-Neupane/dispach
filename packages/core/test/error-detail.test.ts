@@ -1,5 +1,5 @@
 /**
- * A provider's own words travel beside the message, not in it (pilot.14, VelaCrew): AWS's access
+ * A provider's own words travel beside the message, not in it (pilot.14): AWS's access
  * refusal names the assumed-role ARN. Asserted at the far end, the stored turn, because a field
  * dropped by one conditional spread on the way is the shape this repo keeps finding.
  */

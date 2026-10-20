@@ -79,7 +79,7 @@ describe("one published package", () => {
          * external **on purpose**: the lazy `import("ink")` is what keeps ~170-210 ms off the
          * startup path of every non-interactive command, and inlining them would defeat it.
          *
-         * And they are **optional** since pilot.5 (VelaCrew #26): npm still installs them by default,
+         * And they are **optional** since pilot.5: npm still installs them by default,
          * so the CLI is whole, and an application using only the client can say `--omit=optional`.
          * `verify:package` proves that install; this pins the shape.
          */

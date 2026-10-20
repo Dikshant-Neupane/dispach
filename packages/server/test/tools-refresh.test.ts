@@ -1,4 +1,4 @@
-/** `POST /v1/agents/:id/tools/refresh` (pilot.5, VelaCrew #20). The mechanics are core's test. */
+/** `POST /v1/agents/:id/tools/refresh` (pilot.5). The mechanics are core's test. */
 
 import { afterAll, expect, test } from "bun:test"
 import { cleanupWorkspaces, harness, PINNED_MANIFEST } from "./harness.ts"

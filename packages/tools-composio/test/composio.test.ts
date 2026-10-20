@@ -240,7 +240,7 @@ test("a union is still refused when a variant carries a constraint the union for
 })
 
 test("a pinned tool Composio broke costs that tool, not the agent (pilot.16)", async () => {
-    // Nine refused reloads in three hours on VelaCrew's pilot, from one schema change upstream.
+    // Nine refused reloads in three hours on a pilot, from one schema change upstream.
     const dir = tempDir()
     seed(dir, [
         GMAIL_SEND,

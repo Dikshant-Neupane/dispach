@@ -1,5 +1,5 @@
 /**
- * `Runtime.refreshTools` (pilot.5, VelaCrew #20): fetch the providers now, reload only if what the
+ * `Runtime.refreshTools` (pilot.5): fetch the providers now, reload only if what the
  * agent serves moved.
  */
 

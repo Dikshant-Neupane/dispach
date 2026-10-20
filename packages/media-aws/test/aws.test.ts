@@ -1,6 +1,6 @@
 /**
  * The `aws` media provider against injected clients: the request each SDK would be sent, and how
- * each answer is read. The real endpoints need VelaCrew's account; these are what can be settled
+ * each answer is read. The real endpoints need an AWS account; these are what can be settled
  * without one.
  */
 
@@ -266,7 +266,7 @@ describe("Nova Canvas", () => {
         const error = await refusal(async () =>
             images.generateImage?.({ prompt: "x", size: "1024x1024" }, signal),
         )
-        // An agent repeats the hint to the person it is talking to (pilot.15, VelaCrew).
+        // An agent repeats the hint to the person it is talking to (pilot.15).
         expect(error.hint).toStartWith(
             "This agent's AWS credentials do not allow image generation.",
         )

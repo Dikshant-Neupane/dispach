@@ -279,7 +279,7 @@ export const ContextSchema = z
         reserveOutput: z.number().int().positive().default(4096),
         observationMaxTokens: z.number().int().positive().default(2000),
         /**
-         * Whether the agent may see which model it runs on (pilot.15, VelaCrew). `hidden` drops the
+         * Whether the agent may see which model it runs on (pilot.15). `hidden` drops the
          * model and media ids, endpoints, transports and key names from the prompt and from
          * `config_read`; everything else stays readable and settable. Events and the API keep them.
          */
@@ -380,7 +380,7 @@ export const ToolsSchema = z
         untrusted: ToolsUntrustedSchema.prefault({}),
         policy: ToolsPolicySchema.prefault({}),
         /**
-         * What `tool.call` and `tool.result` carry (pilot.5, VelaCrew #16). `none` is the hash and
+         * What `tool.call` and `tool.result` carry (pilot.5). `none` is the hash and
          * the size, as always. `redacted` adds the arguments and the first 2 KB of the output, with
          * values under secret-looking keys and the values of secret-named environment variables
          * replaced. Person-only: it decides what every event subscriber and webhook receives.
@@ -409,7 +409,7 @@ export const SkillsSchema = z
          */
         threshold: z.number().default(0.35),
         /**
-         * The skills whose scripts may run (pilot.14, VelaCrew). Absent, every skill's do, as before;
+         * The skills whose scripts may run (pilot.14). Absent, every skill's do, as before;
          * present, a skill not named here is still selected and read, but its scripts are not tools.
          * The operator's list: a skill arriving by `git pull` or a person's upload cannot add itself,
          * and `config_set` cannot change it.
@@ -511,7 +511,7 @@ export const ChannelSchema = z
         allowFrom: z.array(z.string().min(1)).optional(),
         enabled: z.boolean().default(true),
         /**
-         * A model role declared under `model:` that this channel's turns run on (pilot.14, VelaCrew,
+         * A model role declared under `model:` that this channel's turns run on (pilot.14,
          * OpenClaw's `modelByChannel`): WhatsApp on a cheaper model than the web chat. Absent is
          * `main`, as before. A role that is not declared refuses the manifest rather than falling
          * back, for the reason a schedule's `role:` does.
@@ -527,7 +527,7 @@ export const DeliverySchema = z
         /** Channel used when a turn has no origin — schedules, API-initiated turns. */
         default: slug.optional(),
         /**
-         * What a channel reply carries (pilot.14, VelaCrew). `all`, the default, is every step's prose
+         * What a channel reply carries (pilot.14). `all`, the default, is every step's prose
          * joined, as before. `final` is the last step's alone (`finalText`) when there is one, so a
          * lead-in the model repeats before each tool call reaches the person once.
          */
@@ -697,7 +697,7 @@ export const MediaSchema = z
             .strict()
             .optional(),
         /**
-         * Speaks the reply to a voice note as a voice note too (pilot.15, VelaCrew), after the text,
+         * Speaks the reply to a voice note as a voice note too (pilot.15), after the text,
          * on a channel that can carry one. Only a turn that began as a voice note is answered in
          * audio; typed messages are never spoken to. The provider returns Ogg/Opus, which is what a
          * WhatsApp or Telegram voice note is.

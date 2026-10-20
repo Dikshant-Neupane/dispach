@@ -1,5 +1,5 @@
 /**
- * `delivery.reply: final` sends a channel the last step's prose alone (pilot.14, VelaCrew): Haiku's
+ * `delivery.reply: final` sends a channel the last step's prose alone (pilot.14): Haiku's
  * "Yes, Outlook. Let me try…" before each tool call reached WhatsApp once per step. Asserted on what
  * the transport was asked to send.
  */

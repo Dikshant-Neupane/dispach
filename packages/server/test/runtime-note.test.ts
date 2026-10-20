@@ -1,4 +1,4 @@
-/** `POST /messages {runtimeNote}` (pilot.5, VelaCrew #13). */
+/** `POST /messages {runtimeNote}` (pilot.5). */
 
 import { afterAll, describe, expect, test } from "bun:test"
 import { cleanupWorkspaces, harness, replyFetch } from "./harness.ts"

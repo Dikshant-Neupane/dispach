@@ -146,7 +146,7 @@ export const SETTINGS: readonly Setting[] = [
         means: "none | minimal | low | medium | high | xhigh | max — how hard a reasoning model thinks",
         agentListed: false,
     },
-    // The main role whole (pilot.16, VelaCrew's bring-your-own key): a provider switch changes the
+    // The main role whole (pilot.16, bring-your-own key): a provider switch changes the
     // transport, endpoint, key variable and capabilities together, and field by field the steps in
     // between are configurations that do not load. A person's, like `model.<role>`: the agent's
     // `config_set` cannot reach it, so an agent cannot move itself onto a different bill.
@@ -168,7 +168,7 @@ export const SETTINGS: readonly Setting[] = [
         means: "how long any single tool may take",
         agentListed: true,
     },
-    // Person-only (pilot.15, VelaCrew): the loop guard is what stops a turn that is going nowhere,
+    // Person-only (pilot.15): the loop guard is what stops a turn that is going nowhere,
     // so the agent loosening its own is the agent widening its containment. `sameTool` has its own
     // row so a template's leftover value can be removed without restating `identicalCalls`.
     // Person-only (pilot.15): a workspace file over its tier's budget stops the agent loading, and
@@ -201,7 +201,7 @@ export const SETTINGS: readonly Setting[] = [
     },
     // Person-only: the agent can't relax a guard on its own instructions. An embedder needs it because
     // the rule count is a heuristic, and a misread line otherwise refuses every reload and every
-    // PATCH (VelaCrew, pilot.4).
+    // PATCH (pilot.4).
     // Person-only: it decides what every event subscriber and webhook receives about a tool call.
     {
         path: "tools.eventDetail",
@@ -305,7 +305,7 @@ export const SETTINGS: readonly Setting[] = [
         means: 'the other members\' agents this one may ask, by id, or "*" for every agent that offers. A peer ask is one hop: the asked agent answers, and cannot ask onward',
         agentListed: false,
     },
-    // Person- or engine-only (pilot.15, VelaCrew), written as a whole list. A child narrows its parent's
+    // Person- or engine-only (pilot.15), written as a whole list. A child narrows its parent's
     // tools by construction, but which work leaves the parent's context is the operator's design, and
     // an agent able to route its own calls could route a gated write through a child it wrote.
     {

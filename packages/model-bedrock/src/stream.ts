@@ -44,7 +44,7 @@ function partialTag(text: string, tag: string): number {
 
 /**
  * Nova writes its chain of thought into the *text* as `<thinking>…</thinking>` once it is given tools
- * (pilot.13, VelaCrew): every native reply opened with it, and it reached the person's chat. Routed
+ * (pilot.13): every native reply opened with it, and it reached the person's chat. Routed
  * to `reasoning` instead, the way a model that reports reasoning separately is treated. Streamed, so
  * a tag cut across two deltas is held until it resolves; whitespace right after a block is dropped so
  * the reply does not open on a blank line.

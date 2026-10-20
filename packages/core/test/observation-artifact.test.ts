@@ -1,7 +1,7 @@
 /**
  * A cut observation keeps its whole text, and its marker names the id to read it with (pilot.5).
  *
- * VelaCrew's field report: a project plan over `observationMaxTokens` lost its middle, where its ids
+ * A pilot's field report: a project plan over `observationMaxTokens` lost its middle, where its ids
  * were, and the marker only said how many characters were cut. The model re-ran the call until
  * `no_progress`. Compaction's markers already named an id; this is the same pointer one step earlier.
  *

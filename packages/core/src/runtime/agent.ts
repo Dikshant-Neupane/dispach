@@ -1565,7 +1565,7 @@ export class Agent {
         const meter = this.#meter(sessionKey, turnId, options.from?.id)
         // A turn on another model role (a subagent's, a schedule's, a message's) is budgeted against
         // that model's window, not main's: a schedule on a 32k model sized against a 1M main overflows,
-        // and one on a 1M model sized against a 32k main compacts for nothing (VelaCrew, pilot.7).
+        // and one on a 1M model sized against a 32k main compacts for nothing (pilot.7).
         const window = named === this.roles.main ? this.window : named.capabilities.contextWindow
         const tools = this.#toolsFor(options.turnTools, child !== undefined)
         // A child reads its routed call's output up to what its window holds, not the parent's
@@ -1794,7 +1794,7 @@ export class Agent {
      * After a turn that deleted with `memory_forget`, redact the conversation that asked for it: the
      * listing quoted every note it found, and the person's request usually names the thing. Left in
      * place, the next session's recall answers from that exchange and forgetting looks broken
-     * (pilot.15, VelaCrew). Done before indexing, so the index never holds the text.
+     * (pilot.15). Done before indexing, so the index never holds the text.
      */
     async #redactForgetConversation(sessionKey: string, turnId: string): Promise<void> {
         if (!this.#forgotThisTurn.delete(turnId)) return
@@ -2275,7 +2275,7 @@ export class Agent {
      * decide it — every other turn reads what it always read, plus any shared scope it belongs to.
      */
     /**
-     * The asked turn's framing (pilot.9, VelaCrew): this agent's owner, the asking agent and the
+     * The asked turn's framing (pilot.9): this agent's owner, the asking agent and the
      * person it acts for, each with the title and timezone their participant record carries. Facts the
      * embedder registered, so nothing here is the model's to doubt; absent fields are left out.
      */
@@ -2305,7 +2305,7 @@ export class Agent {
                 : `The agent asking is ${askedBy}, on behalf of ${asker}.`,
             "Your answer goes back to them, so it is written from what your owner shares, not from what they keep private.",
             // Without this an agent with no calendar answered "3pm works, no conflict I'm aware of",
-            // and the asker relayed it as a commitment (VelaCrew, pilot.10). The owner's own ask reads
+            // and the asker relayed it as a commitment (pilot.10). The owner's own ask reads
             // everything, so it is not told this.
             actingFor !== undefined && actingFor === ownerId
                 ? undefined
@@ -2403,7 +2403,7 @@ export class Agent {
                 matchesQuery(note.text, request.query),
             )
             // Past conversations too: recall answers from them, so a forgotten note that was also said
-            // aloud would otherwise come straight back (pilot.15, VelaCrew).
+            // aloud would otherwise come straight back (pilot.15).
             const words = request.query.split(/\s+/).filter((word) => word !== "")
             const said = (
                 await this.store.messages.findProse(this.id, words, reach, FORGET_MESSAGE_LIMIT)
@@ -2429,7 +2429,7 @@ export class Agent {
             FORGOTTEN_MARKER,
         )
         // Then the same words wherever else they were written: `memory_write`'s own call carries the
-        // note as its argument, and an earlier listing quoted it (pilot.15, VelaCrew).
+        // note as its argument, and an earlier listing quoted it (pilot.15).
         const needles = [
             ...gone
                 .filter((note) => !note.id.startsWith(FORGET_MESSAGE_PREFIX))
@@ -2703,7 +2703,7 @@ export class Agent {
 
         const role = this.roles.main.capabilities.promptStyle.skillsIn
         const runner = this.#scriptRunner
-        // `skills.trusted` (pilot.14, VelaCrew): when the operator lists the skills that may run code,
+        // `skills.trusted` (pilot.14): when the operator lists the skills that may run code,
         // only those get script tools. Absent, every skill does, as before.
         const trusted = this.manifest.skills?.trusted
         const mayRun = (name: string) => trusted === undefined || trusted.includes(name)
@@ -3007,7 +3007,7 @@ export function resolveWorkspace(
     }
 
     const workspace = loadWorkspace({ refs, budgets: context.budgets, style })
-    // A template placeholder that reached the model unrendered (pilot.14, VelaCrew): a REMINDER.md
+    // A template placeholder that reached the model unrendered (pilot.14): a REMINDER.md
     // copied raw carried `{{vars.userName}}`, and the model told the person they had pasted its
     // instructions. A warning, never a refusal, since a file may quote template syntax on purpose.
     // Read on the text the model receives, so a placeholder inside a stripped comment is not one.

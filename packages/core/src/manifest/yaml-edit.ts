@@ -241,7 +241,7 @@ export function removeInSource(source: string, path: readonly string[]): string 
     const end = endOfBlock(lines, at, walked.indent)
     const next = [...lines.slice(0, at), ...lines.slice(end + 1)].join("\n")
     // A parent left with no keys reads back as null, which the schema refuses for a map: removing a
-    // template's only `limits.noProgress.sameTool` left `noProgress:` behind (pilot.15, VelaCrew). An
+    // template's only `limits.noProgress.sameTool` left `noProgress:` behind (pilot.15). An
     // empty parent goes too, and so on upwards, so "remove" means the default comes back.
     const parent = path.slice(0, -1)
     if (parent.length > 0 && parseDocument(next).getIn([...parent]) == null) {

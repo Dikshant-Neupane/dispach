@@ -1,6 +1,6 @@
 /**
  * A tool pinned mid-turn is callable on the next step when a provider has it cached, and the agent
- * reloads once the turn ends so it is pinned for good (pilot.14, VelaCrew). Asserted at the far end:
+ * reloads once the turn ends so it is pinned for good (pilot.14). Asserted at the far end:
  * the second request lists the tool, its handler ran, and `agent.reloaded` fired.
  */
 

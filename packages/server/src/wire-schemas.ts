@@ -387,7 +387,7 @@ const ConfigChange = z.object({
 })
 
 /**
- * One change, or several under `changes` applied as one write and one reload (pilot.15, VelaCrew:
+ * One change, or several under `changes` applied as one write and one reload (pilot.15:
  * applying a configuration a setting at a time reloaded the agent once per setting). Not both.
  */
 export const ConfigBody = ConfigChange.partial({ path: true }).extend({

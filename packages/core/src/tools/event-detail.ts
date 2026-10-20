@@ -1,5 +1,5 @@
 /**
- * What a tool event carries under `tools.eventDetail: redacted` (pilot.5, VelaCrew #16).
+ * What a tool event carries under `tools.eventDetail: redacted` (pilot.5).
  *
  * `tool.call` has carried `argsHash` rather than the arguments since Phase 3, because arguments hold
  * what a person typed and sometimes what a tool needs to authenticate. An embedder showing a chat

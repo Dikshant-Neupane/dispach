@@ -193,7 +193,7 @@ console.log(JSON.stringify({
      * The types resolve from a clean install, under a strict consumer that checks libraries too.
      *
      * `client.d.ts` was `export * from "@dispach/client"` — a package nobody can install — so every
-     * type an embedder imported was unresolved, and VelaCrew wrote an ambient shim (pilot.3). The
+     * type an embedder imported was unresolved, and an embedder wrote an ambient shim (pilot.3). The
      * declarations are bundled now; this is the check that would have caught it.
      */
     writeFileSync(
@@ -228,7 +228,7 @@ export { client, first }
     check("the client and wire types resolve, strictly", tsc.exitCode === 0, said)
 
     /**
-     * An embedder's install: no terminal UI (VelaCrew #26). `ink` and `react` are optional, so
+     * An embedder's install: no terminal UI. `ink` and `react` are optional, so
      * `--omit=optional` leaves them out, and the client must still load and the bin still answer.
      */
     const lean = join(work, "lean")

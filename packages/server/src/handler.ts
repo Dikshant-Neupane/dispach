@@ -769,7 +769,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
      *
      * `GET /v1/agents/:id` answers the same thin row for one of these since pilot.5. It used to
      * answer 404, so a client holding an id saw the listing call it `disabled` and the resource call
-     * it nonexistent (VelaCrew). Every route that *acts* on the agent still answers 404: the row says
+     * it nonexistent (a pilot). Every route that *acts* on the agent still answers 404: the row says
      * what exists, and nothing pretends it is running.
      */
     router.add(
@@ -909,7 +909,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
      * to a participant must be an admin participant's.
      */
     /**
-     * The silo, backed up (pilot.9, VelaCrew; the #14 skipped in pilot.5): a consistent snapshot of
+     * The silo, backed up (pilot.9): a consistent snapshot of
      * the store and every hosted agent's directory, as one tar.gz.
      *
      * `admin`, and every agent's data is in it, so a key scoped to fewer agents is refused rather than
@@ -932,7 +932,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
                     403,
                 )
             }
-            // `?include=env,git` (pilot.10, VelaCrew): a backup somebody restores from needs the channel
+            // `?include=env,git` (pilot.10): a backup somebody restores from needs the channel
             // tokens and a workspace's git history, and they asked for it in so many words. Opt-in, so
             // a backup taken the way it always was still carries no secret.
             const include = (context.url.searchParams.get("include") ?? "")
@@ -1081,7 +1081,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
     )
 
     /**
-     * Re-render an agent's template files with changed vars (pilot.5, VelaCrew #21), then reload it.
+     * Re-render an agent's template files with changed vars (pilot.5), then reload it.
      *
      * The engine rewrote persona files through `docker exec` and reloaded. Here the template's own
      * renderer does it, and a file somebody edited since it was rendered is left alone and reported,
@@ -1163,7 +1163,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
     )
 
     /**
-     * Replace one of the agent's workspace files (pilot.15, VelaCrew): only a file its manifest
+     * Replace one of the agent's workspace files (pilot.15): only a file its manifest
      * declares (a tier list, `context.files`, or the soul), so this cannot write anywhere else. A
      * running agent is reloaded and, if the file makes it refuse to load, the old text is put back
      * and the reason returned. An agent that is not running gets the file and a diagnosis, so a repair
@@ -1269,8 +1269,8 @@ export function createHandler(options: HandlerOptions): ServerHandler {
     )
 
     /**
-     * Fetch the tool providers now and reload only if the catalogue the agent serves moved (pilot.5,
-     * VelaCrew #20). The embedder used to PATCH `tools.pinned` or POST `/reload` after a connection,
+     * Fetch the tool providers now and reload only if the catalogue the agent serves moved (pilot.5).
+     * The embedder used to PATCH `tools.pinned` or POST `/reload` after a connection,
      * and retry the `pending` on the next chat open; this is one call that reloads only when needed.
      * `admin`, like `/reload`: it can replace the agent.
      */
@@ -3073,7 +3073,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
     )
 
     /**
-     * Who the agent is assigned to, read back (pilot.9, VelaCrew). `assignment: null` when nobody:
+     * Who the agent is assigned to, read back (pilot.9). `assignment: null` when nobody:
      * an unassigned agent is a normal state, and a 404 would read as the agent itself missing.
      */
     router.add(
@@ -3476,7 +3476,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
     )
 
     // An old wrong answer kept steering new ones through history recall, and deleting the chat was
-    // the only way to stop it (VelaCrew, pilot.10). This keeps the history and drops its passages.
+    // the only way to stop it (pilot.10). This keeps the history and drops its passages.
     router.add(
         "POST",
         "/v1/agents/:id/sessions/:key/recall",
@@ -3749,7 +3749,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
                     )
                 }
 
-                // Every unknown path in one refusal (pilot.16, VelaCrew): a caller sending one batch to
+                // Every unknown path in one refusal (pilot.16): a caller sending one batch to
                 // silos of several versions has to learn all the keys this one lacks, not the first.
                 const unknown = requested
                     .map((change, index) => ({ change, index }))
@@ -3871,7 +3871,7 @@ export function createHandler(options: HandlerOptions): ServerHandler {
                  * takes effect at the next start, which is exactly what `dispach config set` reports.
                  * Returning 409 and implying nothing happened would be rule 8 with better manners.
                  *
-                 * Nothing written, nothing reloaded (pilot.15, VelaCrew): a value equal to the one in
+                 * Nothing written, nothing reloaded (pilot.15): a value equal to the one in
                  * the file is already in force, and reloading for it is the "keeps reloading" report.
                  */
                 let applied: ErrorDetail | undefined

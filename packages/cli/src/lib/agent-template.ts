@@ -265,7 +265,7 @@ function templateUnknown(name: string, dir: string): HarnessError {
     })
 }
 
-// ─── Re-rendering an agent's template files (pilot.5, VelaCrew #21) ─────────────────────────
+// ─── Re-rendering an agent's template files (pilot.5) ─────────────────────────
 
 /**
  * What the agent was made from, beside its manifest: the template, the plain vars, and a hash of
@@ -327,7 +327,7 @@ export interface RerenderResult {
  * because somebody chose those words. A file that is the agent's memory (`memory`): `MEMORY.md`, and
  * any file declaring `eviction: oldest`, which is how a workspace names its `memory_write` target. And
  * a file that is gone (`removed`), since deleting it was a choice too. `USER.md` is none of those
- * unless edited, so it is re-rendered: for VelaCrew it is where the person's name and role live.
+ * unless edited, so it is re-rendered: typically where the person's name and role live.
  */
 export function rerenderFromTemplate(input: {
     readonly templatesDir: string

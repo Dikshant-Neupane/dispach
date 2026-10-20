@@ -11,7 +11,7 @@
  * request's: unreachable, a 5xx, or 408/429 — which reach here only once the transport's own retries
  * are spent, so a fallback starts after the retries rather than instead of them. **Never on a 4xx
  * the caller caused, and never on a 403**: an embedder may use a credential refusal as its budget
- * stop (VelaCrew does), and a fallback that answered anyway would spend past it.
+ * stop (an embedder may), and a fallback that answered anyway would spend past it.
  */
 
 import { isHarnessError } from "../errors.ts"

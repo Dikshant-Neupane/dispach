@@ -137,7 +137,7 @@ export const ffmpegDecode: Decode = (bytes, signal) =>
 
 /**
  * A named profile when the manifest gives one; otherwise a container-credentials endpoint read by
- * Dispach, the provider Bedrock uses (pilot.15, VelaCrew). The SDK's own container provider refuses
+ * Dispach, the provider Bedrock uses (pilot.15). The SDK's own container provider refuses
  * a `FULL_URI` host outside its allowlist, so a silo's `169.254.170.2:4000` failed every voice note
  * with "not a valid container metadata service hostname" while Bedrock worked; and read by Dispach,
  * the endpoint's refusal (`credit_exhausted`) reaches the error instead of a generic SDK one.
@@ -281,8 +281,8 @@ async function* chunks(bytes: Uint8Array): AsyncIterable<AudioStream> {
 }
 
 /**
- * Plain words first, because an agent passes a hint on to the person it is talking to (pilot.15,
- * VelaCrew): "the pod's service account" means nothing to them. The permission an operator grants
+ * Plain words first, because an agent passes a hint on to the person it is talking to (pilot.15):
+ * "the pod's service account" means nothing to them. The permission an operator grants
  * follows, for whoever reads the log.
  */
 function deniedHint(field: string): string {

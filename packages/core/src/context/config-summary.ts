@@ -101,7 +101,7 @@ export interface ConfigSummaryInput {
      */
     readonly skillNames?: readonly string[]
     /**
-     * The workspace files, by name and tier (pilot.15, VelaCrew). Without them, an agent asked "are
+     * The workspace files, by name and tier (pilot.15). Without them, an agent asked "are
      * your files loading?" read this block, found no files in it, answered that they were not, and
      * re-read every one until `no_progress`, while their text sat in its own instructions.
      */

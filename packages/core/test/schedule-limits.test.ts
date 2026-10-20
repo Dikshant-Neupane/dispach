@@ -1,5 +1,5 @@
 /**
- * Limits per schedule (pilot.5, VelaCrew #15): `tools.allow`, `timeoutMs`, `maxSteps`.
+ * Limits per schedule (pilot.5): `tools.allow`, `timeoutMs`, `maxSteps`.
  *
  * Driven through the real runner and a real `Runtime`, reading request bodies, because the fields
  * cross the manifest, the store, the runner, `Agent.send` and the turn: five places a spread can

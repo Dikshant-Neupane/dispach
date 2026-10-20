@@ -1,5 +1,5 @@
 /**
- * A channel's turns run on the model role its manifest entry names (pilot.14, VelaCrew, OpenClaw's
+ * A channel's turns run on the model role its manifest entry names (pilot.14, OpenClaw's
  * `modelByChannel`). Asserted at the far end: the model id the transport was asked for.
  */
 

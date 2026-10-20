@@ -1,6 +1,6 @@
 /**
  * A member's connected apps act as that member, so nobody else's turn may use them (pilot.15,
- * VelaCrew: "no other person can access other person's tools").
+ * the pilot's requirement: "no other person can access other person's tools").
  *
  * Driven through a real `Runtime`, reading the catalogue the model was offered and the events, because
  * the fence crosses the assignment store, the agent and the executor.

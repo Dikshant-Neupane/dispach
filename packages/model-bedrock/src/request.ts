@@ -75,7 +75,7 @@ function claudeVersion(
  * How a Bedrock model takes reasoning: a Claude token budget, Claude's adaptive thinking with an effort,
  * or an `openai.*` effort. Adaptive from 4.7, the first version that refuses a budget with a 400; 4.6
  * still accepts one (deprecated), so its requests stay exactly as they were. Haiku stayed on a budget
- * through 4.5; Haiku 5.5 is adaptive and refuses a budget (VelaCrew, pilot.17: `"thinking.type.enabled"
+ * through 4.5; Haiku 5.5 is adaptive and refuses a budget (pilot.17: `"thinking.type.enabled"
  * is not supported for this model. Use "thinking.type.adaptive" and "output_config.effort"`).
  */
 export function thinkingStyle(modelId: string): "budget" | "adaptive" | "openai" | undefined {
@@ -103,7 +103,7 @@ export function thinkingOff(modelId: string): "disabled" | "between_tools" | "lo
 
 /**
  * Whether the model refuses `temperature` and `topP`. Claude 4.7 and later (Sonnet 5.5 a non-default
- * value), and GPT-6 (VelaCrew, pilot.6: "This model doesn't support the temperature field" on every
+ * value), and GPT-6 (pilot.6: "This model doesn't support the temperature field" on every
  * turn of `global.openai.gpt-6-luna`). Other `openai.*` models, gpt-oss among them, still take both.
  */
 export function refusesSampling(modelId: string): boolean {
@@ -224,7 +224,7 @@ function contentOf(message: ChatMessage): { role: "user" | "assistant"; content:
     }
     // `user`, and a `system` message after the conversation started. Converse has no system role
     // past the top, so that one is sent as user text, fenced so it never reads as the person's words
-    // (pilot.14, VelaCrew): unfenced, a reminder merged with the input looked pasted.
+    // (pilot.14): unfenced, a reminder merged with the input looked pasted.
     const text =
         message.role === "system" && message.content !== ""
             ? `<system>\n${message.content}\n</system>`
@@ -245,7 +245,7 @@ function contentOf(message: ChatMessage): { role: "user" | "assistant"; content:
  * The messages with the turn's input moved ahead of its own trace when they would otherwise open with
  * the assistant. Assembly puts the input last, after the calls and observations of the turn so far,
  * so on a fresh session's second step the first non-system message is the model's own call, and
- * Converse refuses that for Nova ("A conversation must start with a user message", VelaCrew, pilot.5)
+ * Converse refuses that for Nova ("A conversation must start with a user message", pilot.5)
  * and tolerates it for Claude when the call is a `toolUse`. Moved in both cases, so every model gets
  * the canonical order (the question, the call, the result); a request that already opened with the
  * user is unchanged.
@@ -290,14 +290,14 @@ export function converseInput(
             last.content = [...(last.content ?? []), ...content]
         else messages.push({ role, content })
     }
-    // A rolling cache point at the end (pilot.13, VelaCrew): each step of a tool loop then reads every
+    // A rolling cache point at the end (pilot.13): each step of a tool loop then reads every
     // earlier step from the cache instead of resending it at full price. Measured on their Haiku 4.5:
     // 2.0M prompt tokens over 50 calls with 0.56M cached, the cached figure stuck at the static prefix.
     // It pays only because core keeps a caching role's steps append-only (`traceAfterInput`). The
     // third of Converse's four points, beside the static prefix and the skill.
     //
     // Not for Nova when that message carries a tool result: Nova refuses a cachePoint there ("extraneous
-    // key [cachePoint] is not permitted", VelaCrew on pilot.13, every native tool turn's second call),
+    // key [cachePoint] is not permitted", pilot.13, every native tool turn's second call),
     // while Claude takes it and read 99.7% of the step from the cache. Nova keeps its static prefix and
     // the tail of a turn's first call.
     const tail = messages.at(-1)
@@ -325,7 +325,7 @@ export function converseInput(
     const sampling = budget === undefined && !refusesSampling(request.model)
     // Anthropic requires the output cap to exceed the thinking budget, and refuses a sampling
     // temperature beside it. The headroom past the budget is what the answer gets once thinking has
-    // spent it: 4,096 cut long tool calls off mid-argument (VelaCrew, pilot.4), so it is 16,384 —
+    // spent it: 4,096 cut long tool calls off mid-argument (pilot.4), so it is 16,384 —
     // under every thinking-capable Claude's output ceiling even at the `high` budget.
     const maxTokens =
         budget !== undefined

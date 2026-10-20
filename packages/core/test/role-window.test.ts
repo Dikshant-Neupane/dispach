@@ -1,5 +1,5 @@
 /**
- * A turn on another model role is budgeted against that role's window (pilot.7, VelaCrew): a schedule
+ * A turn on another model role is budgeted against that role's window (pilot.7): a schedule
  * or a message on a small model, sized against a large main, overflowed it; the reverse compacted for
  * nothing. Read off `context.pressure`, which carries the budget the turn assembled against.
  */

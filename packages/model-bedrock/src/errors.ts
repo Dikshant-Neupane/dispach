@@ -85,7 +85,7 @@ export function classify(
                 ? shape.code
                 : undefined
         // A 5xx is the vending service failing, not deciding: transient, so retried and reported as
-        // such, where it used to reach the turn as a generic model error (VelaCrew, pilot.10).
+        // such, where it used to reach the turn as a generic model error (pilot.10).
         if (refusedStatus >= 500) {
             return {
                 retryable: true,
@@ -148,7 +148,7 @@ export function classify(
         }
     }
 
-    // AWS's own text goes in `detail`, never `message` (pilot.14, VelaCrew): an access refusal names
+    // AWS's own text goes in `detail`, never `message` (pilot.14): an access refusal names
     // the assumed-role ARN and the account, and `message` is what an embedder shows to people.
     if (name === "AccessDeniedException" || status === 403) {
         return {

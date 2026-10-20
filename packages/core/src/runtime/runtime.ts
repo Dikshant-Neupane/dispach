@@ -1406,7 +1406,7 @@ export class Runtime {
      */
     /**
      * Fetch the providers' catalogues and schemas now, and reload the agent only if what it serves
-     * changed (pilot.5, VelaCrew #20).
+     * changed (pilot.5).
      *
      * The refresh after boot already does the fetch; this is the same call on demand, for a
      * connection made or a work MCP's schema changed while the agent runs. It reloads rather than
@@ -1527,7 +1527,7 @@ export class Runtime {
             return agent === undefined ? [] : [agent]
         })
         const running = () => agents.reduce((sum, agent) => sum + agent.inFlight, 0)
-        // A refusal before anything waited is announced too (pilot.14, VelaCrew): it used to throw
+        // A refusal before anything waited is announced too (pilot.14): it used to throw
         // with no event, so a webhook watching `agent.reloaded` never heard that a skill installed
         // mid-turn had left the agent unable to reload.
         const refused = (error: unknown): never => {
@@ -2437,7 +2437,7 @@ function refreshProviders(input: {
     for (const provider of providers) {
         // A slug another provider already answers for is not this one's to fetch. Composio was
         // handed every pinned MCP tool and asked `GET /tools/<slug>` for each, on every reload: a 404
-        // apiece, 176 in four minutes on one VelaCrew silo (pilot.12). Unresolved slugs still go to
+        // apiece, 176 in four minutes on one pilot silo (pilot.12). Unresolved slugs still go to
         // everyone, which is what lets a refresh heal a tool the cache did not have yet.
         const slugs = input.slugs.filter((slug) => {
             const owner = providerOf?.(slug)

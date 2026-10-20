@@ -51,7 +51,7 @@ export interface ManifestEdit {
     readonly value: unknown
     /**
      * Take the key out instead of setting it, so a field set once can return to its default
-     * (VelaCrew: a `temperature` left over from a template, on a model that refuses one). Checked
+     * (seen in a pilot: a `temperature` left over from a template, on a model that refuses one). Checked
      * like any edit, so removing a required field is refused by the schema. A key that is not there
      * is a no-op.
      */
@@ -208,8 +208,8 @@ export function prepareManifestEdit(
  * Reads the file itself instead of taking source text: a caller that read it earlier would be writing
  * over whatever happened in between, and this is a file the agent, the person and `init` all touch.
  *
- * A value equal to the one already there writes nothing and reports `changed: false` (pilot.15,
- * VelaCrew), so a surface that applies its whole configuration every time can skip the reload.
+ * A value equal to the one already there writes nothing and reports `changed: false` (pilot.15),
+ * so a surface that applies its whole configuration every time can skip the reload.
  */
 export async function editManifest(edit: ManifestEdit): Promise<ManifestEditResult> {
     const { edits } = await editManifestChanges(edit.file, [edit])
@@ -239,7 +239,7 @@ export function editManifestSync(edit: ManifestEdit): ManifestEditResult {
 export type ManifestChange = Omit<ManifestEdit, "file">
 
 /**
- * Several edits to one file, applied in order, validated, and written **once** (pilot.15, VelaCrew:
+ * Several edits to one file, applied in order, validated, and written **once** (pilot.15:
  * one PATCH per setting was one reload per setting). Each is checked against the file as the ones
  * before it left it, so an edit that depends on another goes after it. Any refusal writes nothing.
  */

@@ -1,5 +1,5 @@
 /**
- * `memory_forget` (pilot.15, VelaCrew's "memory purge" skill), through a real runtime: a query lists and
+ * `memory_forget` (pilot.15, a "memory purge" skill), through a real runtime: a query lists and
  * deletes nothing, ids delete exactly those notes from the carried file and the archive, recall cannot
  * find them afterwards, and a turn that may not write private memory may not delete it either.
  */

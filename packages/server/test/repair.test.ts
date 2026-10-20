@@ -1,5 +1,5 @@
 /**
- * An agent that will not load is still reachable over the API (pilot.15, VelaCrew): diagnosed by
+ * An agent that will not load is still reachable over the API (pilot.15): diagnosed by
  * `GET /v1/agents/:id`, repaired through its config and workspace files, then started. It used to
  * answer 404 on every route, so only a shell inside the container could fix it.
  */
