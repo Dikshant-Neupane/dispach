@@ -55,29 +55,27 @@ export function Replay({ lines, caption }: { lines: Line[]; caption: string }) {
     return (
         <figure
             aria-label="Recorded terminal session"
-            className="overflow-hidden rounded-xl border border-fd-border bg-neutral-950 text-left shadow-2xl"
+            className="overflow-hidden rounded-2xl border border-term-accent/70 bg-neutral-950 text-left shadow-2xl shadow-term-accent/10"
         >
-            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
-                <span className="size-2.5 rounded-full bg-white/15" />
-                <span className="size-2.5 rounded-full bg-white/15" />
-                <span className="size-2.5 rounded-full bg-white/15" />
-                <span className="ml-2 font-mono text-xs text-neutral-500">curl, two clients</span>
-            </div>
             <pre className="h-[23rem] overflow-y-auto whitespace-pre-wrap break-all px-4 py-3 font-mono text-[12.5px] leading-relaxed text-neutral-300">
                 {lines.slice(0, shown).map((line, i) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: a fixed transcript where one line repeats verbatim; position is its identity.
                     <Row key={`${run}-${i}`} line={line} />
                 ))}
                 {typing && <Row line={{ ...typing, text: typing.text.slice(0, typed) }} cursor />}
-                {done && <span className="text-emerald-400">$ </span>}
-                {done && <span className="animate-pulse text-neutral-500">▍</span>}
+                {done && <span className="text-term-accent">› </span>}
+                {done && <span className="animate-pulse bg-neutral-300"> </span>}
             </pre>
-            <figcaption className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2 font-mono text-[11px] text-neutral-500">
-                <span>{caption}</span>
+            {/* The TUI's status line: the dot is magenta while a turn streams and green when idle. */}
+            <figcaption className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2 font-mono text-[11px] text-term-muted">
+                <span className="truncate">
+                    <span className={done ? "text-term-success" : "text-term-accent"}>● </span>
+                    {done ? "idle" : "streaming"} · {caption}
+                </span>
                 <button
                     type="button"
                     onClick={() => setRun((n) => n + 1)}
-                    className="shrink-0 text-neutral-400 hover:text-white"
+                    className="shrink-0 hover:text-term-accent"
                 >
                     replay ↻
                 </button>
@@ -86,15 +84,25 @@ export function Replay({ lines, caption }: { lines: Line[]; caption: string }) {
     )
 }
 
+/** Glyphs and colours are the TUI's: `›` for input, `·` for notes, `✓` for a turn that ended well. */
 function Row({ line, cursor = false }: { line: Line; cursor?: boolean }) {
     if (line.kind === "cmd")
         return (
             <div>
-                <span className="text-emerald-400">$ </span>
+                <span className="text-term-accent">› </span>
                 <span className="text-neutral-100">{line.text}</span>
-                {cursor && <span className="text-neutral-500">▍</span>}
+                {cursor && <span className="bg-neutral-300"> </span>}
             </div>
         )
-    if (line.kind === "note") return <div className="text-amber-300/80"># {line.text}</div>
+    if (line.kind === "note") return <div className="text-term-muted">· {line.text}</div>
+    if (line.text.startsWith("event: turn.end"))
+        return (
+            <div>
+                <span className="text-term-success">✓ </span>
+                {line.text}
+            </div>
+        )
+    if (line.text.startsWith("event:"))
+        return <div className="text-term-info">{`  ${line.text}`}</div>
     return <div className="text-neutral-400">{line.text}</div>
 }

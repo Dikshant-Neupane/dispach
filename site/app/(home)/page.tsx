@@ -3,6 +3,7 @@ import { Replay } from "@/components/replay"
 import { evidence } from "@/lib/evidence"
 import { capturedAt, capturedModel, replay } from "@/lib/replay"
 import { brand, repoUrl } from "@/lib/shared"
+import { pixels } from "@/lib/wordmark"
 
 const QUICKSTART = "/docs/runtime/quickstart/run-with-docker"
 
@@ -70,6 +71,24 @@ export default function HomePage() {
         <main className="flex flex-1 flex-col">
             <section className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 pt-16 pb-20 lg:grid-cols-[1fr_1.1fr] lg:pt-24">
                 <div>
+                    <svg
+                        role="img"
+                        aria-label={brand.name}
+                        viewBox={`0 0 ${pixels.width} ${pixels.height}`}
+                        className="mb-8 h-10 w-auto text-term-accent sm:h-12"
+                        shapeRendering="crispEdges"
+                    >
+                        {pixels.cells.map(({ x, y }) => (
+                            <rect
+                                key={`${x}:${y}`}
+                                x={x}
+                                y={y}
+                                width={1}
+                                height={1}
+                                fill="currentColor"
+                            />
+                        ))}
+                    </svg>
                     <p className="font-mono text-xs text-fd-muted-foreground">
                         v{evidence.version} · Apache-2.0 · self-hosted
                     </p>
@@ -84,7 +103,7 @@ export default function HomePage() {
                     <div className="mt-8 flex flex-wrap gap-3">
                         <Link
                             href={QUICKSTART}
-                            className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400"
+                            className="rounded-lg bg-term-accent px-4 py-2.5 text-sm font-medium text-neutral-950 hover:brightness-110"
                         >
                             Run it in five minutes
                         </Link>
@@ -96,7 +115,8 @@ export default function HomePage() {
                         </a>
                     </div>
                     <p className="mt-6 font-mono text-xs text-fd-muted-foreground">
-                        $ npm install --global {brand.slug}
+                        <span className="text-term-accent">›</span> npm install --global{" "}
+                        {brand.slug}
                     </p>
                 </div>
                 <Replay
@@ -107,7 +127,7 @@ export default function HomePage() {
 
             <section className="border-y border-fd-border bg-fd-card/40">
                 <div className="mx-auto w-full max-w-6xl px-4 py-16">
-                    <h2 className="font-mono text-sm text-emerald-500">what you don't build</h2>
+                    <h2 className="font-mono text-sm text-term-accent">what you don't build</h2>
                     <dl className="mt-6 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
                         {BUILT_IN.map(([term, detail]) => (
                             <div key={term}>
@@ -120,12 +140,12 @@ export default function HomePage() {
             </section>
 
             <section className="mx-auto w-full max-w-6xl px-4 py-16">
-                <h2 className="font-mono text-sm text-emerald-500">proof, with the caveats</h2>
+                <h2 className="font-mono text-sm text-term-accent">proof, with the caveats</h2>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                     {PROOFS.map((p) => (
                         <article
                             key={p.title}
-                            className="flex flex-col rounded-xl border border-fd-border p-6"
+                            className="flex flex-col rounded-2xl border border-fd-border p-6 hover:border-term-accent/60"
                         >
                             <p className="font-mono text-3xl font-semibold">{p.figure}</p>
                             <h3 className="mt-2 font-medium">{p.title}</h3>
@@ -133,7 +153,7 @@ export default function HomePage() {
                             <p className="mt-3 text-xs text-fd-muted-foreground/80">{p.caveat}</p>
                             <Link
                                 href={p.href}
-                                className="mt-auto pt-4 font-mono text-xs text-emerald-500 hover:underline"
+                                className="mt-auto pt-4 font-mono text-xs text-term-accent hover:underline"
                             >
                                 {p.link} →
                             </Link>
@@ -150,8 +170,8 @@ export default function HomePage() {
             </section>
 
             <section className="mx-auto w-full max-w-6xl px-4 pb-16">
-                <div className="rounded-xl border border-dashed border-amber-500/40 p-6">
-                    <p className="font-mono text-xs text-amber-500">
+                <div className="rounded-xl border border-dashed border-term-warning/50 p-6">
+                    <p className="font-mono text-xs text-term-warning">
                         experimental · where it's going
                     </p>
                     <p className="mt-2 max-w-3xl">

@@ -3,6 +3,29 @@
 @import "fumadocs-ui/css/preset.css";
 @import "fumadocs-openapi/css/preset.css";
 
+/*
+ * The TUI's tokens (packages/cli/src/lib/theme.ts), as their xterm-256 values: the site is the same
+ * product as the terminal, so it wears the same colours. Magenta is the one accent, as it is there.
+ */
+@theme {
+    --color-term-accent: #d75fd7;
+    --color-term-success: #5fd75f;
+    --color-term-warning: #d7af5f;
+    --color-term-info: #5f87d7;
+    --color-term-emphasis: #5fd7d7;
+    --color-term-muted: #8a8a8a;
+}
+
+@theme inline {
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
+}
+
+:root,
+.dark {
+    --color-fd-primary: #d75fd7;
+}
+
 html {
     scrollbar-gutter: stable;
 }
@@ -10,9 +33,4 @@ html {
 html > body[data-scroll-locked] {
     margin-right: 0px !important;
     --removed-body-scroll-bar-size: 0px !important;
-}
-
-@theme inline {
-    --font-sans: var(--font-sans);
-    --font-mono: var(--font-mono);
 }
