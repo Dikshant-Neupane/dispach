@@ -276,6 +276,13 @@ describe("planFiles", () => {
         ])
     })
 
+    // GPT-6.x refuses any temperature, and an endpoint enforcing its parameters refuses the request.
+    test("the manifest sets no temperature, so a model that refuses one can still answer", () => {
+        const manifest = planFiles(ANSWERS).find((f) => f.relPath === "agent.yaml")?.contents ?? ""
+        expect(manifest).toMatch(/^\s*# temperature:/m)
+        expect(manifest).not.toMatch(/^\s*temperature:/m)
+    })
+
     test("AGENTS.md is operations, fully filled, and adds nothing the rule counter sees", () => {
         const files = planFiles(ANSWERS)
         const ops = files.find((f) => f.relPath === "workspace/AGENTS.md")

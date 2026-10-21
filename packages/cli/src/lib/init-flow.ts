@@ -2126,8 +2126,10 @@ function manifestFor(answers: InitAnswers): string {
         )
     }
     lines.push(
-        `    temperature: 0.3`,
-        `    # reasoningEffort: none   # none | minimal | low | medium | high — a reasoning model`,
+        // Commented, never live: GPT-6.x and the Claude 5.5 rows refuse a temperature, and an endpoint
+        // that enforces its parameters refuses the whole request — a fresh agent that cannot answer.
+        `    # temperature: 0.3        # some models refuse any temperature; leave unset for those`,
+        `    # reasoningEffort: none  # none | minimal | low | medium | high — a reasoning model`,
         `    #                         # bills its thinking to the output budget; verify per endpoint`,
         `    # topP: 0.95`,
         `    # maxTokens: 4096`,
