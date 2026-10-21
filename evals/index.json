@@ -294,6 +294,11 @@
             "results": []
         },
         {
+            "name": "harness",
+            "title": "harness",
+            "results": []
+        },
+        {
             "name": "memory",
             "title": "Memory retrieval",
             "results": [

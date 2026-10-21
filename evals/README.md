@@ -12,6 +12,7 @@ comes from. Negative results are listed with the positive ones.
 | [`boot`](boot/) | Boot: process start to `runtime.ready` | [`results.json`](boot/results.json) | 2026-10-20 |
 | [`budget`](budget/) | The estimator's bias, and the weight that corrects it | [`results.json`](budget/results.json) | not recorded |
 | [`handoff`](handoff/) | evals/handoff — does delegation cost the parent fewer tokens? | none | not recorded |
+| [`harness`](harness/) | harness | none | not recorded |
 | [`memory`](memory/) | Memory retrieval | [`results.json`](memory/results.json) | 2026-10-20 |
 | [`nlt-heredoc`](nlt-heredoc/) | evals/nlt-heredoc — multi-line values through the NLT parser | [`results.json`](nlt-heredoc/results.json) | 2026-09-13 |
 | [`phases`](phases/) | Phase-scoped tool visibility, measured — and the number is negative | [`results.json`](phases/results.json) | not recorded |
