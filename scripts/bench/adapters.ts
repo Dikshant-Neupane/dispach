@@ -5,6 +5,7 @@
  */
 import { join } from "node:path"
 import { BRAND } from "../../packages/core/src/brand.ts"
+import type { RosterModel } from "../lib/roster.ts"
 import type { Harness, HarnessContext } from "./run.ts"
 
 const ROOT = join(import.meta.dirname, "..", "..")
@@ -123,6 +124,27 @@ function runtimeHarness(name: string, variant: Variant): Harness {
             ]
             for (const argv of steps) {
                 const result = await cli(argv, env)
+                // A model the capability registry does not know gets an 8k window, which init's own
+                // reserveOutput does not fit, so the agent it wrote does not load. Do what the error
+                // tells a person to: declare the window — the pinned endpoint's published one.
+                if (
+                    !result.ok &&
+                    argv[0] === "init" &&
+                    `${result.stdout}${result.stderr}`.includes("context.reserveOutput")
+                ) {
+                    const { window, tools } = await published(context.model)
+                    console.log(
+                        `note: ${name} — the registry does not know ${context.model.id}; init's agent did not load, so its window (${window}) and native tool support (${tools}) were set from ${context.model.provider}'s published endpoint through config set model.main.`,
+                    )
+                    const role = {
+                        id: context.model.id,
+                        baseUrl: context.modelBaseUrl,
+                        apiKeyEnv: "BENCH_KEY",
+                        capabilities: { contextWindow: window, nativeTools: tools },
+                    }
+                    const fixed = await cli(set("model.main", JSON.stringify(role)), env)
+                    if (fixed.ok) continue
+                }
                 if (!result.ok)
                     throw new Error(
                         `${name} setup failed at \`${argv.slice(0, 3).join(" ")}\`:\n${result.stderr || result.stdout}\n  hint: run the same command by hand with ${BRAND.envPrefix}HOME=${env[`${BRAND.envPrefix}HOME`]}.`,
@@ -170,4 +192,29 @@ export const HARNESSES: Readonly<Record<string, Harness>> = {
         dialect: "nlt",
         allowWrites: false,
     }),
+}
+
+async function published(model: RosterModel): Promise<{ window: number; tools: boolean }> {
+    const response = await fetch(`${model.baseUrl}/models/${model.id}/endpoints`)
+    const json = (await response.json()) as {
+        data?: {
+            endpoints?: {
+                tag?: string
+                provider_name?: string
+                context_length?: number
+                supported_parameters?: string[]
+            }[]
+        }
+    }
+    const endpoint = json.data?.endpoints?.find(
+        (e) => (e.tag ?? e.provider_name) === model.provider,
+    )
+    if (endpoint?.context_length === undefined)
+        throw new Error(
+            `No published endpoint data for ${model.id} on ${model.provider}.\n  hint: bun scripts/roster.ts --check confirms the pin still exists.`,
+        )
+    return {
+        window: endpoint.context_length,
+        tools: endpoint.supported_parameters?.includes("tools") === true,
+    }
 }

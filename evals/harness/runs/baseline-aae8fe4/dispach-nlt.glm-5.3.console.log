@@ -1,0 +1,141 @@
+note: dispach-nlt — the registry does not know z-ai/glm-5.3; init's agent did not load, so its window (1048576) and native tool support (true) were set from z-ai/fp8's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  43296 ms  $0.01157
+pass  single-read-answer       r1  2 calls  5721 ms  $0.00274
+pass  single-calculator        r1  2 calls  8075 ms  $0.00672
+FAIL  single-now               r1  2 calls  15890 ms  $0.00781  — clock not read (a guess)
+FAIL  single-send              r1  1 calls  28609 ms  $0.00368  — no message to Priya about the build
+FAIL  chain-order-notify       r1  1 calls  10061 ms  $0.00232  — order never looked up
+pass  chain-file-to-kv         r1  3 calls  22834 ms  $0.01229
+pass  chain-sum-to-file        r1  4 calls  27144 ms  $0.00901
+FAIL  chain-kv-to-send         r1  2 calls  24441 ms  $0.00748  — Dmitri not sent the alert
+pass  chain-edit-json          r1  3 calls  24694 ms  $0.00794
+FAIL  recall-fact              r1  6 calls  399128 ms  $0.02552  — harness error: 
+FAIL  recall-preference        r1  3 calls  168956 ms  $0.04722  — Lee not told about the deploy
+pass  recall-correction        r1  4 calls  105453 ms  $0.03703
+pass  abstain-chitchat         r1  1 calls  6287 ms  $0.00205
+pass  abstain-knowledge        r1  1 calls  3277 ms  $0.00113
+pass  abstain-draft-only       r1  1 calls  21552 ms  $0.00751
+pass  abstain-cannot           r1  1 calls  31721 ms  $0.00740
+FAIL  recover-retry            r1  1 calls  2926 ms  $0.00533  — never got past the failure
+FAIL  recover-persist          r1  1 calls  7563 ms  $0.00250  — file never written
+pass  recover-bad-expression   r1  2 calls  6948 ms  $0.00277
+pass  recover-missing-file     r1  2 calls  18868 ms  $0.00614
+pass  recover-unknown-order    r1  3 calls  44305 ms  $0.01295
+FAIL  long-log-needle          r1  1 calls  6018 ms  $0.00143  — error code not stored
+FAIL  long-count-orders        r1  8 calls  300037 ms  $0.10498  — harness error: The middle of that file got cut off, so I'm reading the missing section back before counting.
+
+Two chunks seen so far — refunded count is running at 22 (9 in B-3000–B-3067, 9 in B-3068–B-3104, 4 in B-3355–B-3399). Reading the remaining middle section now.
+
+Still counting — the segment through B-3159
+pass  long-handbook            r1  9 calls  163158 ms  $0.07981
+pass  single-kv-set            r2  2 calls  84426 ms  $0.01989
+pass  single-read-answer       r2  2 calls  15436 ms  $0.00522
+pass  single-calculator        r2  2 calls  6789 ms  $0.00408
+FAIL  single-now               r2  2 calls  21335 ms  $0.00550  — clock not read (a guess)
+FAIL  single-send              r2  1 calls  14098 ms  $0.00660  — no message to Priya about the build
+FAIL  chain-order-notify       r2  1 calls  15908 ms  $0.00359  — order never looked up
+pass  chain-file-to-kv         r2  3 calls  66162 ms  $0.02819
+pass  chain-sum-to-file        r2  4 calls  22132 ms  $0.00870
+FAIL  chain-kv-to-send         r2  2 calls  115327 ms  $0.02924  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  1 calls  5963 ms  $0.00236  — darkMode not true
+pass  recall-fact              r2  3 calls  36765 ms  $0.01181
+FAIL  recall-preference        r2  2 calls  17515 ms  $0.00585  — Lee not told about the deploy
+pass  recall-correction        r2  4 calls  18683 ms  $0.01100
+pass  abstain-chitchat         r2  1 calls  5620 ms  $0.00244
+pass  abstain-knowledge        r2  1 calls  3715 ms  $0.00128
+pass  abstain-draft-only       r2  1 calls  6237 ms  $0.00269
+pass  abstain-cannot           r2  1 calls  35414 ms  $0.00921
+pass  recover-retry            r2  3 calls  13167 ms  $0.00724
+FAIL  recover-persist          r2  1 calls  9603 ms  $0.00315  — file never written
+pass  recover-bad-expression   r2  2 calls  8004 ms  $0.00354
+FAIL  recover-missing-file     r2  1 calls  4120 ms  $0.00158  — never tried to read the file
+FAIL  recover-unknown-order    r2  1 calls  5409 ms  $0.00236  — never looked the order up
+pass  long-log-needle          r2  9 calls  129145 ms  $0.10668
+pass  long-count-orders        r2  5 calls  136116 ms  $0.07564
+FAIL  long-handbook            r2  1 calls  8569 ms  $0.00279  — meal_limit is not 75
+pass  single-kv-set            r3  3 calls  36913 ms  $0.01190
+pass  single-read-answer       r3  2 calls  18099 ms  $0.00464
+pass  single-calculator        r3  2 calls  10741 ms  $0.00408
+pass  single-now               r3  2 calls  43824 ms  $0.01171
+FAIL  single-send              r3  1 calls  29143 ms  $0.00466  — no message to Priya about the build
+FAIL  chain-order-notify       r3  2 calls  21551 ms  $0.00800  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  34317 ms  $0.01203
+pass  chain-sum-to-file        r3  4 calls  25119 ms  $0.01123
+FAIL  chain-kv-to-send         r3  2 calls  36507 ms  $0.01121  — Dmitri not sent the alert
+FAIL  chain-edit-json          r3  1 calls  4679 ms  $0.00226  — darkMode not true
+FAIL  recall-fact              r3  2 calls  12037 ms  $0.00536  — flight not stored as BA 286
+FAIL  recall-preference        r3  2 calls  13107 ms  $0.00583  — Lee not told about the deploy
+pass  recall-correction        r3  4 calls  194449 ms  $0.05866
+pass  abstain-chitchat         r3  1 calls  5948 ms  $0.00301
+pass  abstain-knowledge        r3  1 calls  2944 ms  $0.00147
+pass  abstain-draft-only       r3  1 calls  8518 ms  $0.00327
+pass  abstain-cannot           r3  1 calls  14933 ms  $0.00486
+pass  recover-retry            r3  3 calls  32327 ms  $0.01318
+FAIL  recover-persist          r3  1 calls  9375 ms  $0.00364  — file never written
+pass  recover-bad-expression   r3  2 calls  6573 ms  $0.00360
+FAIL  recover-missing-file     r3  1 calls  2556 ms  $0.00155  — never tried to read the file
+pass  recover-unknown-order    r3  3 calls  92330 ms  $0.03013
+pass  long-log-needle          r3  9 calls  230240 ms  $0.14126
+pass  long-count-orders        r3  9 calls  230173 ms  $0.14217
+FAIL  long-handbook            r3  8 calls  300033 ms  $0.08053  — harness error: I'll read the handbook, then save the limit under that key.
+
+The handbook's meal section is in the truncated middle, so I'll read the full result back before answering.
+
+Continuing through the handbook — the meal section will be in the middle that got cut.
+
+Still working through it — everything so f
+pass  single-kv-set            r4  2 calls  64283 ms  $0.02136
+pass  single-read-answer       r4  2 calls  7306 ms  $0.00401
+pass  single-calculator        r4  2 calls  5214 ms  $0.00366
+FAIL  single-now               r4  2 calls  10627 ms  $0.00503  — clock not read (a guess)
+FAIL  single-send              r4  1 calls  10185 ms  $0.00303  — no message to Priya about the build
+FAIL  chain-order-notify       r4  2 calls  27718 ms  $0.01043  — Sam not told it is delayed
+pass  chain-file-to-kv         r4  3 calls  13790 ms  $0.00757
+FAIL  chain-sum-to-file        r4  1 calls  22847 ms  $0.00216  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r4  2 calls  32282 ms  $0.01182  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  1 calls  5199 ms  $0.00247  — darkMode not true
+pass  recall-fact              r4  3 calls  18911 ms  $0.00909
+pass  recall-preference        r4  4 calls  231473 ms  $0.06659
+pass  recall-correction        r4  4 calls  133930 ms  $0.04577
+pass  abstain-chitchat         r4  1 calls  7504 ms  $0.00384
+pass  abstain-knowledge        r4  1 calls  2668 ms  $0.00161
+pass  abstain-draft-only       r4  1 calls  8809 ms  $0.00381
+pass  abstain-cannot           r4  1 calls  36755 ms  $0.01008
+FAIL  recover-retry            r4  1 calls  5342 ms  $0.00221  — never got past the failure
+FAIL  recover-persist          r4  4 calls  29426 ms  $0.01415  — harness error: I'll check whether that file already has anything in it first, so I don't overwrite it blindly.
+
+The file doesn't exist yet, so there's nothing to overwrite. Writing it now.
+
+The write failed earlier with the server saying "temporarily unavailable — try again," and the file still doesn't exist, so n
+pass  recover-bad-expression   r4  2 calls  10578 ms  $0.00548
+FAIL  recover-missing-file     r4  1 calls  4292 ms  $0.00220  — never tried to read the file
+FAIL  recover-unknown-order    r4  1 calls  8744 ms  $0.00398  — never looked the order up
+FAIL  long-log-needle          r4  1 calls  5001 ms  $0.00245  — error code not stored
+FAIL  long-count-orders        r4  4 calls  35513 ms  $0.02680  — count is not 58
+pass  long-handbook            r4  8 calls  143505 ms  $0.08024
+pass  single-kv-set            r5  2 calls  52018 ms  $0.01710
+pass  single-read-answer       r5  2 calls  7262 ms  $0.00431
+pass  single-calculator        r5  2 calls  10028 ms  $0.00525
+FAIL  single-now               r5  2 calls  17923 ms  $0.00711  — clock not read (a guess)
+FAIL  single-send              r5  1 calls  107222 ms  $0.01444  — no message to Priya about the build
+FAIL  chain-order-notify       r5  1 calls  7392 ms  $0.00267  — order never looked up
+pass  chain-file-to-kv         r5  3 calls  29762 ms  $0.01257
+FAIL  chain-sum-to-file        r5  1 calls  3302 ms  $0.00193  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r5  1 calls  56040 ms  $0.01519  — Dmitri not sent the alert
+pass  chain-edit-json          r5  3 calls  31978 ms  $0.01369
+pass  recall-fact              r5  3 calls  43044 ms  $0.01572
+FAIL  recall-preference        r5  2 calls  20371 ms  $0.00897  — Lee not told about the deploy
+pass  recall-correction        r5  6 calls  138330 ms  $0.04939
+pass  abstain-chitchat         r5  1 calls  5647 ms  $0.00321
+pass  abstain-knowledge        r5  1 calls  2530 ms  $0.00185
+pass  abstain-draft-only       r5  1 calls  9247 ms  $0.00420
+pass  abstain-cannot           r5  2 calls  260569 ms  $0.07183
+pass  recover-retry            r5  4 calls  31364 ms  $0.01495
+FAIL  recover-persist          r5  1 calls  16106 ms  $0.00597  — file never written
+pass  recover-bad-expression   r5  2 calls  6613 ms  $0.00428
+pass  recover-missing-file     r5  2 calls  8542 ms  $0.00532
+FAIL  recover-unknown-order    r5  1 calls  6032 ms  $0.00330  — never looked the order up
+FAIL  long-log-needle          r5  1 calls  5641 ms  $0.00275  — error code not stored
+FAIL  long-count-orders        r5  1 calls  6173 ms  $0.00287  — file never read
+pass  long-handbook            r5  11 calls  85044 ms  $0.06662
+dispach-nlt · glm-5.3: 74/125 passed → evals/harness/runs/baseline-aae8fe4/dispach-nlt.glm-5.3.jsonl
