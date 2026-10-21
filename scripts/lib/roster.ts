@@ -73,7 +73,7 @@ export function loadRoster(only?: readonly string[]): RosterModel[] {
 export function pinnedFetch(model: RosterModel, base: typeof fetch = fetch): typeof fetch {
     if (model.provider === undefined) return base
     const provider = { only: [model.provider], allow_fallbacks: false, require_parameters: true }
-    return ((input: RequestInfo | URL, init?: RequestInit) => {
+    return ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         if (typeof init?.body !== "string") return base(input, init)
         const body = JSON.parse(init.body) as Record<string, unknown>
         return base(input, { ...init, body: JSON.stringify({ ...body, provider }) })

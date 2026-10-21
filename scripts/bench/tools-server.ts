@@ -275,8 +275,8 @@ export function createToolServer(initial: World = {}): ToolServer {
             )
         }
         const batch = Array.isArray(body)
-        const answers = (batch ? body : [body])
-            .map((m) => rpc(m as Record<string, unknown>))
+        const answers = ((batch ? body : [body]) as Record<string, unknown>[])
+            .map((m) => rpc(m))
             .filter((a) => a !== undefined)
         const headers: Record<string, string> =
             (body as { method?: string }).method === "initialize"

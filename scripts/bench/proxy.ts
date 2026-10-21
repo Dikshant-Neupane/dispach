@@ -53,6 +53,8 @@ export interface ProxyRecord {
     }
     readonly servedBy?: string
     readonly generationId?: string
+    /** The last 16 KB of the response as sent, so what the model wrote can be read back, not inferred. */
+    readonly responseTail?: string
     /** The request as received, so anyone can recount the overhead from the raw log. */
     readonly body: unknown
 }
@@ -187,7 +189,7 @@ export function createProxy(options: ProxyOptions): (req: Request) => Promise<Re
             return mockResponse(body, options.reply ?? "OK")
         }
 
-        const sent = { ...body, model: options.model.id }
+        const sent: Record<string, unknown> = { ...body, model: options.model.id }
         if (sent.stream === true) sent.stream_options = { include_usage: true }
         const upstream = await upstreamFetch(`${options.model.baseUrl}/chat/completions`, {
             method: "POST",
@@ -214,6 +216,7 @@ export function createProxy(options: ProxyOptions): (req: Request) => Promise<Re
                 ...optional("firstByteMs", firstByteMs),
                 durationMs: now() - started,
                 ...readTail(tail),
+                responseTail: tail,
             })
         const relay = new ReadableStream<Uint8Array>({
             async pull(controller) {
