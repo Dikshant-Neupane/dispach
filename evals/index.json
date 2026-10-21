@@ -297,10 +297,11 @@
             "name": "harness",
             "title": "Harness benchmark",
             "results": [
+                "runs/after-8267f61/results.json",
                 "runs/baseline-aae8fe4/results.json",
                 "runs/after-ac5dcc5/results.json"
             ],
-            "measuredAt": "2026-10-21T13:50:47.292Z"
+            "measuredAt": "2026-10-21T15:08:50.738Z"
         },
         {
             "name": "memory",
