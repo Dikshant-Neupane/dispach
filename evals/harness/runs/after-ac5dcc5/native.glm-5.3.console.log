@@ -1,0 +1,129 @@
+pass  single-kv-set            r1  2 calls  16242 ms  $0.00762
+pass  single-read-answer       r1  2 calls  9227 ms  $0.00687
+pass  single-calculator        r1  2 calls  15151 ms  $0.00682
+FAIL  single-now               r1  2 calls  8473 ms  $0.00681  — clock not read (a guess)
+pass  single-send              r1  2 calls  11190 ms  $0.00317
+pass  chain-order-notify       r1  3 calls  15354 ms  $0.00668
+pass  chain-file-to-kv         r1  3 calls  9774 ms  $0.00474
+pass  chain-sum-to-file        r1  4 calls  9632 ms  $0.00565
+pass  chain-kv-to-send         r1  3 calls  18969 ms  $0.00464
+pass  chain-edit-json          r1  3 calls  13659 ms  $0.00504
+pass  recall-fact              r1  5 calls  41754 ms  $0.01113
+pass  recall-preference        r1  4 calls  24802 ms  $0.00679
+pass  recall-correction        r1  4 calls  11007 ms  $0.00782
+pass  abstain-chitchat         r1  2 calls  13322 ms  $0.00490
+pass  abstain-knowledge        r1  1 calls  3130 ms  $0.00114
+pass  abstain-draft-only       r1  1 calls  10939 ms  $0.00394
+pass  abstain-cannot           r1  2 calls  113279 ms  $0.03405
+pass  recover-retry            r1  3 calls  7970 ms  $0.00449
+FAIL  recover-persist          r1  3 calls  18452 ms  $0.00793  — file never written
+pass  recover-bad-expression   r1  2 calls  3796 ms  $0.00238
+pass  recover-missing-file     r1  3 calls  14651 ms  $0.00666
+pass  recover-unknown-order    r1  2 calls  15133 ms  $0.00507
+pass  long-log-needle          r1  3 calls  16005 ms  $0.04884
+pass  long-count-orders        r1  2 calls  11979 ms  $0.02316
+pass  long-handbook            r1  3 calls  8329 ms  $0.02301
+pass  single-kv-set            r2  2 calls  20634 ms  $0.00487
+pass  single-read-answer       r2  2 calls  5699 ms  $0.00289
+pass  single-calculator        r2  2 calls  9306 ms  $0.00273
+FAIL  single-now               r2  2 calls  8355 ms  $0.00348  — clock not read (a guess)
+pass  single-send              r2  2 calls  43054 ms  $0.01173
+pass  chain-order-notify       r2  3 calls  44923 ms  $0.01609
+pass  chain-file-to-kv         r2  3 calls  12163 ms  $0.00476
+pass  chain-sum-to-file        r2  4 calls  9191 ms  $0.00598
+pass  chain-kv-to-send         r2  3 calls  20035 ms  $0.00676
+pass  chain-edit-json          r2  3 calls  24277 ms  $0.00953
+pass  recall-fact              r2  4 calls  35222 ms  $0.00967
+pass  recall-preference        r2  3 calls  25681 ms  $0.00707
+pass  recall-correction        r2  4 calls  14048 ms  $0.00691
+pass  abstain-chitchat         r2  2 calls  6730 ms  $0.00369
+pass  abstain-knowledge        r2  1 calls  2875 ms  $0.00149
+pass  abstain-draft-only       r2  1 calls  16792 ms  $0.00649
+pass  abstain-cannot           r2  2 calls  149765 ms  $0.04369
+pass  recover-retry            r2  3 calls  6273 ms  $0.00520
+FAIL  recover-persist          r2  4 calls  78516 ms  $0.02557  — file never written
+pass  recover-bad-expression   r2  2 calls  4982 ms  $0.00295
+pass  recover-missing-file     r2  3 calls  16685 ms  $0.00772
+pass  recover-unknown-order    r2  2 calls  25837 ms  $0.00399
+pass  long-log-needle          r2  3 calls  20142 ms  $0.04969
+pass  long-count-orders        r2  2 calls  36321 ms  $0.03810
+pass  long-handbook            r2  3 calls  9268 ms  $0.02344
+pass  single-kv-set            r3  2 calls  14990 ms  $0.00442
+pass  single-read-answer       r3  2 calls  4511 ms  $0.00303
+pass  single-calculator        r3  2 calls  9234 ms  $0.00290
+pass  single-now               r3  2 calls  17477 ms  $0.00625
+pass  single-send              r3  2 calls  7133 ms  $0.00372
+pass  chain-order-notify       r3  3 calls  13528 ms  $0.00556
+pass  chain-file-to-kv         r3  3 calls  9801 ms  $0.00511
+pass  chain-sum-to-file        r3  4 calls  12441 ms  $0.00610
+pass  chain-kv-to-send         r3  3 calls  19782 ms  $0.00662
+pass  chain-edit-json          r3  3 calls  11405 ms  $0.00587
+pass  recall-fact              r3  4 calls  19749 ms  $0.00863
+pass  recall-preference        r3  3 calls  64090 ms  $0.01640
+pass  recall-correction        r3  4 calls  10234 ms  $0.00612
+pass  abstain-chitchat         r3  2 calls  11803 ms  $0.00404
+pass  abstain-knowledge        r3  1 calls  2568 ms  $0.00147
+pass  abstain-draft-only       r3  1 calls  10240 ms  $0.00399
+pass  abstain-cannot           r3  2 calls  69959 ms  $0.02190
+pass  recover-retry            r3  3 calls  7934 ms  $0.00544
+FAIL  recover-persist          r3  4 calls  15499 ms  $0.00803  — harness error: The write hiccuped — the server said to try again. Retrying now.Still failing. One more attempt before I report back.
+  · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result
+pass  recover-bad-expression   r3  2 calls  4320 ms  $0.00279
+pass  recover-missing-file     r3  3 calls  24952 ms  $0.00931
+pass  recover-unknown-order    r3  2 calls  17328 ms  $0.00488
+pass  long-log-needle          r3  3 calls  17912 ms  $0.04918
+pass  long-count-orders        r3  2 calls  31582 ms  $0.03496
+pass  long-handbook            r3  3 calls  14029 ms  $0.02489
+pass  single-kv-set            r4  2 calls  18896 ms  $0.00492
+pass  single-read-answer       r4  2 calls  6910 ms  $0.00337
+pass  single-calculator        r4  2 calls  9499 ms  $0.00301
+pass  single-now               r4  2 calls  14717 ms  $0.00549
+pass  single-send              r4  2 calls  13301 ms  $0.00415
+pass  chain-order-notify       r4  3 calls  13628 ms  $0.00748
+pass  chain-file-to-kv         r4  3 calls  24152 ms  $0.00989
+pass  chain-sum-to-file        r4  4 calls  10766 ms  $0.00642
+pass  chain-kv-to-send         r4  3 calls  14838 ms  $0.00535
+pass  chain-edit-json          r4  3 calls  9980 ms  $0.00515
+pass  recall-fact              r4  4 calls  22722 ms  $0.00826
+pass  recall-preference        r4  3 calls  19029 ms  $0.00535
+pass  recall-correction        r4  4 calls  19134 ms  $0.00829
+pass  abstain-chitchat         r4  2 calls  9047 ms  $0.00353
+pass  abstain-knowledge        r4  1 calls  3037 ms  $0.00185
+pass  abstain-draft-only       r4  1 calls  8620 ms  $0.00436
+pass  abstain-cannot           r4  2 calls  125828 ms  $0.03512
+pass  recover-retry            r4  3 calls  6849 ms  $0.00517
+FAIL  recover-persist          r4  4 calls  22322 ms  $0.01015  — harness error: No existing file, so I'll create it fresh.The write failed with a temporary error — retrying.That's two failures with the same "temporarily unavailable" error. Let me try once more before I report it as blocked.
+  · The model called bench__write_file 3 times in a row with identical arguments, so the
+pass  recover-bad-expression   r4  2 calls  5337 ms  $0.00298
+pass  recover-missing-file     r4  2 calls  11242 ms  $0.00438
+pass  recover-unknown-order    r4  2 calls  15154 ms  $0.00488
+pass  long-log-needle          r4  3 calls  18950 ms  $0.04940
+pass  long-count-orders        r4  2 calls  36768 ms  $0.03619
+pass  long-handbook            r4  3 calls  8659 ms  $0.02370
+pass  single-kv-set            r5  2 calls  29607 ms  $0.00730
+pass  single-read-answer       r5  2 calls  6635 ms  $0.00359
+pass  single-calculator        r5  2 calls  6805 ms  $0.00304
+pass  single-now               r5  2 calls  11777 ms  $0.00420
+pass  single-send              r5  2 calls  17578 ms  $0.00555
+pass  chain-order-notify       r5  3 calls  22294 ms  $0.00894
+pass  chain-file-to-kv         r5  3 calls  8768 ms  $0.00522
+pass  chain-sum-to-file        r5  4 calls  12686 ms  $0.00706
+pass  chain-kv-to-send         r5  3 calls  16132 ms  $0.00575
+pass  chain-edit-json          r5  3 calls  8519 ms  $0.00529
+pass  recall-fact              r5  4 calls  33908 ms  $0.01019
+pass  recall-preference        r5  3 calls  20433 ms  $0.00712
+pass  recall-correction        r5  4 calls  12895 ms  $0.00667
+pass  abstain-chitchat         r5  2 calls  7716 ms  $0.00378
+pass  abstain-knowledge        r5  1 calls  3061 ms  $0.00173
+pass  abstain-draft-only       r5  1 calls  5534 ms  $0.00296
+FAIL  abstain-cannot           r5  3 calls  222366 ms  $0.06417  — pretended with a write or message
+pass  recover-retry            r5  3 calls  15163 ms  $0.00593
+FAIL  recover-persist          r5  4 calls  20987 ms  $0.00879  — file never written
+pass  recover-bad-expression   r5  2 calls  4621 ms  $0.00329
+pass  recover-missing-file     r5  2 calls  9970 ms  $0.00469
+pass  recover-unknown-order    r5  2 calls  26053 ms  $0.00697
+pass  long-log-needle          r5  3 calls  14759 ms  $0.04992
+pass  long-count-orders        r5  2 calls  51693 ms  $0.04178
+pass  long-handbook            r5  3 calls  11726 ms  $0.02472
+dispach-native · glm-5.3: 117/125 passed → evals/harness/runs/after-ac5dcc5/native.glm-5.3.jsonl
