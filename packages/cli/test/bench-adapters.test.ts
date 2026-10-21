@@ -1,0 +1,37 @@
+import { describe, expect, test } from "bun:test"
+import { forContainer, hermesOutput, openclawReply } from "../../../scripts/bench/adapters.ts"
+
+describe("contained harness adapters", () => {
+    test("loopback URLs are rewritten to the host as a container sees it", () => {
+        expect(forContainer("http://127.0.0.1:51234/v1")).toBe(
+            "http://host.docker.internal:51234/v1",
+        )
+        expect(forContainer("http://localhost:8788/mcp")).toBe(
+            "http://host.docker.internal:8788/mcp",
+        )
+        expect(forContainer("https://api.example.com/v1")).toBe("https://api.example.com/v1")
+    })
+
+    test("the OpenClaw reply is its final visible text, however deep the version nests it", () => {
+        // Its --json output, shape as measured on 2026.10.5, with log lines before the object.
+        const stdout = `[agent] starting\n${JSON.stringify({
+            payload: { meta: { finalAssistantVisibleText: "The server clock says **Saturday**." } },
+            toolSummary: { calls: 2 },
+        })}`
+        expect(openclawReply(stdout)).toBe("The server clock says **Saturday**.")
+        expect(openclawReply("{not json")).toBe("{not json")
+    })
+
+    test("the Hermes reply drops its session line and notices, and keeps the session id", () => {
+        const out = hermesOutput({
+            stdout: "  ⚠ tirith security scanner enabled but not available\nTeal.\n\nsession_id: 20261021_153732_e0cb55\n",
+            stderr: "",
+        })
+        expect(out).toEqual({ reply: "Teal.", session: "20261021_153732_e0cb55" })
+        // The id can arrive on stderr instead; the reply never includes it.
+        expect(hermesOutput({ stdout: "ok\n", stderr: "session_id: abc\n" })).toEqual({
+            reply: "ok",
+            session: "abc",
+        })
+    })
+})

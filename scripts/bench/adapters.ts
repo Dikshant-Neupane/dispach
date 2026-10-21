@@ -179,7 +179,200 @@ function runtimeHarness(name: string, variant: Variant): Harness {
     }
 }
 
+// ── Other harnesses, each in its own container (never installed on the host) ──────────────────
+
+const IMAGES = join(ROOT, "scripts", "bench", "images")
+
+async function run(
+    argv: readonly string[],
+): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+    const child = Bun.spawn([...argv], { stdout: "pipe", stderr: "pipe" })
+    const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+    ])
+    return { ok: code === 0, stdout, stderr }
+}
+
+/** The proxy and tool server bind the host's loopback; a container reaches it by this name. */
+export function forContainer(url: string): string {
+    return url.replace(/\/\/(127\.0\.0\.1|localhost)(?=[:/])/, "//host.docker.internal")
+}
+
+/** A harness living in one container: built from its Dockerfile, set up once, one exec per turn. */
+interface Contained {
+    readonly image: string
+    readonly dockerfile: string
+    /** Shell commands, run in order, that set the harness up the way its own docs say to. */
+    setup(context: HarnessContext): string[]
+    /** One turn: the argv to run inside the container. `issued` is the harness's own id for `session`, once it has given one. */
+    turn(text: string, session: string, issued: string | undefined): string[]
+    /** The reply from that turn's output; `session` is what the next turn needs, if it differs. */
+    read(out: { stdout: string; stderr: string }): { reply: string; session?: string }
+}
+
+function containedHarness(name: string, spec: Contained): Harness {
+    const container = `bench-${name}-${process.pid}`
+    // The harness's own session id, when it issues one rather than taking ours.
+    const sessions = new Map<string, string>()
+    const exec = (argv: readonly string[]) =>
+        // `timeout` inside the container: killing a `docker exec` client leaves the process running.
+        run(["docker", "exec", container, "timeout", String(TURN_TIMEOUT_MS / 1000), ...argv])
+    return {
+        name,
+        async prepare(context) {
+            const built = await run([
+                "docker",
+                "build",
+                "-q",
+                "-t",
+                spec.image,
+                "-f",
+                join(IMAGES, spec.dockerfile),
+                IMAGES,
+            ])
+            if (!built.ok)
+                throw new Error(
+                    `${name}: docker build failed:\n${built.stderr}\n  hint: is Docker running? \`docker version\` answers when it is.`,
+                )
+            await run(["docker", "rm", "-f", container])
+            const started = await run([
+                "docker",
+                "run",
+                "-d",
+                "--rm",
+                "--name",
+                container,
+                "--add-host",
+                "host.docker.internal:host-gateway",
+                spec.image,
+            ])
+            if (!started.ok)
+                throw new Error(
+                    `${name}: docker run failed:\n${started.stderr}\n  hint: docker ps -a shows a leftover ${container}.`,
+                )
+            for (const command of spec.setup(context)) {
+                const result = await exec(["sh", "-c", command])
+                if (!result.ok)
+                    throw new Error(
+                        `${name} setup failed at \`${command}\`:\n${result.stderr || result.stdout}\n  hint: docker exec -it ${container} sh, and run it by hand.`,
+                    )
+            }
+        },
+        async turn(text, session) {
+            const result = await exec(spec.turn(text, session, sessions.get(session)))
+            const read = spec.read(result)
+            if (read.session !== undefined) sessions.set(session, read.session)
+            return {
+                reply: read.reply,
+                ok: result.ok,
+                detail: (result.stderr || result.stdout).trim(),
+            }
+        },
+        async close() {
+            await run(["docker", "rm", "-f", container])
+        },
+    }
+}
+
+/** `finalAssistantVisibleText` from `openclaw agent --json`, wherever the version nests it. */
+export function openclawReply(stdout: string): string {
+    const start = stdout.indexOf("{")
+    if (start === -1) return stdout.trim()
+    const find = (value: unknown): string | undefined => {
+        if (value === null || typeof value !== "object") return undefined
+        const record = value as Record<string, unknown>
+        if (typeof record.finalAssistantVisibleText === "string")
+            return record.finalAssistantVisibleText
+        for (const child of Object.values(record)) {
+            const found = find(child)
+            if (found !== undefined) return found
+        }
+        return undefined
+    }
+    try {
+        return find(JSON.parse(stdout.slice(start))) ?? ""
+    } catch {
+        return stdout.trim()
+    }
+}
+
+/** `hermes chat -Q` prints the reply, a `session_id:` line and the odd `⚠` notice, across both streams. */
+export function hermesOutput(out: { stdout: string; stderr: string }): {
+    reply: string
+    session?: string
+} {
+    const session = `${out.stdout}\n${out.stderr}`.match(/^session_id:\s*(\S+)/m)?.[1]
+    const reply = out.stdout
+        .split("\n")
+        .filter((line) => !/^\s*(session_id:|⚠)/.test(line))
+        .join("\n")
+        .trim()
+    return { reply, ...(session === undefined ? {} : { session }) }
+}
+
+const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
+
+const OPENCLAW: Contained = {
+    image: "bench-openclaw:2026.10.5",
+    dockerfile: "openclaw.Dockerfile",
+    setup: (context) => [
+        [
+            "openclaw onboard --non-interactive --accept-risk --mode local --flow quickstart",
+            "--auth-choice custom-api-key --custom-compatibility openai",
+            `--custom-base-url ${quote(forContainer(context.modelBaseUrl))}`,
+            `--custom-model-id ${quote(context.model.id)} --custom-api-key dummy --custom-text-input`,
+            "--no-install-daemon --skip-channels --skip-skills",
+        ].join(" "),
+        `openclaw mcp add bench --url ${quote(forContainer(context.mcpUrl))} --transport streamable-http`,
+        // Bench tools only, through its own policy (docs/gateway/config-tools/tool-policy.md): the
+        // minimal profile plus the MCP server glob, and its memory tools as the other arms keep theirs.
+        "openclaw config set tools.profile minimal",
+        `openclaw config set tools.alsoAllow '["bench__*","group:memory"]' --strict-json`,
+    ],
+    turn: (text, session) => [
+        "openclaw",
+        "agent",
+        "--local",
+        "--agent",
+        "main",
+        "--session-id",
+        session,
+        "--message",
+        text,
+        "--json",
+    ],
+    read: ({ stdout }) => ({ reply: openclawReply(stdout) }),
+}
+
+const HERMES: Contained = {
+    image: "bench-hermes:0.19.0",
+    dockerfile: "hermes.Dockerfile",
+    setup: (context) => [
+        // The commands its own `hermes setup --non-interactive` prints for a custom endpoint.
+        "hermes config set model.provider custom",
+        `hermes config set model.base_url ${quote(forContainer(context.modelBaseUrl))}`,
+        `hermes config set model.default ${quote(context.model.id)}`,
+        'echo OPENAI_API_KEY=dummy >> "$(hermes config env-path)"',
+        // `hermes mcp add` needs a terminal; this is the documented config.yaml form.
+        `printf 'mcp_servers:\\n  bench:\\n    url: %s\\n' ${quote(forContainer(context.mcpUrl))} >> "$(hermes config path)"`,
+        // Bench tools only: everything that reaches the same effect outside the graded world is off.
+        "hermes tools disable terminal file code_execution web browser computer_use delegation cronjob image_gen tts vision",
+        // The reply only, as the other arms run with --no-reasoning.
+        "hermes config set display.show_reasoning false",
+    ],
+    // Hermes issues its own session id on the first turn; later turns resume it.
+    turn: (text, _session, issued) =>
+        issued === undefined
+            ? ["hermes", "chat", "-Q", "-q", text]
+            : ["hermes", "chat", "-Q", "--resume", issued, "-q", text],
+    read: hermesOutput,
+}
+
 export const HARNESSES: Readonly<Record<string, Harness>> = {
+    openclaw: containedHarness("openclaw", OPENCLAW),
+    hermes: containedHarness("hermes", HERMES),
     [`${BRAND.slug}-nlt`]: runtimeHarness(`${BRAND.slug}-nlt`, {
         dialect: "nlt",
         allowWrites: true,

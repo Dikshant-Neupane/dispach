@@ -48,6 +48,8 @@ export interface Harness {
     readonly name: string
     prepare(context: HarnessContext): Promise<void>
     turn(text: string, session: string): Promise<{ reply: string; ok: boolean; detail: string }>
+    /** Tear down what `prepare` started, such as a container. */
+    close?(): Promise<void>
 }
 
 export interface HarnessContext {
@@ -191,28 +193,32 @@ if (import.meta.main) {
     // ponytail: sequential, because the tool server holds one world; parallel runs need a world per session.
     let passed = 0
     let total = 0
-    for (let repeat = 1; repeat <= repeats; repeat += 1) {
-        for (const task of tasks) {
-            current = `${task.id}#${repeat}`
-            const row = await runTask({
-                harness,
-                model,
-                task,
-                repeat,
-                server,
-                takeRecords: () => {
-                    const taken = records
-                    records = []
-                    return taken
-                },
-            })
-            appendFileSync(out, `${JSON.stringify(row)}\n`)
-            total += 1
-            if (row.pass) passed += 1
-            console.log(
-                `${row.pass ? "pass" : "FAIL"}  ${task.id.padEnd(24)} r${repeat}  ${row.modelCalls} calls  ${row.wallMs} ms  $${row.cost.toFixed(5)}${row.retries > 0 ? `  (${row.retries} 429 retries)` : ""}${row.reason === undefined ? "" : `  — ${row.reason}`}`,
-            )
+    try {
+        for (let repeat = 1; repeat <= repeats; repeat += 1) {
+            for (const task of tasks) {
+                current = `${task.id}#${repeat}`
+                const row = await runTask({
+                    harness,
+                    model,
+                    task,
+                    repeat,
+                    server,
+                    takeRecords: () => {
+                        const taken = records
+                        records = []
+                        return taken
+                    },
+                })
+                appendFileSync(out, `${JSON.stringify(row)}\n`)
+                total += 1
+                if (row.pass) passed += 1
+                console.log(
+                    `${row.pass ? "pass" : "FAIL"}  ${task.id.padEnd(24)} r${repeat}  ${row.modelCalls} calls  ${row.wallMs} ms  $${row.cost.toFixed(5)}${row.retries > 0 ? `  (${row.retries} 429 retries)` : ""}${row.reason === undefined ? "" : `  — ${row.reason}`}`,
+                )
+            }
         }
+    } finally {
+        await harness.close?.()
     }
     console.log(`${harness.name} · ${model.key}: ${passed}/${total} passed → ${out}`)
     tools.stop(true)
