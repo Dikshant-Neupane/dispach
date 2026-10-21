@@ -177,6 +177,10 @@ sign-up, agents, messages, webhooks, billing, backup, upgrade, deletion.
 | `DISPACH_CONTROL_ALERT_WINDOW` / `_ALERT_MIN_TURNS` | `50` / `20` | Turns a rate is taken over, and the fewest a rate alert fires on |
 | `DISPACH_CONTROL_ALERT_NON_FINAL` / `_ALERT_TOOL_ERRORS` | `0.05` / `0.1` | Rate thresholds |
 | `DISPACH_CONTROL_ALERT_TG_TOKEN` / `_ALERT_TG_CHAT` | — | A Telegram bot token and chat id for alerts. Both or neither |
+| `DISPACH_CONTROL_CONTAIN_RUNTIME` | — | An OCI runtime for every silo, e.g. `runsc` (gVisor). For silos running code nobody vetted |
+| `DISPACH_CONTROL_CONTAIN_MEMORY` / `_CPUS` / `_PIDS` | — | Per-silo ceilings: `512m`, `0.5`, `128`. The pids ceiling is what stops a fork bomb; a non-number refuses the boot |
+| `DISPACH_CONTROL_CONTAIN_LOCKED` | — | `on` drops every capability and sets `no-new-privileges`. The image runs as uid 1000 and needs neither |
+| `DISPACH_CONTROL_CONTAIN_RESTART` | `unless-stopped` | `no` for guest silos, which nothing would reap after a host reboot |
 
 ## Not in v0, deliberately
 
