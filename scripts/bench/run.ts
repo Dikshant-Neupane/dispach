@@ -64,8 +64,17 @@ export interface HarnessContext {
 
 export const MAX_RETRIES = 4
 
+/**
+ * The provider throttled this run: a 429, or OpenRouter's 402 for too many requests in flight at
+ * once (`in_flight_budget_exhausted`, measured with eight arms in parallel). Both are the provider's
+ * noise, never the harness's failure. A 402 for an actual lack of credit is not this, and is scored.
+ */
 export function rateLimited(records: readonly ProxyRecord[]): boolean {
-    return records.some((r) => r.status === 429)
+    return records.some(
+        (r) =>
+            r.status === 429 ||
+            (r.status === 402 && (r.responseTail ?? "").includes("in_flight_budget_exhausted")),
+    )
 }
 
 /** One task, start to finish, with 429 re-runs. `reset` and `records` are the run's world and log. */
@@ -107,7 +116,10 @@ export async function runTask(options: {
             : task.grade(state, reply)
         if (failure !== undefined && rateLimited(records) && retries < MAX_RETRIES) {
             retries += 1
-            await sleep(5_000 * 2 ** retries)
+            // OpenRouter asks for 120 s after an in-flight 402; the 429 backoff is shorter.
+            await sleep(
+                Math.max(5_000 * 2 ** retries, records.some((r) => r.status === 402) ? 120_000 : 0),
+            )
             continue
         }
         const sum = (pick: (r: ProxyRecord) => number | undefined) =>

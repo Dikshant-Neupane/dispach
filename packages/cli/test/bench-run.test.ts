@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { ProxyRecord } from "../../../scripts/bench/proxy.ts"
-import { type Harness, MAX_RETRIES, runTask } from "../../../scripts/bench/run.ts"
+import { type Harness, MAX_RETRIES, rateLimited, runTask } from "../../../scripts/bench/run.ts"
 import { TASKS } from "../../../scripts/bench/tasks.ts"
 import { createToolServer } from "../../../scripts/bench/tools-server.ts"
 import { loadRoster } from "../../../scripts/lib/roster.ts"
@@ -128,5 +128,16 @@ describe("bench runner", () => {
             sleep: async () => {},
         })
         expect(row).toMatchObject({ pass: false, errored: true, reason: "harness error: boom" })
+    })
+
+    test("OpenRouter's in-flight 402 is throttling; a 402 for no credit is not", () => {
+        const tail = (reason: string) =>
+            ({
+                status: 402,
+                responseTail: `{"error":{"code":402,"metadata":{"reason":"${reason}"}}}`,
+            }) as unknown as ProxyRecord
+        expect(rateLimited([tail("in_flight_budget_exhausted")])).toBe(true)
+        expect(rateLimited([tail("insufficient_credits")])).toBe(false)
+        expect(rateLimited([record(200)])).toBe(false)
     })
 })
