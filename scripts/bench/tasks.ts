@@ -164,7 +164,7 @@ export const TASKS: readonly Task[] = [
         id: "single-now",
         category: "single",
         world: { clock: CLOCK },
-        turns: ["What day of the week is it today?"],
+        turns: ["Check the server clock: what day of the week does it say it is?"],
         grade: (s, reply) =>
             all(
                 [succeeded(s, "now"), "clock not read (a guess)"],
