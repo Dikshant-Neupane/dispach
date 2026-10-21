@@ -47,6 +47,9 @@ export function mcpToolFailed(server: string, tool: string, detail: string): Too
     return new ToolError({
         code: "mcp_tool_failed",
         message: `The MCP tool "${tool}" on "${server}" reported an error: ${detail}`,
-        hint: "The server received the call and refused it; its own words are above. A tool outside the server's allowlist, a missing upstream credential or an invalid argument are the usual causes, and none of them is fixed by retrying the same call.",
+        // The server's words decide whether a retry helps. This hint said none would, and the harness
+        // benchmark measured it overriding a server that said "temporarily unavailable. Try again":
+        // recover-retry and recover-persist failed in every arm (`evals/harness/runs/after-ac5dcc5`).
+        hint: "The server's own words above say what went wrong. If they say the failure is temporary, retry once. Otherwise a tool outside the server's allowlist, a missing upstream credential or an invalid argument are the usual causes, and retrying the same call will not fix those.",
     })
 }

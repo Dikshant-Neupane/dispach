@@ -348,6 +348,21 @@ describe("calls", () => {
         ).rejects.toMatchObject({ code: "mcp_tool_failed" })
     })
 
+    test("the refusal's hint leaves the retry to the server's words, never forbids it (0.2.0)", async () => {
+        // A hint that ruled out retrying overrode a server saying "temporarily unavailable. Try
+        // again", and the model gave up after one call in every benchmark arm.
+        const { tool } = await warmed(server())
+        const failure = await Promise.resolve(
+            tool("huly__invoke_tool")?.handler(
+                { toolName: "delete_issue", arguments: {} },
+                context(null),
+            ),
+        ).catch((error: unknown) => error)
+        const hint = (failure as { hint?: string }).hint ?? ""
+        expect(hint).toContain("If they say the failure is temporary, retry once")
+        expect(hint).not.toContain("none of them is fixed by retrying")
+    })
+
     test("a server restart (stale session) costs one re-initialize, not a failure", async () => {
         const fake = server()
         const { tool } = await warmed(fake)
