@@ -21,18 +21,13 @@
  * cycle that only appears at runtime is exactly the failure this is meant to catch.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { DEFAULT_BRAND } from "../packages/core/src/brand.ts"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const CORE = join(ROOT, "packages", "core")
 const CONTROL = join(ROOT, "packages", "control")
-/**
- * Every FSL-licensed package: the control plane, and the guest broker that drives it over HTTP.
- * Each holds the same line, and neither imports the other.
- */
-const FSL_PACKAGES = [CONTROL, join(ROOT, "packages", "guest")]
 
 /** Rule 2, second clause: the complete allowlist of core's runtime dependencies. */
 const ALLOWED_CORE_DEPS = new Set(["yaml", "zod"])
@@ -157,58 +152,59 @@ function sources(dir: string): string[] {
     })
 }
 
-function checkIsolated(PKG: string): Violation[] {
+function checkControlIsolated(): Violation[] {
     const violations: Violation[] = []
     const scope = DEFAULT_BRAND.packageScope
-    const label = relative(ROOT, PKG)
-    for (const file of sources(PKG)) {
+    for (const file of sources(CONTROL)) {
         const rel = relative(ROOT, file)
         for (const { specifier, line } of specifiersIn(readFileSync(file, "utf8"))) {
             const escapes =
-                specifier.startsWith(".") && !resolve(file, "..", specifier).startsWith(`${PKG}/`)
+                specifier.startsWith(".") &&
+                !resolve(file, "..", specifier).startsWith(`${CONTROL}/`)
             if (specifier.startsWith(`${scope}/`) || escapes) {
                 violations.push({
                     file: rel,
                     line,
                     specifier,
-                    reason: `${label} imports from outside itself`,
-                    hint: `${label} calls what it needs over HTTP and imports nothing from this tree. It is FSL-licensed and the runtime is Apache-2.0, so an import here moves code across the licence line. If it needs something, the runtime's or the control plane's API should expose it.`,
+                    reason: "the control plane imports from the runtime",
+                    hint: "packages/control calls a silo over /v1 and imports nothing from this tree. It is FSL-licensed and the runtime is Apache-2.0, so an import here moves code across the licence line. If the control plane needs something, the runtime's API should expose it.",
                 })
             }
         }
     }
-    const manifest = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")) as {
+    const manifest = JSON.parse(readFileSync(join(CONTROL, "package.json"), "utf8")) as {
         dependencies?: Record<string, string>
     }
     for (const name of Object.keys(manifest.dependencies ?? {})) {
         violations.push({
-            file: relative(ROOT, join(PKG, "package.json")),
+            file: relative(ROOT, join(CONTROL, "package.json")),
             line: 1,
             specifier: name,
-            reason: `${label} declares the dependency ${name}`,
+            reason: `the control plane declares the dependency ${name}`,
             hint: "It has none: Node's standard library, run as TypeScript. A dependency here is one more thing between an operator and the silos they hold.",
         })
     }
     return violations
 }
 
-function checkNothingImports(PKG: string): Violation[] {
+function checkNothingImportsControl(): Violation[] {
     const violations: Violation[] = []
-    const name = `${DEFAULT_BRAND.packageScope}/${relative(join(ROOT, "packages"), PKG)}`
+    const name = `${DEFAULT_BRAND.packageScope}/control`
     const packages = readdirSync(join(ROOT, "packages"))
         .map((entry) => join(ROOT, "packages", entry))
-        .filter((dir) => dir !== PKG && statSync(dir).isDirectory())
+        .filter((dir) => dir !== CONTROL && statSync(dir).isDirectory())
     const files = [...packages.flatMap(sources), ...walk(join(ROOT, "scripts"))]
     for (const file of files) {
         for (const { specifier, line } of specifiersIn(readFileSync(file, "utf8"))) {
             const into =
-                specifier.startsWith(".") && resolve(file, "..", specifier).startsWith(`${PKG}/`)
+                specifier.startsWith(".") &&
+                resolve(file, "..", specifier).startsWith(`${CONTROL}/`)
             if (specifier === name || specifier.startsWith(`${name}/`) || into) {
                 violations.push({
                     file: relative(ROOT, file),
                     line,
                     specifier,
-                    reason: `${relative(ROOT, file)} imports the FSL package ${relative(ROOT, PKG)}`,
+                    reason: "the runtime imports the control plane",
                     hint: "packages/control is FSL-1.1 and everything else here is Apache-2.0. An import would bundle FSL code into the runtime's tarball or image. Talk to the control plane over HTTP, or move what is shared into the runtime.",
                 })
             }
@@ -220,15 +216,13 @@ function checkNothingImports(PKG: string): Violation[] {
 const violations = [
     ...checkCoreImports(),
     ...checkCoreDependencies(),
-    ...FSL_PACKAGES.filter((dir) => existsSync(dir)).flatMap((dir) => [
-        ...checkIsolated(dir),
-        ...checkNothingImports(dir),
-    ]),
+    ...checkControlIsolated(),
+    ...checkNothingImportsControl(),
 ]
 
 if (violations.length === 0) {
     console.log(
-        "check-deps: ok — packages/core is self-contained, and nothing crosses an FSL package's licence line",
+        "check-deps: ok — packages/core is self-contained, and nothing crosses packages/control's licence line",
     )
     process.exit(0)
 }

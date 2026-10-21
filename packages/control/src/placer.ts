@@ -39,20 +39,6 @@ export interface Placer {
     start(name: string): Promise<void>
 }
 
-function containmentFlags(contain: SiloContainment): string[] {
-    return [
-        ...(contain.runtime === undefined ? [] : ["--runtime", contain.runtime]),
-        ...(contain.memory === undefined
-            ? []
-            : ["--memory", contain.memory, "--memory-swap", contain.memory]),
-        ...(contain.cpus === undefined ? [] : ["--cpus", contain.cpus]),
-        ...(contain.pids === undefined ? [] : ["--pids-limit", String(contain.pids)]),
-        ...(contain.locked === true
-            ? ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
-            : []),
-    ]
-}
-
 /** A thrown refusal that says what to do about it — the runtime's rule, kept here too. */
 export class ControlError extends Error {
     readonly code: string
@@ -129,27 +115,6 @@ export interface DockerOptions {
     /** Variables every silo gets, by value. Handed to `docker run` through its environment. */
     readonly siloEnv?: Readonly<Record<string, string>>
     readonly docker?: string
-    /**
-     * Containment for silos that run code nobody vetted, such as anonymous guests. Unset, a silo's
-     * `docker run` is exactly what it was before this existed.
-     */
-    readonly contain?: SiloContainment
-}
-
-/** `docker run` flags for an untrusted silo. Each is optional; `locked` is the one to always want. */
-export interface SiloContainment {
-    /** An OCI runtime, e.g. `runsc` for gVisor: a user-space kernel between the silo and the host's. */
-    readonly runtime?: string
-    /** A memory ceiling in Docker's syntax, e.g. `512m`. The runtime plus one TUI needs about 250 MiB. */
-    readonly memory?: string
-    /** A CPU share, e.g. `0.5`. */
-    readonly cpus?: string
-    /** A process ceiling, which is what stops a fork bomb. */
-    readonly pids?: number
-    /** Drop every capability and forbid gaining privileges. The image runs as uid 1000 and needs none. */
-    readonly locked?: boolean
-    /** A guest silo must not return after a host reboot with nothing left to reap it. */
-    readonly restart?: "unless-stopped" | "no"
 }
 
 export class DockerPlacer implements Placer {
@@ -158,7 +123,6 @@ export class DockerPlacer implements Placer {
     readonly #templates: string | undefined
     readonly #siloEnv: Readonly<Record<string, string>>
     readonly #docker: string
-    readonly #contain: SiloContainment
 
     constructor(options: DockerOptions = {}) {
         this.#image = options.image ?? BRAND.runtime.image
@@ -166,7 +130,6 @@ export class DockerPlacer implements Placer {
         this.#templates = options.templatesDir
         this.#siloEnv = options.siloEnv ?? {}
         this.#docker = options.docker ?? "docker"
-        this.#contain = options.contain ?? {}
     }
 
     async create(subject: string, token: string): Promise<PlacedSilo> {
@@ -363,8 +326,7 @@ export class DockerPlacer implements Placer {
             `${BRAND.label}=${subject}`,
             // A host reboot brings silos back; the control plane re-pauses the idle ones.
             "--restart",
-            this.#contain.restart ?? "unless-stopped",
-            ...containmentFlags(this.#contain),
+            "unless-stopped",
             ...Object.keys(env).flatMap((key) => ["--env", key]),
             "--volume",
             `${name}:${BRAND.runtime.home}`,

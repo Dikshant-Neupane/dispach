@@ -9,7 +9,7 @@
 import { BRAND } from "./brand.ts"
 import { ControlPlane } from "./control.ts"
 import { type AlertRules, DEFAULT_RULES, Monitor, telegramAlert } from "./monitor.ts"
-import { ControlError, DockerPlacer, resolveSiloEnv, type SiloContainment } from "./placer.ts"
+import { ControlError, DockerPlacer, resolveSiloEnv } from "./placer.ts"
 import { createControlServer } from "./server.ts"
 import { SiloStore } from "./store.ts"
 
@@ -85,36 +85,12 @@ if ((alertToken === undefined) !== (alertChat === undefined)) {
     )
     process.exit(1)
 }
-const pids = env("CONTAIN_PIDS")
-if (pids !== undefined && !/^[1-9][0-9]*$/.test(pids)) {
-    process.stderr.write(
-        `${BRAND.envPrefix}CONTAIN_PIDS="${pids}" is not a whole number.\n  hint: set a process ceiling such as 128, or unset it for none.\n`,
-    )
-    process.exit(1)
-}
-const restart = env("CONTAIN_RESTART")
-if (restart !== undefined && restart !== "no" && restart !== "unless-stopped") {
-    process.stderr.write(
-        `${BRAND.envPrefix}CONTAIN_RESTART="${restart}" is not a restart policy this control plane sets.\n  hint: "no" for guest silos, which nothing would reap after a reboot; unset for the default, unless-stopped.\n`,
-    )
-    process.exit(1)
-}
-// Containment for silos running code nobody vetted. Every field unset leaves `docker run` unchanged.
-const contain: SiloContainment = {
-    ...(env("CONTAIN_RUNTIME") === undefined ? {} : { runtime: env("CONTAIN_RUNTIME") as string }),
-    ...(env("CONTAIN_MEMORY") === undefined ? {} : { memory: env("CONTAIN_MEMORY") as string }),
-    ...(env("CONTAIN_CPUS") === undefined ? {} : { cpus: env("CONTAIN_CPUS") as string }),
-    ...(pids === undefined ? {} : { pids: Number(pids) }),
-    ...(env("CONTAIN_LOCKED") === "on" ? { locked: true } : {}),
-    ...(restart === "no" || restart === "unless-stopped" ? { restart } : {}),
-}
 const store = await SiloStore.open(env("DB") ?? "control.db")
 const placer = new DockerPlacer({
     image,
     siloEnv,
     ...(env("NETWORK") === undefined ? {} : { network: env("NETWORK") as string }),
     ...(env("TEMPLATES") === undefined ? {} : { templatesDir: env("TEMPLATES") as string }),
-    contain,
 })
 const monitor =
     hookUrl === undefined

@@ -121,7 +121,7 @@ export default function HomePage() {
                 </div>
                 <Replay
                     lines={replay}
-                    caption={`recorded run · ${capturedAt} · ${capturedModel} · live shell coming`}
+                    caption={`recorded run · ${capturedAt} · ${capturedModel}`}
                 />
             </section>
 
