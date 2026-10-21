@@ -135,8 +135,8 @@ export interface AssembleInput {
      * than inside the history before them (pilot.13). For a model whose signed thinking is replayed:
      * Claude 5.x binds each block to everything before it, so with the input after the trace, step two
      * moved the input behind the step-one call and every replayed block was refused ("bound to a
-     * different conversation"). Off, the order is what it always was: small models keep the question
-     * last, after the observations.
+     * different conversation"). Since 0.2.0 the turn loop sets it for every model unless the role's
+     * capabilities say `traceAfterInput: false`; off, the question is last, after the observations.
      */
     readonly traceAfterInput?: boolean
     readonly input: string

@@ -224,7 +224,7 @@ function validateContextBudget(manifest: AgentManifest, resolvedWindow: number):
         {
             code: "manifest_reserve_output_too_large",
             message: `context.reserveOutput (${reserveOutput}) must be less than the context window (${resolvedWindow}).`,
-            hint: "reserveOutput is held back from the window for the response. Set context.window explicitly if the shipped capability registry is wrong for your endpoint.",
+            hint: "reserveOutput is held back from the window for the response. Set context.window explicitly (`config set <agent> context.window <tokens>`) if the shipped capability registry is wrong for your endpoint.",
             field: "context.reserveOutput",
         },
     ]

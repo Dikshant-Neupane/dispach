@@ -20,7 +20,10 @@
  *   something false about the runtime, and they will believe it.
  * - **Do not work around it.** An agent with `exec` and without `file_write` will cheerfully
  *   `echo … > file` its way past a decision somebody made deliberately. That is the shape that turns a
- *   narrow grant into a broad one, and it has to be said rather than assumed.
+ *   narrow grant into a broad one, and it has to be said rather than assumed. It is scoped to that
+ *   shape on purpose: unscoped, "a different tool" read as any tool, and a model holding a pinned
+ *   `bench__read_file` refused to read a file because `file_read` was listed here — 16 and 17 of 125
+ *   runs on GPT-6 Luna (`evals/harness/runs/baseline-aae8fe4`).
  */
 
 import type { ContextBlock } from "../../context/blocks.ts"
@@ -52,7 +55,7 @@ export function renderNotEnabledText(notEnabled: readonly ToolAvailability[] | u
         "",
         lines,
         "",
-        "If something you are asked to do needs one, say so plainly: name the tool, say what you would have done with it, and say that it has to be added to `tools.pinned` in this agent's configuration and permitted under `tools.policy`. Say you are not permitted to yet — never that you are unable to. And do not use a different tool to work around it.",
+        "If something you are asked to do needs one, say so plainly: name the tool, say what you would have done with it, and say that it has to be added to `tools.pinned` in this agent's configuration and permitted under `tools.policy`. Say you are not permitted to yet — never that you are unable to. A tool you have been given that does the job is not a workaround: use it. What is forbidden is reaching the same effect by another route, such as writing a file through a shell command.",
     ].join("\n")
 }
 

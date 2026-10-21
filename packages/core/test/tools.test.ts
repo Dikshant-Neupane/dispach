@@ -1366,7 +1366,9 @@ describe("telling the model what it was not given", () => {
         // "unable", and do not reach for another tool to get around it.
         expect(text).toContain("tools.pinned")
         expect(text).toContain("not permitted to yet")
-        expect(text).toContain("work around it")
+        expect(text).toContain("by another route")
+        // Scoped, or a pinned tool that does the job reads as a forbidden workaround and is refused.
+        expect(text).toContain("A tool you have been given that does the job is not a workaround")
     })
 
     test("native says the same thing, in the only place it can", async () => {

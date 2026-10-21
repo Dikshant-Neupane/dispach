@@ -839,12 +839,14 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                     // messages it is handed rather than from `history`, because the ladder may have
                     // replaced that array by the time this runs.
                     protectedTail: Math.max(0, messages.length - initialHistoryLength),
-                    // Claude's signed thinking is bound to what precedes it, and a cached prefix is
-                    // only reused if each step appends to it; see `traceAfterInput`.
+                    // On for every model since 0.2.0. Behind the input, the person's request reads as
+                    // unanswered and finished calls are re-issued into the repeat guard; Claude's signed
+                    // thinking also needs it, and a cached prefix is only reused if each step appends.
+                    // See `traceAfterInput`.
                     traceAfterInput:
                         input.role.capabilities.thinking === "anthropic" ||
                         input.role.capabilities.promptCache === "bedrock" ||
-                        input.role.capabilities.traceAfterInput === true,
+                        input.role.capabilities.traceAfterInput !== false,
                     input: promptInput,
                     ...(input.turnNote === undefined ? {} : { note: input.turnNote }),
                     ...(input.images === undefined || input.images.length === 0

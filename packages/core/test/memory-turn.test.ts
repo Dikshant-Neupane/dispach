@@ -451,12 +451,15 @@ describe("memory_write evicts rather than growing without bound", () => {
                 messages?: { content?: unknown }[]
             }
             const messages = body.messages ?? []
-            // Key on the turn's *input*, which is the last message: `SLOT.input` is ordered after the
-            // history, so an observation is never the final message and "has this turn already been
-            // answered" cannot be read off the tail. Looking for OBSERVATION anywhere in the prompt is
-            // worse still — one stays in the history forever. Both mistakes were made here first, and
-            // both presented as "eviction does not work" rather than as a broken fixture.
-            const input = String(messages[messages.length - 1]?.content ?? "")
+            // Key on the turn's *input*, found by its own text. Not by position: since 0.2.0 the turn's
+            // trace follows the input, so after step one the last message is an observation. And not by
+            // looking for OBSERVATION anywhere in the prompt — one stays in the history forever. Each of
+            // these was made here, and each presented as "eviction does not work" rather than as a
+            // broken fixture.
+            const input = String(
+                messages.findLast((m) => String(m.content ?? "").startsWith("save fact"))
+                    ?.content ?? "",
+            )
             const first = !seen.has(input)
             if (first) seen.add(input)
             const content = first

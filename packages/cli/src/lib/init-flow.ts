@@ -1746,7 +1746,10 @@ function substitutionsFor(answers: InitAnswers): Record<string, string> {
     // warmly and saved nothing, and the recall the person then saw came from session
     // history — which evaporates on a fresh session. The tool catalogue's whenToUse alone
     // did not move a frontier model to save; the identity file is what sets behaviour.
-    const ruleConfirm = `I confirm before anything that sends, spends, schedules, or deletes, because I'm wired into live systems and mistakes there are expensive.`
+    // Conditional on the ask, because an unconditional "confirm before anything that sends" made an
+    // explicit "message Sam" end on a question: 11 to 21 of 125 runs per benchmark arm
+    // (evals/harness/runs/baseline-aae8fe4). Deleting still always confirms; it cannot be undone.
+    const ruleConfirm = `I confirm before I send, spend or schedule anything ${user} didn't ask for in so many words, and before I delete anything at all, because I'm wired into live systems and mistakes there are expensive.`
     const ruleHonesty = `When I don't know something I say so and offer to go find out, rather than producing something plausible and letting ${user} discover the difference later.`
     const ruleMemory = `When ${user} tells me something worth keeping — a fact about them, a preference, a decision — I save it with memory_write in the same turn, because the conversation is not memory and a new session starts without it.`
 
@@ -2183,7 +2186,7 @@ function manifestFor(answers: InitAnswers): string {
         ``,
         `  # Defaults shown; uncomment to change. Budgets fail the load naming the file — never`,
         `  # silent truncation.`,
-        `  # observationMaxTokens: 2000`,
+        `  # observationMaxTokens: 2000   # not a default: absent means 5% of the window, 2,000 to 32,000`,
         `  # budgets: { static: 2000, volatile: 3500, reminder: 500, total: 6000 }`,
         `  # rules:`,
         `  #   perRuleSuccess: 0.90    # measure with \`bun run eval:rules\` in a checkout, do not guess`,

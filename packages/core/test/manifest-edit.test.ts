@@ -299,3 +299,15 @@ describe("a rendering that would not parse", () => {
         }
     })
 })
+
+describe("context.window is a person's setting (0.2.0)", () => {
+    test("config set accepts it and the agent's config_set does not", async () => {
+        // The reserveOutput error tells a person to set it; until 0.2.0 `config set` refused it as
+        // "not a setting", so the only way past an unknown model's 8k window was a hand edit.
+        const { AGENT_SETTABLE_PATHS, PERSON_SETTABLE_PATHS } = await import(
+            "../src/manifest/settings.ts"
+        )
+        expect(PERSON_SETTABLE_PATHS).toContain("context.window")
+        expect(AGENT_SETTABLE_PATHS).not.toContain("context.window")
+    })
+})

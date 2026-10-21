@@ -106,10 +106,16 @@ describe("thinking replay", () => {
         expect(second.slice(0, first.length)).toEqual([...first])
     })
 
-    test("a model without replayed thinking keeps the question last, as before", async () => {
+    test("every model gets the trace after its input, so a step never re-asks a finished question (0.2.0)", async () => {
+        // With the question last, the work already done on it sat above it and read as unanswered:
+        // GPT-6 Luna and GLM 5.3 re-issued finished calls until the repeat guard stopped the turn.
         const { requests } = await turn("none")
+        const first = requests[0]?.messages ?? []
         const second = requests[1]?.messages ?? []
-        expect(second.at(-1)?.turnInput).toBe(true)
+        expect(first.at(-1)?.turnInput).toBe(true)
+        expect(second.slice(0, first.length)).toEqual([...first])
+        expect(second[first.length]?.origin).toBe("call")
+        expect(second.at(-1)?.turnInput).toBeUndefined()
     })
 
     test("a model whose family does not take it back gets none", async () => {

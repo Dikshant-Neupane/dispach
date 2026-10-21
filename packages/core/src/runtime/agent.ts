@@ -18,7 +18,7 @@ import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import { basename, isAbsolute, join, resolve } from "node:path"
 import type { InboundAudio } from "../channels/channel.ts"
 import { assembleContext, historyReport, slotReport } from "../context/assemble.ts"
-import { type Calibration, UNCALIBRATED } from "../context/budget.ts"
+import { type Calibration, observationBudget, UNCALIBRATED } from "../context/budget.ts"
 import { renderCompactionNotice } from "../context/compaction-notice.ts"
 import { renderConfigSummary } from "../context/config-summary.ts"
 import { estimateMessageTokens } from "../context/tokens.ts"
@@ -690,7 +690,10 @@ export class Agent {
                 dir: init.loaded.dir,
                 blocks: [],
                 wireTokens: 0,
-                observationMaxTokens: this.manifest.context.observationMaxTokens,
+                observationMaxTokens: observationBudget(
+                    this.manifest.context.observationMaxTokens,
+                    this.window,
+                ),
                 untrustedOnMutate: this.manifest.tools.untrusted.onMutate,
                 policy: this.manifest.tools.policy,
                 ...(init.approve === undefined ? {} : { approve: init.approve }),
@@ -711,7 +714,10 @@ export class Agent {
                 ...(this.#memory === undefined ? {} : { memoryDir: this.#memory.dir }),
                 ...(requestTools === undefined ? {} : { requestTools }),
                 wireTokens: requestTools === undefined ? 0 : nativeWireTokens(requestTools),
-                observationMaxTokens: this.manifest.context.observationMaxTokens,
+                observationMaxTokens: observationBudget(
+                    this.manifest.context.observationMaxTokens,
+                    this.window,
+                ),
                 untrustedOnMutate: this.manifest.tools.untrusted.onMutate,
                 ...(detail === undefined ? {} : { eventDetail: detail }),
                 // Resolved once, here, so every turn of this agent is decided by the same rules.
@@ -1038,7 +1044,10 @@ export class Agent {
             eventContext: { agentId: this.id, sessionKey: options.sessionKey, turnId },
             timeoutMs: this.manifest.limits.toolTimeoutMs,
             maxParallel: 1,
-            observationMaxTokens: this.manifest.context.observationMaxTokens,
+            observationMaxTokens: observationBudget(
+                this.manifest.context.observationMaxTokens,
+                this.window,
+            ),
             untrustedInTurn: false,
             onMutate: this.manifest.tools.untrusted.onMutate,
             policy: this.manifest.tools.policy,

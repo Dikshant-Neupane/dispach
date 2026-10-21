@@ -143,12 +143,25 @@ const ATTEMPTED_CALL: readonly RegExp[] = [
     /^\s*<\s*(?:invoke|tool_call|tool_use|tool|function_call|function)\b[^>]*\bname\s*=\s*["'][^"']+["'][^>]*>\s*$/im,
 ]
 
+/** `ACTION:` after other text on its line, with an `END` alone on a later line. */
+const GLUED_ACTION = /\S[^\n]*?\bACTION\s*:\s*\S[\s\S]*?^\s*END\s*$/m
+
 /**
  * Did this step attempt a tool call the parser could not read?
  *
  * Only asked when nothing parsed, and answered from the *prose*, which is what the markup became.
  */
 function attemptedCall(text: string): FieldError | undefined {
+    // A block glued onto a sentence: GLM 5.3 wrote `…then store the error code.ACTION: bench__read_file`
+    // with the fields and END on the lines after (5 of 125 runs, evals/harness/runs/baseline-aae8fe4).
+    // The block parser only opens at a line start, so the markup was delivered as the reply. Its own
+    // message, because the remedy is a line break, not a different format.
+    if (GLUED_ACTION.test(text))
+        return {
+            field: "the block",
+            message: "started in the middle of a line, so it was read as prose and nothing ran.",
+            hint: "Put `ACTION:` at the start of a line of its own, with nothing before it on that line, then one `name: value` per line, then `END` alone on its own line. Nothing was executed, so writing it again correctly is safe.",
+        }
     if (!ATTEMPTED_CALL.some((pattern) => pattern.test(text))) return undefined
     return {
         field: "the block",
@@ -622,12 +635,26 @@ export function parseNlt(output: string): ParsedOutput {
     })
 
     const text = state.text.join("\n").trim()
+    // The same block written several times in a row is one call. GPT-6 Luna wrote an identical
+    // lookup six times in one reply while "waiting" for its result, and all six ran — a write would
+    // have happened six times. Only *consecutive* identical blocks collapse: a call repeated after a
+    // different one is a deliberate sequence. Call ids are renumbered so they stay contiguous.
+    const collapsed = intents
+        .filter(
+            (intent, index) =>
+                index === 0 ||
+                intent.slug !== intents[index - 1]?.slug ||
+                JSON.stringify(intent.args) !== JSON.stringify(intents[index - 1]?.args),
+        )
+        .map((intent, index) => ({ ...intent, callId: `c${index + 1}` }))
     // Reported *alongside* the intents rather than instead of them. The loop reads `malformed` first
     // and makes the step all-or-nothing, so a damaged value stops the call it belongs to — and
     // carrying the intents means the repair names the tool the model was reaching for. Dropping them
     // here would report "nothing parsed", which is both untrue and less useful.
-    if (intents.length > 0) {
-        return damaged.length === 0 ? { intents, text } : { intents, text, malformed: damaged }
+    if (collapsed.length > 0) {
+        return damaged.length === 0
+            ? { intents: collapsed, text }
+            : { intents: collapsed, text, malformed: damaged }
     }
 
     // Nothing parsed. If the prose is markup rather than prose, say so instead of delivering it.

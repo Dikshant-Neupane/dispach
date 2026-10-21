@@ -221,3 +221,16 @@ export function measuredPressure(input: {
 }): Pressure {
     return pressureOf(input.reported, promptBudget(input.window, input.reserveOutput), "reported")
 }
+
+/**
+ * The default ceiling on one tool observation: 5% of the window, between 2,000 and 32,000 tokens.
+ *
+ * A flat 2,000 was right for an 8k local model and cut an 11k file in the middle on a 1M-window one,
+ * where the answer sat (`evals/harness/runs/baseline-aae8fe4`, long-handbook) — a cap that changed
+ * the answer. The floor keeps every window up to 40k exactly where it was; the ceiling keeps one
+ * observation from becoming most of a turn's cost on a very large window. An explicit
+ * `context.observationMaxTokens` always wins.
+ */
+export function observationBudget(configured: number | undefined, window: number): number {
+    return configured ?? Math.min(32_000, Math.max(2_000, Math.floor(window * 0.05)))
+}

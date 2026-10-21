@@ -277,7 +277,8 @@ export const ContextSchema = z
         /** Total token budget. Defaults to the model's `contextWindow` capability. */
         window: z.number().int().positive().optional(),
         reserveOutput: z.number().int().positive().default(4096),
-        observationMaxTokens: z.number().int().positive().default(2000),
+        /** Absent means sized from the window — `observationBudget` in `context/budget.ts`. */
+        observationMaxTokens: z.number().int().positive().optional(),
         /**
          * Whether the agent may see which model it runs on (pilot.15). `hidden` drops the
          * model and media ids, endpoints, transports and key names from the prompt and from

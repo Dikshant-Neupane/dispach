@@ -939,7 +939,10 @@ describe("a value damaged on the way in", () => {
         // A new `ACTION` clears the pending verdict: whatever the prose was, it sat between two
         // calls rather than inside one.
         const parsed = parseNlt(
-            ["ACTION: now", "", "Let me also check the time.", "", "ACTION: now", "END"].join("\n"),
+            // Two different calls: two identical ones in a row are one call since 0.2.0.
+            ["ACTION: now", "", "Let me also check the date.", "", "ACTION: today", "END"].join(
+                "\n",
+            ),
         )
         expect(parsed.malformed).toBeUndefined()
         expect(parsed.intents.length).toBe(2)
@@ -974,6 +977,39 @@ describe("a value damaged on the way in", () => {
                 "END",
             ].join("\n"),
         )
+        expect(parsed.malformed).toBeUndefined()
+    })
+})
+
+describe("shapes measured in the harness benchmark (evals/harness/runs/baseline-aae8fe4)", () => {
+    const block = "ACTION: lookup_order\norder_id: A-1001\nEND"
+
+    test("the same block written several times in a row is one call", () => {
+        // GPT-6 Luna wrote this six times in one reply and all six ran; a write would have run six times.
+        const parsed = parseNlt(["I'll check.", block, block, block].join("\n\n"))
+        expect(parsed.intents.map((i) => [i.callId, i.slug, i.args])).toEqual([
+            ["c1", "lookup_order", { order_id: "A-1001" }],
+        ])
+    })
+
+    test("a repeat after a different call, or with different arguments, still runs", () => {
+        const other = "ACTION: now\nEND"
+        const second = "ACTION: lookup_order\norder_id: A-2002\nEND"
+        const parsed = parseNlt([block, other, block, second].join("\n\n"))
+        expect(parsed.intents.map((i) => i.callId)).toEqual(["c1", "c2", "c3", "c4"])
+    })
+
+    test("a block glued onto a sentence earns a repair instead of becoming the reply", () => {
+        // GLM 5.3: "…then store the error code.ACTION: bench__read_file" — delivered as the answer.
+        const parsed = parseNlt(
+            "I'll read the log file first, then store the error code.ACTION: read_file\npath: logs/app.log\nEND",
+        )
+        expect(parsed.intents).toEqual([])
+        expect(parsed.malformed?.[0]?.message).toContain("middle of a line")
+    })
+
+    test("prose that merely mentions ACTION: is still prose", () => {
+        const parsed = parseNlt("Write ACTION: and the tool name to call a tool.")
         expect(parsed.malformed).toBeUndefined()
     })
 })

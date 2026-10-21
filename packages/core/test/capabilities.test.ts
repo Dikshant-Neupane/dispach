@@ -433,3 +433,15 @@ describe("Amazon Nova on Bedrock (pilot.5)", () => {
         expect(micro.capabilities.nativeTools).toBe(true)
     })
 })
+
+describe("GLM 5.3 (benchmark, 0.2.0)", () => {
+    test("GLM 5.3 resolves to its measured row, under its vendor prefix", () => {
+        // Unlisted, it fell back to an 8,192 window: init's agent did not load and native was refused
+        // (evals/harness/runs/baseline-aae8fe4). The window is a ceiling `model probe` saw named.
+        const glm = matchCapabilities("z-ai/glm-5.3").capabilities
+        expect(glm.contextWindow).toBe(1_048_576)
+        expect(glm.nativeTools).toBe(true)
+        expect(glm.thinking).toBe("deepseek")
+        expect(glm.maxOutput).toBeLessThan(glm.contextWindow)
+    })
+})

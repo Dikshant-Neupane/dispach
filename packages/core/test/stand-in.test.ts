@@ -35,7 +35,9 @@ function scripted(
             id: context.id,
             async *chat(request): AsyncIterable<ChatChunk> {
                 seen.push([...request.messages])
-                const input = String(request.messages.findLast((m) => m.role === "user")?.content)
+                // The marked input, not the last user message: the turn's trace follows the input, so
+                // after step one the last user message is an observation.
+                const input = String(request.messages.find((m) => m.turnInput === true)?.content)
                 const index = progress.get(input) ?? 0
                 progress.set(input, index + 1)
                 const step = script(input)[index] ?? { text: "ok" }

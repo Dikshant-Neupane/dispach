@@ -68,7 +68,11 @@ export interface ModelCapabilities {
      * already have it (pilot.15). Set by a transport, never by the registry: it is a fact about how
      * that transport lays out messages. Converse merges a tool result and the restated question into
      * one user message, and GPT-6 on Bedrock read that as a new request and called the tool again
-     * until `no_progress`. Absent means today's order.
+     * until `no_progress`. The same shape was found a third time on every transport — GPT-6 Luna and
+     * GLM 5.3 over chat-completions re-issued finished calls until the repeat guard stopped the turn
+     * (`evals/harness/runs/baseline-aae8fe4`) — so since 0.2.0 absent means on, for every model.
+     * `false` restores the old order (question last, after the observations); `thinking: anthropic`
+     * and Bedrock caching ignore it, because both break without it.
      */
     readonly traceAfterInput?: boolean
     /**
@@ -381,6 +385,29 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
     // ── Open weights, typically local via Ollama or vLLM ───────────────────────────────────
     //
     // More specific patterns first: `patternSpecificity` decides, but reading order should match.
+    {
+        // Without a row the window fell back to 8,192, which init's own reserveOutput does not fit, so
+        // a fresh agent on one of the most-used open models could not start, and native was refused
+        // (evals/harness/runs/baseline-aae8fe4). Measured through OpenRouter pinned to z-ai/fp8.
+        pattern: "glm-5.3*",
+        capabilities: {
+            // 125 native benchmark runs on the pinned endpoint made real tool calls.
+            nativeTools: true,
+            strictSchema: false,
+            // Reasoning streams in a separate `reasoning` field and is not replayed.
+            thinking: "deepseek",
+            // The provider caches on its own (`model probe`: 1,024 of 1,044 prompt tokens cached on a
+            // repeat), so the runtime sends no markers — `none` is about our job, as on the deepseek rows.
+            promptCache: "none",
+            parallelToolCalls: false,
+            // A ceiling: `model probe` saw an over-range request refused naming 1,048,576.
+            contextWindow: 1_048_576,
+            // Published by the endpoint (max_completion_tokens), not measured.
+            maxOutput: 131_072,
+        },
+        note: "Reasoning is billed to the output budget, like the deepseek rows.",
+        verified: "2026-10-21 via OpenRouter, provider z-ai/fp8",
+    },
     {
         // qwen3.5 reasons, and the generic `qwen*` row below says it does not. Measured through
         // Ollama's OpenAI-compatible endpoint: reasoning arrives in a `reasoning` delta field,

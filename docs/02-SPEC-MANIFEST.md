@@ -41,7 +41,7 @@ model:
 context:
   window: 32768
   reserveOutput: 4096
-  observationMaxTokens: 2000
+  observationMaxTokens: 2000          # optional; absent = 5% of window, 2,000–32,000
   workspace: ./workspace
   static:
     - AGENTS.md
@@ -249,7 +249,7 @@ the provider caches nothing: DeepSeek caches context automatically server-side a
 | --- | --- | --- |
 | `window` | from capabilities | Total token budget. |
 | `reserveOutput` | 4096 | How much of the window to keep free for the reply, so the prompt cannot crowd it out. A **prompt-budget** number: it never becomes `max_tokens`. |
-| `observationMaxTokens` | 2000 | Above this a single tool observation is trimmed to head+tail with an artifact pointer. |
+| `observationMaxTokens` | 5% of window, 2,000–32,000 | Above this a single tool observation is trimmed to head+tail with an artifact pointer. Absent, it is sized from the resolved window (0.2.0; a flat 2,000 cut an 11k file in the middle on a 1M-window model, where the answer was). Set it to pin a number. |
 | `modelIdentity` | `shown` | `hidden` keeps the agent from seeing which model it runs on (pilot.15). The prompt's settings summary keeps the dialect and window and drops the model id. `config_read` shows `(hidden by the operator)` for `model.<role>` (fallbacks too) `id`, `api`, `baseUrl`, `options` and `apiKeyEnv`, and `media.<section>` `provider`, `model`, `baseUrl`, `options` and `apiKeyEnv`, whether read whole or by path; every other setting, model tuning included, stays readable and settable. Person-only: `config_set` refuses it. Events and the HTTP API keep the real ids. Not covered: `file_read` or `exec` on `agent.yaml`, and an error text that names the model. |
 | `files` | `[]` | **Deprecated.** Alias for `static`, warning at load and naming the replacement. Keeps resolving against the *manifest* directory rather than `workspace`, which is what makes it an alias rather than a rename. Setting both `files` and `static` is a load failure, not a merge. |
 | `thresholds` | `snip .60 · micro .70 · collapse .80 · reset .88 · trim .95` | Compaction ladder trigger fractions **of the prompt budget** — `window` minus `reserveOutput`, not of the whole window. Measured against the window, a large reserve lets `assembleContext`'s oldest-first trim run while the ladder still reports mild pressure, which is the common case on a reasoning model. Must be strictly ascending **in stage order** and within `(0, 1)`; validated. The stage order is `snip → micro → collapse → reset → trim`, ordered by how much information each rung destroys rather than how many bytes it frees: `snip` and `micro` leave an `artifact_read` pointer, `collapse` and `reset` leave the meaning as a digest, `trim` leaves nothing. So `trim` is last despite freeing the most, and it is the fallback for the case where a digest would have grown the prompt and the no-growth guard refused it. A manifest ordered for the pre-reorder ladder (`trim` first) is refused by name, with the rewrite in the hint. |

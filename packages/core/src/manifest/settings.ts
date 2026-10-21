@@ -194,6 +194,14 @@ export const SETTINGS: readonly Setting[] = [
         means: "shown or hidden: whether the agent can see which model it runs on (hidden keeps tuning settable)",
         agentListed: false,
     },
+    // Person-only: a window the agent could raise past the endpoint's is a request the endpoint
+    // refuses. Settable at all because the reserveOutput error tells a person to set it, and until
+    // 0.2.0 `config set` answered that it was not a setting.
+    {
+        path: "context.window",
+        means: "the token budget for a whole request; unset uses the model's known window",
+        agentListed: false,
+    },
     {
         path: "context.observationMaxTokens",
         means: "how much of a tool's output reaches the model",
