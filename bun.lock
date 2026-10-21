@@ -57,7 +57,7 @@
     },
     "packages/cli": {
       "name": "dispach",
-      "version": "0.2.0-pilot.14",
+      "version": "0.2.0-pilot.17",
       "bin": {
         "dispach": "dist/index.js",
       },
@@ -111,6 +111,10 @@
         "yaml": "^2.8.1",
         "zod": "^4.1.12",
       },
+    },
+    "packages/guest": {
+      "name": "@dispach/guest",
+      "version": "0.0.1",
     },
     "packages/media-aws": {
       "name": "@dispach/media-aws",
@@ -352,6 +356,8 @@
     "@dispach/control": ["@dispach/control@workspace:packages/control"],
 
     "@dispach/core": ["@dispach/core@workspace:packages/core"],
+
+    "@dispach/guest": ["@dispach/guest@workspace:packages/guest"],
 
     "@dispach/media-aws": ["@dispach/media-aws@workspace:packages/media-aws"],
 
