@@ -12,7 +12,7 @@ comes from. Negative results are listed with the positive ones.
 | [`boot`](boot/) | Boot: process start to `runtime.ready` | [`results.json`](boot/results.json) | 2026-10-20 |
 | [`budget`](budget/) | The estimator's bias, and the weight that corrects it | [`results.json`](budget/results.json) | not recorded |
 | [`handoff`](handoff/) | evals/handoff — does delegation cost the parent fewer tokens? | none | not recorded |
-| [`harness`](harness/) | Harness benchmark | [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json) | 2026-10-21 |
+| [`harness`](harness/) | Harness benchmark | [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json), [`runs/h2h-309fdf8/results.json`](harness/runs/h2h-309fdf8/results.json) | 2026-10-21 |
 | [`memory`](memory/) | Memory retrieval | [`results.json`](memory/results.json) | 2026-10-20 |
 | [`nlt-heredoc`](nlt-heredoc/) | evals/nlt-heredoc — multi-line values through the NLT parser | [`results.json`](nlt-heredoc/results.json) | 2026-09-13 |
 | [`phases`](phases/) | Phase-scoped tool visibility, measured — and the number is negative | [`results.json`](phases/results.json) | not recorded |
