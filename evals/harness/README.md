@@ -48,6 +48,64 @@ in each run's `results.json`.
 store a "sensitive" locker code). Every arm-level change in that pair is inside both intervals. A
 task-level difference of 3 in 5 on these hosted models is not a result.
 
+## Model sweep (`552660a`)
+
+The same 25 tasks, n=5, on 2026-10-22, under the isolation above. This runtime at `552660a`: 14.120
+(each framed user-role block says where it ends), 14.121 (init's third-party rule applies only when
+the person has not said what to share) and 14.122 (a built-in pinned again under a namespace leaves
+the catalogue). All three were found by the interim sweep at `bfaf549`, which is kept in
+`runs/sweep-bfaf549/`. The runner fix `d1c217f` (an unreachable upstream is re-run, not scored) was in
+place for the Kimi and gpt-oss arms; the arms it would have changed were re-run whole, and the
+originals are in `runs/sweep-552660a/superseded-network/`.
+
+| Model | Native | NLT | Native cost | NLT cost |
+| --- | --- | --- | --- | --- |
+| Claude Opus 5.5 | 120/125 (96%) | 119/125 (95%) | $1.89 | $2.34 |
+| Claude Sonnet 5.5 | 120/125 (96%) | 120/125 (96%) | $0.78 | $1.02 |
+| Claude Haiku 5.5 | 120/125 (96%) | 114/125 (91%) | $0.06 | $0.08 |
+| GPT-6.1 Sol | 120/125 (96%) | 120/125 (96%) | $0.54 | $0.86 |
+| GLM 5.3 | 120/125 (96%) | 103/125 (82%) | $0.92 | $0.84 |
+| DeepSeek V4 Pro | 119/125 (95%) | 117/125 (94%) | $0.31 | $0.24 |
+| GPT-6 Luna | 118/125 (94%) | 74/125 (59%) | $0.04 | $0.04 |
+| Grok 4.7 | 118/125 (94%) | 46/125 (37%) | $1.47 | $1.18 |
+| Kimi K3 | 117/125 (94%) | 66/125 (53%) | $2.35 | $0.99 |
+| Gemini 3.8 Flash | 115/125 (92%) | 117/125 (94%) | $1.38 | $1.73 |
+| Gemini 4 Argon | 114/125 (91%) | 116/125 (93%) | $1.98 | $2.45 |
+| gpt-oss-20b | 88/125 (70%) | 74/125 (59%) | $0.04 | $0.04 |
+| qwen3.5-9b | 76/125 (61%) | not measured | $0.14 | |
+
+Intervals and per-category results are in `runs/sweep-552660a/results.json`. Hosted qwen3.5-9b under
+NLT was stopped at 8/125: DeepInfra served it at about 16 tokens a second and four of the eight runs hit
+the 300 s turn limit, which measures the endpoint rather than the model. The local Ollama arms
+(qwen3.5:9b, gemma4:12b) were paused, not run.
+
+**Against the other harnesses**, on the four anchors (Hermes and OpenClaw from `runs/sweep-bfaf549/`;
+nothing in `552660a` changes them):
+
+| Model | Dispach native | Hermes 0.19.0 | OpenClaw 2026.10.5 |
+| --- | --- | --- | --- |
+| Opus 5.5 | 120 (96%) · $1.89 | 119 (95%) · $2.24 | 105 (84%) · $7.10 |
+| Sonnet 5.5 | 120 (96%) · $0.78 | 120 (96%) · $1.76 | 105 (84%) · $4.21 |
+| Haiku 5.5 | 120 (96%) · $0.06 | 120 (96%) · $0.07 | 102 (82%) · $0.21 |
+| Gemini 4 Argon | 114 (91%) · $1.98 | 123 (98%) · $2.79 | 108 (86%) · $5.47 |
+
+**Read plainly.**
+
+- Native Dispach scores 94–96% on nine of thirteen models, and its remaining failures there are almost
+  entirely `recover-persist` (5 of 5, the repeat guard). Against Hermes it ties on the three Claude
+  models and loses on Gemini 4 Argon by 9 runs, where four of its misses are miscounts of a 400-row file
+  the model received complete. OpenClaw trails both by 12–18pp, losing all 15 long-file runs on each
+  model to its own truncation.
+- Dispach native is the cheapest of the three on Opus, Sonnet and Argon, and level with Hermes on
+  Haiku. On Claude that is 14.119: without `cache_control` the same arms paid full price.
+- NLT ties native on eight models and collapses on four: Grok 4.7 (37%), Kimi K3 (53%), GPT-6 Luna (59%)
+  and gpt-oss-20b (59%), with GLM 5.3 at 82%. The mechanism, from the replies and from replaying the
+  requests: the model writes "I'll do X" and ends its turn without the `ACTION` block. Replaying one
+  Grok request, it wrote the block 5 of 8 times on a single call and 0 of 8 on a two-step chain. Native
+  never loses to NLT by more than the noise; NLT loses to native by up to 72 runs.
+- The two small open models are where native falls too: gpt-oss-20b 70%, qwen3.5-9b 61%. Below the
+  frontier the dialect is not the only thing that matters, and no small model reached the band.
+
 ## Head-to-head (`bfaf549`)
 
 The same 25 tasks, n=5, all arms on 2026-10-22, under the isolation described above: every harness

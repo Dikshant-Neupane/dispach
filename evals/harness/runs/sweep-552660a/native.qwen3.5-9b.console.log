@@ -1,0 +1,126 @@
+pass  single-kv-set            r1  2 calls  31818 ms  $0.00082
+pass  single-read-answer       r1  2 calls  9097 ms  $0.00079
+FAIL  single-calculator        r1  2 calls  7300 ms  $0.00078  — wrong product
+FAIL  single-now               r1  2 calls  51572 ms  $0.00085  — wrong weekday
+pass  single-send              r1  2 calls  22933 ms  $0.00080
+pass  chain-order-notify       r1  3 calls  19379 ms  $0.00120
+pass  chain-file-to-kv         r1  3 calls  18663 ms  $0.00119
+FAIL  chain-sum-to-file        r1  3 calls  34552 ms  $0.00122  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r1  3 calls  23073 ms  $0.00119
+FAIL  chain-edit-json          r1  1 calls  44020 ms  $0.00046  — darkMode not true
+pass  recall-fact              r1  5 calls  36796 ms  $0.00161  (1 429 retries)
+pass  recall-preference        r1  5 calls  32351 ms  $0.00160
+pass  recall-correction        r1  4 calls  25006 ms  $0.00158
+pass  abstain-chitchat         r1  1 calls  7522 ms  $0.00039
+pass  abstain-knowledge        r1  1 calls  5880 ms  $0.00039
+pass  abstain-draft-only       r1  1 calls  10868 ms  $0.00040
+pass  abstain-cannot           r1  1 calls  29575 ms  $0.00044
+FAIL  recover-retry            r1  2 calls  12823 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r1  1 calls  21053 ms  $0.00043  (1 429 retries)  — file never written
+pass  recover-bad-expression   r1  2 calls  10687 ms  $0.00078
+pass  recover-missing-file     r1  2 calls  15616 ms  $0.00081
+pass  recover-unknown-order    r1  2 calls  10893 ms  $0.00080
+FAIL  long-log-needle          r1  3 calls  37103 ms  $0.00238  — error code not stored
+FAIL  long-count-orders        r1  1 calls  43978 ms  $0.00049  — file never read
+FAIL  long-handbook            r1  4 calls  91215 ms  $0.00258  — empty reply
+pass  single-kv-set            r2  3 calls  21336 ms  $0.00080  (1 429 retries)
+pass  single-read-answer       r2  2 calls  10308 ms  $0.00079
+FAIL  single-calculator        r2  2 calls  7181 ms  $0.00078  — wrong product
+FAIL  single-now               r2  2 calls  6970 ms  $0.00077  — wrong weekday
+pass  single-send              r2  2 calls  12995 ms  $0.00079
+FAIL  chain-order-notify       r2  2 calls  11382 ms  $0.00079  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r2  1 calls  18006 ms  $0.00042  — region not stored as eu-west-2
+pass  chain-sum-to-file        r2  4 calls  22068 ms  $0.00164
+FAIL  chain-kv-to-send         r2  2 calls  17200 ms  $0.00080  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  1 calls  29159 ms  $0.00044  — darkMode not true
+pass  recall-fact              r2  4 calls  22864 ms  $0.00160
+pass  recall-preference        r2  4 calls  31453 ms  $0.00162
+pass  recall-correction        r2  4 calls  18561 ms  $0.00157
+pass  abstain-chitchat         r2  1 calls  11582 ms  $0.00040
+pass  abstain-knowledge        r2  1 calls  6554 ms  $0.00039
+pass  abstain-draft-only       r2  1 calls  12408 ms  $0.00041
+pass  abstain-cannot           r2  1 calls  36988 ms  $0.00046
+FAIL  recover-retry            r2  2 calls  13322 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r2  2 calls  18684 ms  $0.00081  — file never written
+FAIL  recover-bad-expression   r2  2 calls  14137 ms  $0.00078  — wrong answer
+pass  recover-missing-file     r2  2 calls  13948 ms  $0.00080
+pass  recover-unknown-order    r2  3 calls  33605 ms  $0.00126
+FAIL  long-log-needle          r2  2 calls  27196 ms  $0.00082  (2 429 retries)  — empty reply
+FAIL  long-count-orders        r2  2 calls  97468 ms  $0.00137  — count is not 58
+FAIL  long-handbook            r2  2 calls  72782 ms  $0.00112  — meal_limit is not 75
+FAIL  single-kv-set            r3  2 calls  14955 ms  $0.00078  — empty reply
+pass  single-read-answer       r3  2 calls  13282 ms  $0.00079
+FAIL  single-calculator        r3  2 calls  11642 ms  $0.00078  (2 429 retries)  — wrong product
+pass  single-now               r3  2 calls  83645 ms  $0.00092
+pass  single-send              r3  2 calls  18402 ms  $0.00079
+FAIL  chain-order-notify       r3  2 calls  15258 ms  $0.00079  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  22962 ms  $0.00120
+FAIL  chain-sum-to-file        r3  1 calls  33361 ms  $0.00044  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r3  3 calls  24001 ms  $0.00119
+FAIL  chain-edit-json          r3  1 calls  25689 ms  $0.00042  — darkMode not true
+pass  recall-fact              r3  4 calls  30904 ms  $0.00161  (2 429 retries)
+pass  recall-preference        r3  5 calls  43871 ms  $0.00161
+pass  recall-correction        r3  4 calls  30300 ms  $0.00159
+pass  abstain-chitchat         r3  1 calls  14507 ms  $0.00040
+pass  abstain-knowledge        r3  1 calls  5404 ms  $0.00038
+pass  abstain-draft-only       r3  1 calls  13213 ms  $0.00041
+pass  abstain-cannot           r3  2 calls  66697 ms  $0.00099
+FAIL  recover-retry            r3  2 calls  13766 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r3  3 calls  39866 ms  $0.00127  — file never written
+pass  recover-bad-expression   r3  2 calls  15142 ms  $0.00078
+pass  recover-missing-file     r3  2 calls  22162 ms  $0.00081
+pass  recover-unknown-order    r3  2 calls  19857 ms  $0.00081
+FAIL  long-log-needle          r3  3 calls  43524 ms  $0.00237  — error code not stored
+FAIL  long-count-orders        r3  3 calls  37145 ms  $0.00211  — count is not 58
+FAIL  long-handbook            r3  3 calls  37896 ms  $0.00168  (1 429 retries)  — meal_limit is not 75
+pass  single-kv-set            r4  2 calls  17841 ms  $0.00079
+pass  single-read-answer       r4  2 calls  11032 ms  $0.00079
+FAIL  single-calculator        r4  2 calls  9929 ms  $0.00077  — wrong product
+FAIL  single-now               r4  2 calls  9143 ms  $0.00077  — wrong weekday
+pass  single-send              r4  2 calls  21697 ms  $0.00080
+pass  chain-order-notify       r4  3 calls  24507 ms  $0.00121
+pass  chain-file-to-kv         r4  3 calls  26191 ms  $0.00121
+pass  chain-sum-to-file        r4  5 calls  34437 ms  $0.00164
+pass  chain-kv-to-send         r4  3 calls  34726 ms  $0.00126
+FAIL  chain-edit-json          r4  1 calls  32523 ms  $0.00043  — darkMode not true
+FAIL  recall-fact              r4  3 calls  26215 ms  $0.00119  — flight not stored as BA 286
+FAIL  recall-preference        r4  4 calls  35293 ms  $0.00160  — not signed Captain
+pass  recall-correction        r4  4 calls  32962 ms  $0.00159
+pass  abstain-chitchat         r4  3 calls  16932 ms  $0.00040
+pass  abstain-knowledge        r4  1 calls  6746 ms  $0.00038
+pass  abstain-draft-only       r4  1 calls  17710 ms  $0.00041
+pass  abstain-cannot           r4  1 calls  34013 ms  $0.00044
+FAIL  recover-retry            r4  2 calls  14451 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r4  2 calls  13948 ms  $0.00081  — file never written
+pass  recover-bad-expression   r4  2 calls  15786 ms  $0.00080
+FAIL  recover-missing-file     r4  2 calls  17623 ms  $0.00082  — invented a value or file
+pass  recover-unknown-order    r4  2 calls  17206 ms  $0.00082
+FAIL  long-log-needle          r4  1 calls  33590 ms  $0.00044  — error code not stored
+FAIL  long-count-orders        r4  3 calls  3397 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:64352/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  long-handbook            r4  11 calls  88640 ms  $0.01214  (3 429 retries)
+pass  single-kv-set            r5  2 calls  13920 ms  $0.00079
+FAIL  single-read-answer       r5  1 calls  26187 ms  $0.00043  — file never read
+pass  single-calculator        r5  2 calls  9178 ms  $0.00078
+FAIL  single-now               r5  2 calls  13312 ms  $0.00079  — wrong weekday
+FAIL  single-send              r5  1 calls  15885 ms  $0.00042  — no message to Priya about the build
+pass  chain-order-notify       r5  3 calls  17993 ms  $0.00120
+pass  chain-file-to-kv         r5  3 calls  13930 ms  $0.00119
+pass  chain-sum-to-file        r5  4 calls  23569 ms  $0.00166
+pass  chain-kv-to-send         r5  3 calls  30979 ms  $0.00127
+pass  chain-edit-json          r5  4 calls  45112 ms  $0.00203
+FAIL  recall-fact              r5  4 calls  20189 ms  $0.00161  — empty reply
+pass  recall-preference        r5  6 calls  120741 ms  $0.00265
+pass  recall-correction        r5  4 calls  24775 ms  $0.00159
+pass  abstain-chitchat         r5  1 calls  8008 ms  $0.00039
+pass  abstain-knowledge        r5  1 calls  3394 ms  $0.00038
+FAIL  abstain-draft-only       r5  1 calls  16276 ms  $0.00041  — no draft in the reply
+pass  abstain-cannot           r5  1 calls  35393 ms  $0.00046
+pass  recover-retry            r5  3 calls  18369 ms  $0.00122
+FAIL  recover-persist          r5  1 calls  11855 ms  $0.00040  — file never written
+pass  recover-bad-expression   r5  2 calls  12472 ms  $0.00078
+pass  recover-missing-file     r5  2 calls  32294 ms  $0.00085
+pass  recover-unknown-order    r5  3 calls  26755 ms  $0.00124
+FAIL  long-log-needle          r5  2 calls  39595 ms  $0.00129  — empty reply
+FAIL  long-count-orders        r5  2 calls  80571 ms  $0.00134  — count is not 58
+pass  long-handbook            r5  11 calls  123748 ms  $0.01221
+dispach-native · qwen3.5-9b: 76/125 passed → evals/harness/runs/sweep-552660a/native.qwen3.5-9b.jsonl

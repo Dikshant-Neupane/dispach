@@ -1,0 +1,126 @@
+FAIL  single-kv-set            r1  1 calls  6479 ms  $0.00055  — locker_code not stored as 4417
+FAIL  single-read-answer       r1  1 calls  2596 ms  $0.00009  — file never read
+pass  single-calculator        r1  2 calls  3802 ms  $0.00013
+pass  single-now               r1  2 calls  4715 ms  $0.00013
+FAIL  single-send              r1  1 calls  2981 ms  $0.00008  — no message to Priya about the build
+pass  chain-order-notify       r1  3 calls  13270 ms  $0.00043
+pass  chain-file-to-kv         r1  3 calls  10349 ms  $0.00026
+pass  chain-sum-to-file        r1  4 calls  23539 ms  $0.00070
+FAIL  chain-kv-to-send         r1  1 calls  3604 ms  $0.00012  — Dmitri not sent the alert
+FAIL  chain-edit-json          r1  1 calls  5161 ms  $0.00014  — darkMode not true
+pass  recall-fact              r1  3 calls  11028 ms  $0.00029
+pass  recall-preference        r1  3 calls  9569 ms  $0.00025
+pass  recall-correction        r1  3 calls  8944 ms  $0.00024
+pass  abstain-chitchat         r1  1 calls  1666 ms  $0.00006
+pass  abstain-knowledge        r1  1 calls  1885 ms  $0.00006
+pass  abstain-draft-only       r1  1 calls  3556 ms  $0.00008
+pass  abstain-cannot           r1  1 calls  5585 ms  $0.00018
+FAIL  recover-retry            r1  1 calls  2068 ms  $0.00007  — never got past the failure
+FAIL  recover-persist          r1  1 calls  2354 ms  $0.00009  — file never written
+FAIL  recover-bad-expression   r1  1 calls  2508 ms  $0.00008  — calculator never succeeded
+pass  recover-missing-file     r1  2 calls  13435 ms  $0.00032
+FAIL  recover-unknown-order    r1  1 calls  7725 ms  $0.00020  — never looked the order up
+FAIL  long-log-needle          r1  1 calls  3258 ms  $0.00012  — error code not stored
+FAIL  long-count-orders        r1  1 calls  3268 ms  $0.00009  — file never read
+pass  long-handbook            r1  3 calls  18875 ms  $0.00203
+FAIL  single-kv-set            r2  1 calls  5193 ms  $0.00014  — locker_code not stored as 4417
+FAIL  single-read-answer       r2  1 calls  2337 ms  $0.00005  — file never read
+FAIL  single-calculator        r2  1 calls  2264 ms  $0.00004  — calculator not used
+FAIL  single-now               r2  1 calls  5243 ms  $0.00005  — clock not read (a guess)
+pass  single-send              r2  2 calls  5728 ms  $0.00012
+FAIL  chain-order-notify       r2  1 calls  4271 ms  $0.00011  — order never looked up
+pass  chain-file-to-kv         r2  3 calls  17612 ms  $0.00048
+pass  chain-sum-to-file        r2  3 calls  28587 ms  $0.00072
+FAIL  chain-kv-to-send         r2  1 calls  3800 ms  $0.00008  — Dmitri not sent the alert
+pass  chain-edit-json          r2  3 calls  10103 ms  $0.00025
+pass  recall-fact              r2  3 calls  10816 ms  $0.00024
+FAIL  recall-preference        r2  2 calls  9637 ms  $0.00022  — Lee not told about the deploy
+pass  recall-correction        r2  3 calls  8341 ms  $0.00018
+pass  abstain-chitchat         r2  1 calls  2602 ms  $0.00005
+pass  abstain-knowledge        r2  1 calls  1873 ms  $0.00004
+pass  abstain-draft-only       r2  1 calls  2686 ms  $0.00008
+pass  abstain-cannot           r2  1 calls  6190 ms  $0.00017
+pass  recover-retry            r2  3 calls  7120 ms  $0.00019
+FAIL  recover-persist          r2  1 calls  4258 ms  $0.00007  — file never written
+pass  recover-bad-expression   r2  2 calls  5819 ms  $0.00012
+pass  recover-missing-file     r2  2 calls  8386 ms  $0.00023
+FAIL  recover-unknown-order    r2  1 calls  4026 ms  $0.00008  — never looked the order up
+pass  long-log-needle          r2  3 calls  13117 ms  $0.00390
+FAIL  long-count-orders        r2  1 calls  2664 ms  $0.00007  — file never read
+FAIL  long-handbook            r2  1 calls  3766 ms  $0.00010  — meal_limit is not 75
+FAIL  single-kv-set            r3  1 calls  4093 ms  $0.00012  — locker_code not stored as 4417
+FAIL  single-read-answer       r3  1 calls  2584 ms  $0.00005  — file never read
+pass  single-calculator        r3  2 calls  4452 ms  $0.00010
+FAIL  single-now               r3  1 calls  3817 ms  $0.00007  — clock not read (a guess)
+FAIL  single-send              r3  1 calls  2667 ms  $0.00008  — no message to Priya about the build
+pass  chain-order-notify       r3  3 calls  13370 ms  $0.00039
+pass  chain-file-to-kv         r3  3 calls  19081 ms  $0.00056
+pass  chain-sum-to-file        r3  3 calls  17797 ms  $0.00042
+FAIL  chain-kv-to-send         r3  1 calls  6242 ms  $0.00015  — Dmitri not sent the alert
+pass  chain-edit-json          r3  3 calls  12315 ms  $0.00027
+pass  recall-fact              r3  3 calls  10332 ms  $0.00025
+FAIL  recall-preference        r3  2 calls  8004 ms  $0.00021  — Lee not told about the deploy
+pass  recall-correction        r3  4 calls  9484 ms  $0.00026
+pass  abstain-chitchat         r3  1 calls  3352 ms  $0.00005
+pass  abstain-knowledge        r3  1 calls  1934 ms  $0.00004
+pass  abstain-draft-only       r3  1 calls  3358 ms  $0.00007
+pass  abstain-cannot           r3  1 calls  4722 ms  $0.00012
+FAIL  recover-retry            r3  1 calls  2371 ms  $0.00004  — never got past the failure
+FAIL  recover-persist          r3  1 calls  5582 ms  $0.00008  — file never written
+pass  recover-bad-expression   r3  2 calls  4226 ms  $0.00010
+pass  recover-missing-file     r3  2 calls  20506 ms  $0.00054
+FAIL  recover-unknown-order    r3  1 calls  5583 ms  $0.00011  — never looked the order up
+pass  long-log-needle          r3  3 calls  20614 ms  $0.00405
+FAIL  long-count-orders        r3  1 calls  2516 ms  $0.00006  — file never read
+pass  long-handbook            r3  3 calls  15946 ms  $0.00192
+FAIL  single-kv-set            r4  1 calls  7394 ms  $0.00018  — locker_code not stored as 4417
+pass  single-read-answer       r4  2 calls  4163 ms  $0.00011
+pass  single-calculator        r4  2 calls  5027 ms  $0.00010
+pass  single-now               r4  2 calls  4361 ms  $0.00011
+FAIL  single-send              r4  1 calls  2775 ms  $0.00007  — no message to Priya about the build
+FAIL  chain-order-notify       r4  1 calls  3886 ms  $0.00008  — order never looked up
+pass  chain-file-to-kv         r4  3 calls  20297 ms  $0.00051
+FAIL  chain-sum-to-file        r4  1 calls  5237 ms  $0.00010  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r4  1 calls  6986 ms  $0.00014  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  1 calls  3248 ms  $0.00009  — darkMode not true
+pass  recall-fact              r4  3 calls  9348 ms  $0.00026
+pass  recall-preference        r4  4 calls  10269 ms  $0.00031
+pass  recall-correction        r4  4 calls  9376 ms  $0.00028
+pass  abstain-chitchat         r4  1 calls  2178 ms  $0.00005
+pass  abstain-knowledge        r4  1 calls  2041 ms  $0.00004
+pass  abstain-draft-only       r4  1 calls  2969 ms  $0.00009
+pass  abstain-cannot           r4  1 calls  5792 ms  $0.00015
+FAIL  recover-retry            r4  1 calls  2800 ms  $0.00004  — never got past the failure
+FAIL  recover-persist          r4  1 calls  3028 ms  $0.00007  — file never written
+pass  recover-bad-expression   r4  2 calls  7729 ms  $0.00014
+FAIL  recover-missing-file     r4  1 calls  6757 ms  $0.00013  — never tried to read the file
+pass  recover-unknown-order    r4  2 calls  13549 ms  $0.00041
+pass  long-log-needle          r4  3 calls  21168 ms  $0.00409
+FAIL  long-count-orders        r4  1 calls  3522 ms  $0.00008  — file never read
+pass  long-handbook            r4  3 calls  12534 ms  $0.00177
+FAIL  single-kv-set            r5  1 calls  6493 ms  $0.00015  — locker_code not stored as 4417
+pass  single-read-answer       r5  2 calls  4736 ms  $0.00014
+pass  single-calculator        r5  2 calls  4831 ms  $0.00010
+FAIL  single-now               r5  1 calls  2316 ms  $0.00004  — clock not read (a guess)
+pass  single-send              r5  2 calls  5598 ms  $0.00013
+pass  chain-order-notify       r5  3 calls  9536 ms  $0.00021
+FAIL  chain-file-to-kv         r5  1 calls  4483 ms  $0.00011  — region not stored as eu-west-2
+pass  chain-sum-to-file        r5  3 calls  21710 ms  $0.00061
+pass  chain-kv-to-send         r5  3 calls  8849 ms  $0.00019
+FAIL  chain-edit-json          r5  1 calls  3743 ms  $0.00010  — darkMode not true
+pass  recall-fact              r5  3 calls  9004 ms  $0.00022
+pass  recall-preference        r5  5 calls  12763 ms  $0.00074
+pass  recall-correction        r5  3 calls  7079 ms  $0.00021
+pass  abstain-chitchat         r5  1 calls  3653 ms  $0.00007
+pass  abstain-knowledge        r5  1 calls  1556 ms  $0.00004
+pass  abstain-draft-only       r5  1 calls  3652 ms  $0.00009
+pass  abstain-cannot           r5  1 calls  7479 ms  $0.00016
+FAIL  recover-retry            r5  2 calls  6617 ms  $0.00013  — never got past the failure
+FAIL  recover-persist          r5  3 calls  12276 ms  $0.00027  — file never written
+pass  recover-bad-expression   r5  2 calls  4661 ms  $0.00010
+pass  recover-missing-file     r5  2 calls  23854 ms  $0.00054
+FAIL  recover-unknown-order    r5  1 calls  5099 ms  $0.00011  — never looked the order up
+pass  long-log-needle          r5  3 calls  24074 ms  $0.00416
+FAIL  long-count-orders        r5  1 calls  2996 ms  $0.00007  — file never read
+FAIL  long-handbook            r5  1 calls  4130 ms  $0.00010  — meal_limit is not 75
+dispach-nlt · gpt-6-luna: 74/125 passed → evals/harness/runs/sweep-552660a/nlt.gpt-6-luna.jsonl

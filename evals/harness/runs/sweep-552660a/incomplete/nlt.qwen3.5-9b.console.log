@@ -1,0 +1,8 @@
+pass  single-kv-set            r1  2 calls  25173 ms  $0.00070
+FAIL  single-read-answer       r1  2 calls  300054 ms  $0.00000  — harness error: 
+FAIL  single-calculator        r1  2 calls  300055 ms  $0.00000  — harness error: 
+pass  single-now               r1  3 calls  21352 ms  $0.00071  (1 429 retries)
+pass  single-send              r1  2 calls  87486 ms  $0.00087
+FAIL  chain-order-notify       r1  2 calls  300073 ms  $0.00000  — harness error: 
+FAIL  chain-file-to-kv         r1  2 calls  28422 ms  $0.00073  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r1  2 calls  300148 ms  $0.00000  — harness error: 

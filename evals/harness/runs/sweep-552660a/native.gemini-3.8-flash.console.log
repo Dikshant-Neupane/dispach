@@ -1,0 +1,126 @@
+pass  single-kv-set            r1  2 calls  8888 ms  $0.00849
+pass  single-read-answer       r1  2 calls  4519 ms  $0.00585
+pass  single-calculator        r1  2 calls  4494 ms  $0.00583
+pass  single-now               r1  2 calls  7688 ms  $0.00730
+pass  single-send              r1  2 calls  8289 ms  $0.00721
+pass  chain-order-notify       r1  3 calls  12805 ms  $0.01258
+pass  chain-file-to-kv         r1  3 calls  8746 ms  $0.00935
+pass  chain-sum-to-file        r1  4 calls  10746 ms  $0.01268
+pass  chain-kv-to-send         r1  3 calls  14904 ms  $0.01279
+pass  chain-edit-json          r1  3 calls  8966 ms  $0.00988
+pass  recall-fact              r1  4 calls  13933 ms  $0.01324
+pass  recall-preference        r1  4 calls  23460 ms  $0.01820
+pass  recall-correction        r1  4 calls  12376 ms  $0.01292
+pass  abstain-chitchat         r1  1 calls  4252 ms  $0.00354
+pass  abstain-knowledge        r1  1 calls  2499 ms  $0.00300
+pass  abstain-draft-only       r1  1 calls  5577 ms  $0.00439
+pass  abstain-cannot           r1  2 calls  9029 ms  $0.00847
+pass  recover-retry            r1  3 calls  7638 ms  $0.00929
+FAIL  recover-persist          r1  3 calls  11573 ms  $0.01129  — file never written
+pass  recover-bad-expression   r1  2 calls  4820 ms  $0.00593
+pass  recover-missing-file     r1  3 calls  10204 ms  $0.01058
+pass  recover-unknown-order    r1  2 calls  7343 ms  $0.00684
+pass  long-log-needle          r1  3 calls  9267 ms  $0.03841
+FAIL  long-count-orders        r1  2 calls  5445 ms  $0.01393  — count is not 58
+pass  long-handbook            r1  4 calls  13932 ms  $0.02249
+pass  single-kv-set            r2  2 calls  9950 ms  $0.00882
+pass  single-read-answer       r2  2 calls  6549 ms  $0.00692
+pass  single-calculator        r2  2 calls  4808 ms  $0.00583
+pass  single-now               r2  2 calls  9497 ms  $0.00852
+pass  single-send              r2  2 calls  7306 ms  $0.00727
+pass  chain-order-notify       r2  3 calls  15156 ms  $0.01333
+pass  chain-file-to-kv         r2  3 calls  8222 ms  $0.00943
+pass  chain-sum-to-file        r2  4 calls  11913 ms  $0.01231
+pass  chain-kv-to-send         r2  3 calls  12123 ms  $0.01068
+pass  chain-edit-json          r2  3 calls  8338 ms  $0.00963
+pass  recall-fact              r2  4 calls  23286 ms  $0.01863
+pass  recall-preference        r2  4 calls  19968 ms  $0.01704
+pass  recall-correction        r2  4 calls  13822 ms  $0.01423
+pass  abstain-chitchat         r2  1 calls  3738 ms  $0.00360
+pass  abstain-knowledge        r2  1 calls  2882 ms  $0.00303
+pass  abstain-draft-only       r2  1 calls  5404 ms  $0.00420
+pass  abstain-cannot           r2  2 calls  12868 ms  $0.00892
+pass  recover-retry            r2  3 calls  8195 ms  $0.00946
+FAIL  recover-persist          r2  3 calls  12082 ms  $0.01162  — file never written
+pass  recover-bad-expression   r2  2 calls  5235 ms  $0.00612
+pass  recover-missing-file     r2  4 calls  11515 ms  $0.01162
+pass  recover-unknown-order    r2  2 calls  7223 ms  $0.00697
+pass  long-log-needle          r2  3 calls  8532 ms  $0.03811
+FAIL  long-count-orders        r2  2 calls  5761 ms  $0.00583  — count is not 58
+pass  long-handbook            r2  4 calls  11847 ms  $0.01964
+pass  single-kv-set            r3  2 calls  12892 ms  $0.00987
+pass  single-read-answer       r3  2 calls  6387 ms  $0.00662
+pass  single-calculator        r3  2 calls  4902 ms  $0.00579
+pass  single-now               r3  2 calls  7774 ms  $0.00734
+pass  single-send              r3  2 calls  8078 ms  $0.00753
+pass  chain-order-notify       r3  3 calls  13180 ms  $0.01170
+pass  chain-file-to-kv         r3  3 calls  8917 ms  $0.00943
+pass  chain-sum-to-file        r3  4 calls  11771 ms  $0.01342
+pass  chain-kv-to-send         r3  3 calls  15514 ms  $0.01130
+pass  chain-edit-json          r3  3 calls  9108 ms  $0.00974
+pass  recall-fact              r3  4 calls  14706 ms  $0.01415
+pass  recall-preference        r3  4 calls  17295 ms  $0.01582
+pass  recall-correction        r3  4 calls  12521 ms  $0.01349
+pass  abstain-chitchat         r3  1 calls  3709 ms  $0.00342
+pass  abstain-knowledge        r3  1 calls  2589 ms  $0.00290
+FAIL  abstain-draft-only       r3  1 calls  5802 ms  $0.00434  — no draft in the reply
+pass  abstain-cannot           r3  2 calls  10264 ms  $0.00845
+pass  recover-retry            r3  3 calls  7984 ms  $0.00932
+FAIL  recover-persist          r3  3 calls  17084 ms  $0.01151  — file never written
+pass  recover-bad-expression   r3  2 calls  6292 ms  $0.00645
+pass  recover-missing-file     r3  3 calls  7773 ms  $0.00823
+pass  recover-unknown-order    r3  2 calls  8104 ms  $0.00774
+pass  long-log-needle          r3  3 calls  10211 ms  $0.03627
+FAIL  long-count-orders        r3  2 calls  5941 ms  $0.00603  — count is not 58
+pass  long-handbook            r3  3 calls  6777 ms  $0.01582
+pass  single-kv-set            r4  2 calls  9355 ms  $0.00833
+pass  single-read-answer       r4  2 calls  5431 ms  $0.00509
+pass  single-calculator        r4  2 calls  5566 ms  $0.00583
+pass  single-now               r4  2 calls  7869 ms  $0.00714
+pass  single-send              r4  2 calls  8968 ms  $0.00713
+pass  chain-order-notify       r4  3 calls  13167 ms  $0.01156
+pass  chain-file-to-kv         r4  3 calls  9036 ms  $0.00945
+pass  chain-sum-to-file        r4  4 calls  15847 ms  $0.01300
+pass  chain-kv-to-send         r4  3 calls  11527 ms  $0.01001
+pass  chain-edit-json          r4  3 calls  7496 ms  $0.00813
+pass  recall-fact              r4  4 calls  15748 ms  $0.01530
+pass  recall-preference        r4  4 calls  19799 ms  $0.01625
+pass  recall-correction        r4  4 calls  14241 ms  $0.01395
+pass  abstain-chitchat         r4  1 calls  3680 ms  $0.00354
+pass  abstain-knowledge        r4  1 calls  2504 ms  $0.00299
+pass  abstain-draft-only       r4  1 calls  4359 ms  $0.00391
+pass  abstain-cannot           r4  1 calls  57739 ms  $0.03025
+pass  recover-retry            r4  3 calls  7117 ms  $0.00909
+FAIL  recover-persist          r4  3 calls  12416 ms  $0.01069  — file never written
+pass  recover-bad-expression   r4  2 calls  5529 ms  $0.00638
+pass  recover-missing-file     r4  5 calls  12991 ms  $0.01384
+pass  recover-unknown-order    r4  2 calls  6540 ms  $0.00672
+pass  long-log-needle          r4  3 calls  12887 ms  $0.03792
+FAIL  long-count-orders        r4  2 calls  5897 ms  $0.00591  — count is not 58
+pass  long-handbook            r4  4 calls  14223 ms  $0.02235
+pass  single-kv-set            r5  2 calls  10952 ms  $0.00858
+pass  single-read-answer       r5  2 calls  6704 ms  $0.00674
+pass  single-calculator        r5  2 calls  4851 ms  $0.00583
+pass  single-now               r5  3 calls  7109 ms  $0.01104
+pass  single-send              r5  2 calls  8177 ms  $0.00743
+pass  chain-order-notify       r5  3 calls  14496 ms  $0.01281
+pass  chain-file-to-kv         r5  3 calls  8873 ms  $0.00936
+pass  chain-sum-to-file        r5  4 calls  9866 ms  $0.01250
+pass  chain-kv-to-send         r5  3 calls  15008 ms  $0.01231
+pass  chain-edit-json          r5  3 calls  9197 ms  $0.00992
+pass  recall-fact              r5  4 calls  20372 ms  $0.01743
+pass  recall-preference        r5  4 calls  17359 ms  $0.01577
+pass  recall-correction        r5  4 calls  11216 ms  $0.01277
+pass  abstain-chitchat         r5  1 calls  3418 ms  $0.00349
+pass  abstain-knowledge        r5  1 calls  2517 ms  $0.00297
+pass  abstain-draft-only       r5  1 calls  4710 ms  $0.00390
+pass  abstain-cannot           r5  2 calls  11865 ms  $0.00822
+pass  recover-retry            r5  3 calls  7523 ms  $0.00930
+FAIL  recover-persist          r5  3 calls  18629 ms  $0.01295  — file never written
+pass  recover-bad-expression   r5  2 calls  5173 ms  $0.00489
+pass  recover-missing-file     r5  5 calls  12494 ms  $0.01467
+pass  recover-unknown-order    r5  2 calls  7105 ms  $0.00689
+pass  long-log-needle          r5  3 calls  8963 ms  $0.03574
+pass  long-count-orders        r5  3 calls  16241 ms  $0.02348
+pass  long-handbook            r5  3 calls  7298 ms  $0.01831
+dispach-native · gemini-3.8-flash: 115/125 passed → evals/harness/runs/sweep-552660a/native.gemini-3.8-flash.jsonl

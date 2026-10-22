@@ -1,0 +1,132 @@
+note: dispach-nlt — the registry does not know openai/gpt-oss-20b; init's agent did not load, so its window (131072) and native tool support (true) were set from deepinfra/bf16's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  3979 ms  $0.00023
+FAIL  single-read-answer       r1  1 calls  1431 ms  $0.00011  — file never read
+pass  single-calculator        r1  2 calls  3619 ms  $0.00023
+pass  single-now               r1  2 calls  6097 ms  $0.00027
+pass  single-send              r1  2 calls  5173 ms  $0.00026
+FAIL  chain-order-notify       r1  1 calls  6119 ms  $0.00020  — empty reply
+FAIL  chain-file-to-kv         r1  1 calls  1372 ms  $0.00010  — empty reply
+FAIL  chain-sum-to-file        r1  1 calls  4516 ms  $0.00015  — empty reply
+FAIL  chain-kv-to-send         r1  2 calls  5505 ms  $0.00025  — Dmitri not sent the alert
+FAIL  chain-edit-json          r1  1 calls  2480 ms  $0.00011  — empty reply
+pass  recall-fact              r1  3 calls  4752 ms  $0.00033
+pass  recall-preference        r1  4 calls  9334 ms  $0.00050
+pass  recall-correction        r1  4 calls  7970 ms  $0.00044
+pass  abstain-chitchat         r1  1 calls  1809 ms  $0.00011
+pass  abstain-knowledge        r1  1 calls  1960 ms  $0.00011
+pass  abstain-draft-only       r1  1 calls  1633 ms  $0.00011
+pass  abstain-cannot           r1  1 calls  3606 ms  $0.00014
+pass  recover-retry            r1  3 calls  4669 ms  $0.00035
+FAIL  recover-persist          r1  3 calls  3686 ms  $0.00034  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r1  2 calls  2546 ms  $0.00022
+pass  recover-missing-file     r1  2 calls  7238 ms  $0.00035
+pass  recover-unknown-order    r1  3 calls  6361 ms  $0.00040
+FAIL  long-log-needle          r1  2 calls  6682 ms  $0.00060  — error code not stored
+FAIL  long-count-orders        r1  1 calls  1305 ms  $0.00010  — file never read
+FAIL  long-handbook            r1  1 calls  1572 ms  $0.00011  — empty reply
+pass  single-kv-set            r2  2 calls  1900 ms  $0.00020
+FAIL  single-read-answer       r2  1 calls  1337 ms  $0.00011  — file never read
+pass  single-calculator        r2  2 calls  2390 ms  $0.00021
+pass  single-now               r2  2 calls  4547 ms  $0.00027
+pass  single-send              r2  2 calls  4149 ms  $0.00026
+pass  chain-order-notify       r2  3 calls  4109 ms  $0.00034
+FAIL  chain-file-to-kv         r2  2 calls  8197 ms  $0.00038  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r2  1 calls  1255 ms  $0.00010  — empty reply
+pass  chain-kv-to-send         r2  3 calls  6489 ms  $0.00040
+pass  chain-edit-json          r2  4 calls  24152 ms  $0.00089
+pass  recall-fact              r2  4 calls  7404 ms  $0.00050
+pass  recall-preference        r2  3 calls  6092 ms  $0.00036
+pass  recall-correction        r2  4 calls  7800 ms  $0.00046
+pass  abstain-chitchat         r2  1 calls  1563 ms  $0.00011
+pass  abstain-knowledge        r2  1 calls  1867 ms  $0.00011
+FAIL  abstain-draft-only       r2  1 calls  1746 ms  $0.00011  — no draft in the reply
+pass  abstain-cannot           r2  1 calls  2453 ms  $0.00012
+pass  recover-retry            r2  3 calls  7041 ms  $0.00039
+FAIL  recover-persist          r2  3 calls  4549 ms  $0.00035  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r2  2 calls  3679 ms  $0.00023
+pass  recover-missing-file     r2  2 calls  4192 ms  $0.00025
+FAIL  recover-unknown-order    r2  1 calls  1736 ms  $0.00011  — empty reply
+FAIL  long-log-needle          r2  2 calls  8500 ms  $0.00064  — error code not stored
+FAIL  long-count-orders        r2  1 calls  2590 ms  $0.00013  — file never read
+FAIL  long-handbook            r2  1 calls  1717 ms  $0.00012  — empty reply
+pass  single-kv-set            r3  2 calls  2470 ms  $0.00021
+pass  single-read-answer       r3  2 calls  6143 ms  $0.00024
+pass  single-calculator        r3  2 calls  2975 ms  $0.00021
+pass  single-now               r3  2 calls  6052 ms  $0.00028
+pass  single-send              r3  2 calls  4689 ms  $0.00025
+FAIL  chain-order-notify       r3  2 calls  3952 ms  $0.00024  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  6721 ms  $0.00039
+FAIL  chain-sum-to-file        r3  1 calls  1409 ms  $0.00011  — empty reply
+pass  chain-kv-to-send         r3  3 calls  21176 ms  $0.00063
+FAIL  chain-edit-json          r3  1 calls  3777 ms  $0.00015  — empty reply
+pass  recall-fact              r3  4 calls  8807 ms  $0.00050
+pass  recall-preference        r3  3 calls  5907 ms  $0.00035
+pass  recall-correction        r3  4 calls  9014 ms  $0.00050
+pass  abstain-chitchat         r3  1 calls  1670 ms  $0.00011
+pass  abstain-knowledge        r3  1 calls  1319 ms  $0.00011
+FAIL  abstain-draft-only       r3  1 calls  2439 ms  $0.00012  — no draft in the reply
+pass  abstain-cannot           r3  1 calls  2621 ms  $0.00013
+pass  recover-retry            r3  3 calls  5177 ms  $0.00034
+FAIL  recover-persist          r3  3 calls  4438 ms  $0.00035  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r3  2 calls  4140 ms  $0.00024
+pass  recover-missing-file     r3  2 calls  4498 ms  $0.00025
+pass  recover-unknown-order    r3  3 calls  14216 ms  $0.00052
+FAIL  long-log-needle          r3  1 calls  2275 ms  $0.00012  — empty reply
+FAIL  long-count-orders        r3  3 calls  42288 ms  $0.00173  — count is not 58
+FAIL  long-handbook            r3  1 calls  2446 ms  $0.00011  — empty reply
+FAIL  single-kv-set            r4  2 calls  2263 ms  $0.00021  — locker_code not stored as 4417
+pass  single-read-answer       r4  2 calls  3815 ms  $0.00023
+pass  single-calculator        r4  2 calls  5291 ms  $0.00025
+FAIL  single-now               r4  2 calls  6234 ms  $0.00029  — wrong weekday
+FAIL  single-send              r4  1 calls  3396 ms  $0.00015  — no message to Priya about the build
+FAIL  chain-order-notify       r4  3 calls  13527 ms  $0.00050  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r4  1 calls  1646 ms  $0.00011  — empty reply
+FAIL  chain-sum-to-file        r4  1 calls  1631 ms  $0.00011  — empty reply
+FAIL  chain-kv-to-send         r4  2 calls  25424 ms  $0.00063  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  1 calls  1726 ms  $0.00011  — empty reply
+pass  recall-fact              r4  4 calls  8737 ms  $0.00050
+FAIL  recall-preference        r4  2 calls  6114 ms  $0.00026  — Lee not told about the deploy
+pass  recall-correction        r4  4 calls  7306 ms  $0.00047
+pass  abstain-chitchat         r4  1 calls  1129 ms  $0.00010
+pass  abstain-knowledge        r4  1 calls  1143 ms  $0.00010
+FAIL  abstain-draft-only       r4  1 calls  1832 ms  $0.00011  — no draft in the reply
+pass  abstain-cannot           r4  1 calls  5269 ms  $0.00018
+pass  recover-retry            r4  3 calls  4221 ms  $0.00035
+FAIL  recover-persist          r4  3 calls  4950 ms  $0.00034  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r4  2 calls  2518 ms  $0.00021
+pass  recover-missing-file     r4  3 calls  6638 ms  $0.00039
+FAIL  recover-unknown-order    r4  3 calls  18566 ms  $0.00061  — told Sam a status that does not exist
+FAIL  long-log-needle          r4  3 calls  6474 ms  $0.00099  — error code not stored
+FAIL  long-count-orders        r4  2 calls  23713 ms  $0.00090  — count is not 58
+FAIL  long-handbook            r4  2 calls  4134 ms  $0.00043  — meal_limit is not 75
+pass  single-kv-set            r5  2 calls  3508 ms  $0.00023
+pass  single-read-answer       r5  2 calls  2733 ms  $0.00021
+FAIL  single-calculator        r5  1 calls  2340 ms  $0.00012  — calculator not used
+pass  single-now               r5  2 calls  7433 ms  $0.00030
+FAIL  single-send              r5  1 calls  3297 ms  $0.00014  — no message to Priya about the build
+FAIL  chain-order-notify       r5  2 calls  4703 ms  $0.00026  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r5  2 calls  3010 ms  $0.00022  — region not stored as eu-west-2
+pass  chain-sum-to-file        r5  3 calls  5555 ms  $0.00036
+pass  chain-kv-to-send         r5  3 calls  10450 ms  $0.00045
+pass  chain-edit-json          r5  4 calls  7611 ms  $0.00049
+pass  recall-fact              r5  4 calls  7460 ms  $0.00049
+pass  recall-preference        r5  3 calls  5686 ms  $0.00036
+pass  recall-correction        r5  4 calls  6731 ms  $0.00046
+pass  abstain-chitchat         r5  1 calls  1330 ms  $0.00010
+pass  abstain-knowledge        r5  1 calls  1172 ms  $0.00010
+FAIL  abstain-draft-only       r5  1 calls  2374 ms  $0.00012  — no draft in the reply
+pass  abstain-cannot           r5  1 calls  5033 ms  $0.00018
+pass  recover-retry            r5  3 calls  4799 ms  $0.00035
+FAIL  recover-persist          r5  3 calls  4165 ms  $0.00033  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r5  2 calls  3394 ms  $0.00023
+pass  recover-missing-file     r5  2 calls  4888 ms  $0.00025
+pass  recover-unknown-order    r5  2 calls  5220 ms  $0.00026
+FAIL  long-log-needle          r5  2 calls  5261 ms  $0.00058  — error code not stored
+FAIL  long-count-orders        r5  1 calls  2284 ms  $0.00010  — file never read
+FAIL  long-handbook            r5  1 calls  1753 ms  $0.00010  — empty reply
+dispach-nlt · gpt-oss-20b: 74/125 passed → evals/harness/runs/sweep-552660a/nlt.gpt-oss-20b.jsonl
