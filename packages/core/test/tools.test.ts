@@ -105,6 +105,28 @@ describe("resolution", () => {
         expect(registry.specs().map((entry) => entry.slug)).toEqual(["now", "memory_write"])
     })
 
+    test("a built-in pinned again under a namespace leaves the catalogue, and says so", async () => {
+        // Measured: with `now` and `bench__now` both offered, Sonnet 5.5 read the built-in clock on
+        // every run of a task about the server's. The namespaced one was pinned on purpose, so it wins.
+        const registry = await ToolRegistry.create({
+            local: ["now", "memory_write"],
+            pinned: ["bench__now"],
+            providers: [provider("mcp", [tool({ slug: "bench__now" })])],
+        })
+        expect(registry.specs().map((entry) => entry.slug)).toEqual(["memory_write", "bench__now"])
+        const detail = registry.warnings.find((warning) => warning.code === "tool_builtin_shadowed")
+        expect(detail?.message).toContain(
+            "now, because a pinned tool has the same name (bench__now)",
+        )
+        expect(detail?.field).toBe("tools.local")
+
+        const alone = await ToolRegistry.create({ local: ["now"] })
+        expect(alone.specs().map((entry) => entry.slug)).toEqual(["now"])
+        expect(alone.warnings.some((warning) => warning.code === "tool_builtin_shadowed")).toBe(
+            false,
+        )
+    })
+
     test("catalogue order is manifest order, because that is trim priority", async () => {
         const registry = await ToolRegistry.create({ local: ["memory_write", "now"] })
         expect(registry.specs().map((entry) => entry.slug)).toEqual(["memory_write", "now"])

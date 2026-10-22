@@ -17,10 +17,13 @@ import { describeScope, scopeOfSource } from "../memory/scopes.ts"
 import type { ChatMessage, ImageInput } from "../model/provider.ts"
 import {
     type ContextBlock,
+    MEMORY_END,
     NOTE_HEADER,
+    REMINDER_END,
     REMINDER_HEADER,
     SLOT,
     skillHeader,
+    VOLATILE_END,
     VOLATILE_HEADER,
 } from "./blocks.ts"
 import { isTurnStart } from "./compaction/stages.ts"
@@ -208,7 +211,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
             block(
                 SLOT.volatile,
                 "user",
-                `${VOLATILE_HEADER}\n\n${input.volatile}`,
+                `${VOLATILE_HEADER}\n\n${input.volatile}\n\n${VOLATILE_END}`,
                 true,
                 "workspace-volatile",
             ),
@@ -271,7 +274,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
             block(
                 SLOT.memory,
                 "user",
-                `# Remembered\n\n${provenance}${because}\n\n${passage.text}`,
+                `# Remembered\n\n${provenance}${because}\n\n${passage.text}\n\n${MEMORY_END}`,
                 false,
                 `memory:${passage.source}`,
             ),
@@ -282,7 +285,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
             block(
                 SLOT.reminder,
                 "user",
-                `${REMINDER_HEADER}\n\n${input.reminder}`,
+                `${REMINDER_HEADER}\n\n${input.reminder}\n\n${REMINDER_END}`,
                 true,
                 "workspace-reminder",
             ),

@@ -160,6 +160,7 @@ export class ToolRegistry {
         // is chosen by whoever registered the factory — nothing stops an embedder registering one
         // under the id "local". Position is the fact; the strings are claims.
         const trustOverrides: string[] = []
+        const builtins = new Set<string>()
         for (const [provider, slugs, fallback] of [
             [localProvider(), requested, "trusted"] as const,
             ...providers.map((provider) => [provider, pinned, "untrusted"] as const),
@@ -189,6 +190,7 @@ export class ToolRegistry {
                 }
                 // Normalised once, here, so every consumer downstream reads a settled value and no
                 // provider package can ship a trusted email body by forgetting a field.
+                if (fallback === "trusted") builtins.add(key)
                 found.set(
                     key,
                     resolved.spec.trust === undefined
@@ -267,7 +269,44 @@ export class ToolRegistry {
             claimed.add(tool)
             ordered.push(tool)
         }
-        const all = [...ordered, ...[...found.values()].filter((tool) => !claimed.has(tool))]
+        const resolvedAll = [
+            ...ordered,
+            ...[...found.values()].filter((tool) => !claimed.has(tool)),
+        ]
+
+        // A built-in the person also pinned under a namespace — `now` beside `bench__now` — is one tool
+        // offered twice under two names, and the model picks either. Measured: Sonnet 5.5 and Gemini 4
+        // Argon read the built-in clock instead of the pinned server's, every time. Pinning the
+        // namespaced one is the more specific choice, so it wins and the built-in leaves the catalogue.
+        const bare = (slug: string) => normalise(slug.slice(slug.lastIndexOf("__") + 2))
+        const pinnedNames = new Set(
+            resolvedAll
+                .filter((tool) => !builtins.has(normalise(tool.spec.slug)))
+                .filter((tool) => tool.spec.slug.includes("__"))
+                .map((tool) => bare(tool.spec.slug)),
+        )
+        const shadowed = resolvedAll.filter(
+            (tool) =>
+                builtins.has(normalise(tool.spec.slug)) &&
+                pinnedNames.has(normalise(tool.spec.slug)),
+        )
+        if (shadowed.length > 0) {
+            const names = shadowed.map((tool) => tool.spec.slug)
+            warnings.push({
+                code: "tool_builtin_shadowed",
+                message: `Left out of the catalogue: ${names.join(", ")}, because a pinned tool has the same name (${resolvedAll
+                    .filter(
+                        (tool) =>
+                            !builtins.has(normalise(tool.spec.slug)) &&
+                            names.some((n) => bare(tool.spec.slug) === normalise(n)),
+                    )
+                    .map((tool) => tool.spec.slug)
+                    .join(", ")}).`,
+                hint: "Two tools with one name make the model choose between them at random, so the pinned one is kept. Remove the built-in from tools.local to silence this, or unpin the other to keep the built-in.",
+                field: "tools.local",
+            })
+        }
+        const all = resolvedAll.filter((tool) => !shadowed.includes(tool))
 
         // Honoured — the embedder chose to run that provider's code — but never silent. Declaring a
         // provider tool trusted opts it out of the delimiter *and* out of the write gate, which is

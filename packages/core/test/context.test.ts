@@ -8,7 +8,13 @@
  */
 
 import { assembleContext, slotReport } from "../src/context/assemble.ts"
-import { SLOT, VOLATILE_HEADER } from "../src/context/blocks.ts"
+import {
+    MEMORY_END,
+    REMINDER_END,
+    SLOT,
+    VOLATILE_END,
+    VOLATILE_HEADER,
+} from "../src/context/blocks.ts"
 import { renderConfigSummary } from "../src/context/config-summary.ts"
 import { estimateTokens } from "../src/context/tokens.ts"
 import { describe, expect, test } from "./_harness.ts"
@@ -168,6 +174,35 @@ describe("workspace tiers in the assembled prompt", () => {
         )
     })
 
+    test("every framed user-role block says where it ends, so the person's message cannot read as part of it", () => {
+        // Claude through OpenRouter merges consecutive user messages into one turn. Without a closing
+        // line Haiku 5.5 read the person's request as part of its notes and sent nothing (0 of 8 on
+        // replayed requests; 8 of 8 with these lines).
+        const { messages } = assembleContext({
+            identity: "You are a test fixture.",
+            volatile: "Known: metric units.",
+            reminder: "Answer in prose.",
+            memory: [
+                {
+                    source: "2026-08.md",
+                    at: "2026-08-01T10:00:00Z",
+                    text: "staging is in frankfurt",
+                },
+            ],
+            history: [],
+            input: "message Sam that the build is green",
+            window: 8192,
+            reserveOutput: 1024,
+        })
+        const before = messages.slice(0, -1).filter((m) => m.role === "user")
+        expect(before.map((m) => m.content.split("\n\n").at(-1))).toEqual([
+            VOLATILE_END,
+            REMINDER_END,
+            MEMORY_END,
+        ])
+        expect(messages.at(-1)?.content).toBe("message Sam that the build is green")
+    })
+
     test("volatile follows the catalogue and precedes the history", () => {
         const slots = withTiers("Memory.").blocks.map((b) => b.slot)
         expect(slots.indexOf(SLOT.volatile) > slots.indexOf(SLOT.tools)).toBe(true)
@@ -186,7 +221,8 @@ describe("workspace tiers in the assembled prompt", () => {
         const reminder = withTiers("Memory.").blocks.find((b) => b.slot === SLOT.reminder)
         expect(reminder?.content.startsWith("From my own instructions")).toBe(true)
         expect(reminder?.content).toContain("The person did not write this.")
-        expect(reminder?.content.endsWith("\n\nAnswer in prose.")).toBe(true)
+        expect(reminder?.content).toContain("\n\nAnswer in prose.\n\n")
+        expect(reminder?.content.endsWith(REMINDER_END)).toBe(true)
     })
 
     test("retrieved memory lands after the reminder and immediately before the input", () => {

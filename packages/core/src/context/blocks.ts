@@ -153,6 +153,22 @@ export interface ContextBlock {
  *
  * Deliberately short: it is paid on every turn, after breakpoint A, forever.
  */
+/**
+ * The closing lines of the three framed blocks that are user messages (decision 14.118), so the
+ * person's own message cannot read as part of them.
+ *
+ * Claude through OpenRouter merges consecutive user messages into one turn, which put the request
+ * inside a block that says "the person did not write this". Haiku 5.5 then answered a request to
+ * message someone with "you haven't asked me to send anything" (chain tasks 0 of 10). Replaying the
+ * real request with these lines appended: 0 of 8 sends without them, 8 of 8 with them. Static text,
+ * so the prefix stays byte-stable and the cache gain 14.118 was for is kept. Framing, not rewriting.
+ */
+export const VOLATILE_END =
+    "That is everything I already know; the person's message follows separately."
+export const REMINDER_END =
+    "End of my restated instructions; the person's message follows separately."
+export const MEMORY_END = "End of the remembered excerpt; the person's message follows separately."
+
 /** Frames a `SLOT.note` block, so the model can tell it from what the person wrote. */
 export const NOTE_HEADER =
     "From the application this conversation runs in, about the next message. The person did not write this."

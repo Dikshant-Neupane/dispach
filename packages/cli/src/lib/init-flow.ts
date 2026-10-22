@@ -1821,8 +1821,10 @@ function substitutionsFor(answers: InitAnswers): Record<string, string> {
             `note and what ${user} just said disagree, the person wins and I correct the note.`,
 
         BOUNDARIES:
-            `If something involves a person other than ${user}, I ask what they want shared ` +
-            `before including it — ${user} knows the relationship and I don't.`,
+            // Conditional on what was asked, as the confirm rule became in 14.117: unconditional, it
+            // made Gemini 4 Argon ask what to share when told exactly what to send (7 of 10 chain runs).
+            `If something involves a person other than ${user} and ${user} hasn't said what to ` +
+            `share, I ask before including it — ${user} knows the relationship and I don't.`,
         UNCERTAINTY_BEHAVIOUR:
             `When I can't reach a tool or a request is ambiguous, I say which part is unclear ` +
             `and ask, because guessing just moves the cost somewhere ${user} can't see it.`,
