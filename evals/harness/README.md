@@ -48,6 +48,41 @@ in each run's `results.json`.
 store a "sensitive" locker code). Every arm-level change in that pair is inside both intervals. A
 task-level difference of 3 in 5 on these hosted models is not a result.
 
+## Head-to-head (`bfaf549`)
+
+The same 25 tasks, n=5, all arms on 2026-10-22, under the isolation described above: every harness
+in its own container, its state restored before every attempt, the proxy reached as `openrouter.ai`.
+This runtime is at `bfaf549`: decision 14.118 (only byte-stable slots are system messages) and 14.119
+(`cache_control` for Claude on OpenRouter). The `309fdf8` table below is the "before".
+
+| Harness · model | Pass | 95% CI | Errored | Cost | Prompt tokens | Cached | Median run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Dispach native · GPT-6.1 Sol | 120/125 (96%) | 91–98% | 0 | $0.69 | 1,456,332 | 87% | 8 s |
+| Dispach NLT · GPT-6.1 Sol | 118/125 (94%) | 89–97% | 0 | $0.81 | 1,490,867 | 86% | 12 s |
+| Hermes · GPT-6.1 Sol | 120/125 (96%) | 91–98% | 0 | $0.53 | 2,729,115 | 98% | 11 s |
+| OpenClaw · GPT-6.1 Sol | 95/125 (76%) | 68–83% | 0 | $1.73 | 6,216,179 | 94% | 25 s |
+| Dispach native · GLM 5.3 | 117/125 (94%) | 88–97% | 1 | $0.92 | 1,682,956 | 94% | 13 s |
+| Dispach NLT · GLM 5.3 | 103/125 (82%) | 75–88% | 1 | $1.04 | 1,392,695 | 87% | 10 s |
+| Hermes · GLM 5.3 | 123/125 (98%) | 94–100% | 0 | $1.18 | 2,827,957 | 96% | 13 s |
+| OpenClaw · GLM 5.3 | 98/125 (78%) | 70–85% | 7 | $4.86 | 8,690,426 | 91% | 35 s |
+
+**Read plainly.** Accuracy did not move for any arm by more than the noise; the cost did. Dispach
+native on Sol costs 63% less than at `309fdf8` ($1.84 → $0.69) with the same 120/125, and its cache hit
+rate went from 57% to 87%; the first request of a run, which cached 15%, caches about 96%. Hermes is
+still the cheapest on Sol ($0.53, 98% cached; Dispach is now 1.3× rather than 3.2×). On GLM Dispach
+native is the cheapest per passed task ($0.78 per 100 passes against Hermes's $0.96). Dispach native
+and Hermes are level on accuracy on both models; OpenClaw trails by about 18–20pp on both.
+
+- *Dispach:* native on Sol loses only `recover-persist` (0/5, the repeat guard, as before). NLT on GLM
+  still fails chains (13/25); NLT trails native on both models.
+- *Hermes:* abstention on GLM went from 15/20 to 19/20 once runs stopped sharing memory, which is the
+  contamination isolation was added for. It failed `recover-persist` on Sol (0/5) and passed 4/5 on GLM.
+- *OpenClaw:* long files 0/15 on both models again; 7 GLM runs errored, its reasoning spending its
+  4,096-token output cap as before.
+- One run in each Dispach GLM arm hit the 300 s turn timeout and is scored 0.
+- What remains between 87% and Hermes's 98% on Sol is new tool output inside a run and the reset of
+  everything after the volatile tier when `memory_write` changes it.
+
 ## Head-to-head (`309fdf8`)
 
 Same 25 tasks, n=5, the same proxy and tool server, all arms on 2026-10-21. OpenClaw 2026.10.5 and
