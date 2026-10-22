@@ -109,7 +109,7 @@ function containedHarness(name: string, spec: Contained): Harness {
                 throw new Error(
                     `${name}: docker build failed:\n${built.stderr}\n  hint: is Docker running? \`docker version\` answers when it is.`,
                 )
-            await run(["docker", "rm", "-f", container])
+            await run(["docker", "rm", "-f", "-v", container])
             const host = upstreamHost(context.model)
             const started = await run([
                 "docker",
@@ -155,7 +155,7 @@ function containedHarness(name: string, spec: Contained): Harness {
             }
         },
         async close() {
-            await run(["docker", "rm", "-f", container])
+            await run(["docker", "rm", "-f", "-v", container])
         },
     }
 }
@@ -416,6 +416,7 @@ export const HARNESSES: Readonly<Record<string, Harness>> = {
 }
 
 async function published(model: RosterModel): Promise<{ window: number; tools: boolean }> {
+    if (model.provider === undefined) return served(model)
     const response = await fetch(`${model.baseUrl}/models/${model.id}/endpoints`)
     const json = (await response.json()) as {
         data?: {
@@ -438,4 +439,32 @@ async function published(model: RosterModel): Promise<{ window: number; tools: b
         window: endpoint.context_length,
         tools: endpoint.supported_parameters?.includes("tools") === true,
     }
+}
+
+/**
+ * A local Ollama model's window is what the server *serves*, not what the model supports: gemma4:12b
+ * supports 262,144 and is served at 32,768 here, and declaring the larger one would let a prompt past
+ * 32k be cut without a word. The served figure exists only once the model is loaded, so it is loaded.
+ */
+async function served(model: RosterModel): Promise<{ window: number; tools: boolean }> {
+    const api = model.baseUrl.replace(/\/v1\/?$/, "")
+    await fetch(`${api}/api/generate`, {
+        method: "POST",
+        body: JSON.stringify({ model: model.id, prompt: "", keep_alive: "30m" }),
+    })
+    const ps = (await (await fetch(`${api}/api/ps`)).json()) as {
+        models?: { name?: string; context_length?: number }[]
+    }
+    const show = (await (
+        await fetch(`${api}/api/show`, {
+            method: "POST",
+            body: JSON.stringify({ model: model.id }),
+        })
+    ).json()) as { capabilities?: string[] }
+    const window = ps.models?.find((m) => m.name === model.id)?.context_length
+    if (window === undefined)
+        throw new Error(
+            `Ollama did not report a served context for ${model.id}.\n  hint: ollama ps lists loaded models and their context; ollama pull ${model.id} if it is missing.`,
+        )
+    return { window, tools: show.capabilities?.includes("tools") === true }
 }

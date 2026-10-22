@@ -191,7 +191,10 @@ export function createProxy(options: ProxyOptions): (req: Request) => Promise<Re
 
         const sent: Record<string, unknown> = { ...body, model: options.model.id }
         if (sent.stream === true) sent.stream_options = { include_usage: true }
-        const upstream = await upstreamFetch(`${options.model.baseUrl}/chat/completions`, {
+        // An upstream that cannot be reached is the network's noise, like a 429: recorded as status 0
+        // so the runner re-runs the attempt instead of scoring it. Unrecorded, a host-side network blip
+        // on 2026-10-22 was scored as 11 harness errors across two arms.
+        const reached = await upstreamFetch(`${options.model.baseUrl}/chat/completions`, {
             method: "POST",
             headers: {
                 "content-type": "application/json",
@@ -200,7 +203,23 @@ export function createProxy(options: ProxyOptions): (req: Request) => Promise<Re
                     : { authorization: `Bearer ${options.apiKey}` }),
             },
             body: JSON.stringify(sent),
-        })
+        }).catch((cause: unknown) => (cause instanceof Error ? cause : new Error(String(cause))))
+        if (reached instanceof Error) {
+            options.record({
+                ...base,
+                mode: "upstream",
+                modelSent: options.model.id,
+                ...optional("provider", options.model.provider),
+                status: 0,
+                durationMs: now() - started,
+                responseTail: `upstream unreachable: ${reached.message}`,
+            })
+            return Response.json(
+                { error: { message: `bench proxy: upstream unreachable: ${reached.message}` } },
+                { status: 502 },
+            )
+        }
+        const upstream = reached
         const model = options.model
         const reader = upstream.body?.getReader()
         let tail = ""

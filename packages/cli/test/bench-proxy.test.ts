@@ -117,4 +117,22 @@ describe("bench proxy", () => {
         }
         expect(list.data[0]?.id).toBe("vendor/model-x")
     })
+
+    test("an upstream it cannot reach is recorded as status 0 and answered 502, never left unrecorded", async () => {
+        // Unrecorded, the runner saw no throttling and scored a host network blip as harness errors.
+        const records: ProxyRecord[] = []
+        const handler = createProxy({
+            label: "h",
+            model: MODEL,
+            record: (r) => records.push(r),
+            fetch: async () => {
+                throw new Error("Unable to connect")
+            },
+        })
+        const response = await post(handler, REQUEST)
+        expect(response.status).toBe(502)
+        expect(records).toHaveLength(1)
+        expect(records[0]?.status).toBe(0)
+        expect(records[0]?.responseTail).toContain("Unable to connect")
+    })
 })

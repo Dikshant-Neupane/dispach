@@ -79,6 +79,8 @@ export function rateLimited(records: readonly ProxyRecord[]): boolean {
     return records.some(
         (r) =>
             r.status === 429 ||
+            // The proxy could not reach the upstream at all (status 0): the network's noise, not the harness's.
+            r.status === 0 ||
             (r.status === 402 && (r.responseTail ?? "").includes("in_flight_budget_exhausted")),
     )
 }

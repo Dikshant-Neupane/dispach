@@ -141,6 +141,8 @@ describe("bench runner", () => {
         expect(rateLimited([tail("in_flight_budget_exhausted")])).toBe(true)
         expect(rateLimited([tail("insufficient_credits")])).toBe(false)
         expect(rateLimited([record(200)])).toBe(false)
+        // An upstream the proxy could not reach is re-run, not scored.
+        expect(rateLimited([record(0)])).toBe(true)
     })
 
     test("every attempt starts from a reset harness, a re-run after a 429 included", async () => {
