@@ -25,6 +25,7 @@ function fake(
     return {
         name: "fake",
         prepare: async () => {},
+        reset: async () => {},
         async turn() {
             const step = plan.shift() ?? "ok"
             if (step === "429") {
@@ -116,6 +117,7 @@ describe("bench runner", () => {
         const harness: Harness = {
             name: "broken",
             prepare: async () => {},
+            reset: async () => {},
             turn: async () => ({ reply: "", ok: false, detail: "boom" }),
         }
         const row = await runTask({
@@ -139,5 +141,30 @@ describe("bench runner", () => {
         expect(rateLimited([tail("in_flight_budget_exhausted")])).toBe(true)
         expect(rateLimited([tail("insufficient_credits")])).toBe(false)
         expect(rateLimited([record(200)])).toBe(false)
+    })
+
+    test("every attempt starts from a reset harness, a re-run after a 429 included", async () => {
+        const { server, harness, takeRecords } = setup(["429", "ok"])
+        const order: string[] = []
+        const traced: Harness = {
+            ...harness,
+            reset: async () => {
+                order.push("reset")
+            },
+            turn: async (text, session) => {
+                order.push("turn")
+                return harness.turn(text, session)
+            },
+        }
+        await runTask({
+            harness: traced,
+            model,
+            task,
+            repeat: 1,
+            server,
+            takeRecords,
+            sleep: async () => {},
+        })
+        expect(order).toEqual(["reset", "turn", "reset", "turn"])
     })
 })

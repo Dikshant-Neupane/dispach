@@ -11,6 +11,13 @@ same tasks, models and tools.
   `require_parameters: true`) through a recording proxy (`scripts/bench/proxy.ts`).
 - **Setup:** `init --yes` and `config set`, the way a person would (`scripts/bench/adapters.ts`).
   The three bench write tools are in `policy.allow`.
+- **Isolation (since 309fdf8):** every harness, this runtime included, runs in its own container
+  (`docker/Dockerfile` for this runtime, `scripts/bench/images/` for the others), and its state is
+  restored from a snapshot before every attempt. The 309fdf8 runs shared one agent per arm, so repeat 3
+  of a task recalled repeats 1 and 2. The proxy is reached under the upstream's own host name
+  (`openrouter.ai`, mapped to the host), because harnesses decide by it: this runtime, Hermes and
+  OpenClaw all send Claude's `cache_control` only on an OpenRouter route. OpenClaw needs its documented
+  `request.allowPrivateNetwork` opt-in for that, and Hermes a non-placeholder key in its environment.
 - **Scoring:** an errored run scores 0 and stays in the denominator. A run lost to a 429 is re-run
   and counted as a retry; none occurred in these runs. Intervals are Wilson 95%.
 

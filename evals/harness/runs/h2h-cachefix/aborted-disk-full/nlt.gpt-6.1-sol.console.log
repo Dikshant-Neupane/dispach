@@ -1,0 +1,1 @@
+FAIL  single-kv-set            r1  2 calls  11846 ms  $0.00972  — harness error: database or disk is full

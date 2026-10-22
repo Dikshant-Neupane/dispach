@@ -153,9 +153,9 @@ function cacheUsage(
  * sees the call it made, and the symptom is an agent that repeats itself. So the mapping is explicit
  * and in one place.
  */
-function wireMessage(message: ChatMessage): Record<string, unknown> {
+function wireMessage(message: ChatMessage, marked = false): Record<string, unknown> {
     const calls = message.toolCalls ?? []
-    return {
+    const wire = {
         role: message.role,
         // `null` rather than `""` beside tool calls: the API documents null for a message that is
         // only a call, and some compat endpoints treat an empty string as a malformed turn.
@@ -184,6 +184,46 @@ function wireMessage(message: ChatMessage): Record<string, unknown> {
                   })),
               }),
     }
+    if (!marked || typeof wire.content !== "string" || wire.content === "") return wire
+    return { ...wire, content: [{ type: "text", text: wire.content, cache_control: EPHEMERAL }] }
+}
+
+const EPHEMERAL = { type: "ephemeral" } as const
+
+/**
+ * Whether this endpoint takes Anthropic's `cache_control` on a chat-completions message.
+ *
+ * Claude caches nothing without an explicit marker, and Anthropic's own compatibility endpoint ignores
+ * one (see `CLAUDE_BASE`), so the registry says `promptCache: none` for every Claude row. OpenRouter is
+ * the exception: it forwards `cache_control` on a text part to Anthropic. Without it a Claude agent there
+ * paid full price for an identical prefix on every step. Keyed on the host and the vendor-prefixed id,
+ * because another aggregator may refuse an unknown field on a content part and a 400 is worse than a
+ * missed cache.
+ */
+export function sendsCacheControl(baseUrl: string, model: string): boolean {
+    try {
+        return new URL(baseUrl).hostname === "openrouter.ai" && /^anthropic\/claude/.test(model)
+    } catch {
+        return false
+    }
+}
+
+/**
+ * The wire messages, with Anthropic's markers where assembly put a `cacheBreakpoint` and on the last
+ * message. The last is the rolling point the Bedrock transport also places (pilot.13): each step of a
+ * tool loop then reads every earlier step from the cache, which pays because core keeps a caching
+ * role's steps append-only. Three of Anthropic's four allowed markers at most.
+ */
+function wireMessages(
+    messages: readonly ChatMessage[],
+    markers: boolean,
+): Record<string, unknown>[] {
+    return messages.map((message, index) =>
+        wireMessage(
+            message,
+            markers && (message.cacheBreakpoint === true || index === messages.length - 1),
+        ),
+    )
 }
 
 /**
@@ -413,7 +453,10 @@ export function createChatCompletionsProvider(config: ChatCompletionsConfig): Mo
         const buildBody = (withUsage: boolean) =>
             JSON.stringify({
                 model: request.model,
-                messages: request.messages.map(wireMessage),
+                messages: wireMessages(
+                    request.messages,
+                    sendsCacheControl(config.baseUrl, request.model),
+                ),
                 stream: true,
                 // Absent entirely under NLT, so a text-dialect request is byte-for-byte what Phase 1
                 // sent. An endpoint that has never seen a `tools` key is not asked to ignore one.

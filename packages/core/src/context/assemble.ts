@@ -207,7 +207,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         pinned.push(
             block(
                 SLOT.volatile,
-                "system",
+                "user",
                 `${VOLATILE_HEADER}\n\n${input.volatile}`,
                 true,
                 "workspace-volatile",
@@ -270,7 +270,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         pinned.push(
             block(
                 SLOT.memory,
-                "system",
+                "user",
                 `# Remembered\n\n${provenance}${because}\n\n${passage.text}`,
                 false,
                 `memory:${passage.source}`,
@@ -281,7 +281,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
         pinned.push(
             block(
                 SLOT.reminder,
-                "system",
+                "user",
                 `${REMINDER_HEADER}\n\n${input.reminder}`,
                 true,
                 "workspace-reminder",

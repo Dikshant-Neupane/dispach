@@ -58,6 +58,11 @@ export const SLOT = {
      * *After* breakpoint A, and that is the entire reason the tier exists: this content changes when
      * the agent writes to memory, and content ahead of the breakpoint that changes invalidates the
      * cached prefix on every write. The cost rises and nothing anywhere reports it.
+     *
+     * A **user** message, as are the reminder and recall: OpenAI through OpenRouter treats the leading
+     * run of system messages as one block and reuses none of it if any byte changes. With this tier as
+     * a system message every memory write, and with recall as one every new question, cached 0 of a
+     * 3,300-token prefix on GPT-6.1 Sol (2026-10-22). Only byte-stable slots may be system messages.
      */
     volatile: 4,
     /** Active skill body. Cache breakpoint B. Phase 5. */

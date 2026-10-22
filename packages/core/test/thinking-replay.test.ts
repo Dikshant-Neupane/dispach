@@ -173,4 +173,53 @@ describe("cache breakpoints", () => {
             { role: "user", content: "hi" },
         ])
     })
+
+    test("OpenRouter's Claude gets cache_control on each breakpoint and the tail, and nobody else does", async () => {
+        // Claude caches nothing without a marker: measured on Haiku 5.5 through OpenRouter, an
+        // 11,242-token prefix sent twice cached 0 both times, and with these markers 11,604 of 11,608.
+        const bodyFor = async (baseUrl: string, model: string) => {
+            const bodies: string[] = []
+            const fetch: FetchLike = async (_url, init) => {
+                bodies.push(String(init?.body))
+                return new Response("data: [DONE]\n\n", {
+                    headers: { "content-type": "text/event-stream" },
+                })
+            }
+            const provider = createChatCompletionsProvider({
+                baseUrl,
+                field: "model.main",
+                fetch,
+                env: {},
+            })
+            const messages: ChatMessage[] = [
+                { role: "system", content: "identity", cacheBreakpoint: true },
+                { role: "user", content: "notes" },
+                { role: "user", content: "hi" },
+            ]
+            for await (const _ of provider.chat(
+                { model, messages },
+                new AbortController().signal,
+            )) {
+                // drain
+            }
+            return JSON.parse(bodies[0] ?? "{}").messages
+        }
+        const marked = (text: string) => [
+            { type: "text", text, cache_control: { type: "ephemeral" } },
+        ]
+        expect(await bodyFor("https://openrouter.ai/api/v1", "anthropic/claude-haiku-5.5")).toEqual(
+            [
+                { role: "system", content: marked("identity") },
+                { role: "user", content: "notes" },
+                { role: "user", content: marked("hi") },
+            ],
+        )
+        const plain = [
+            { role: "system", content: "identity" },
+            { role: "user", content: "notes" },
+            { role: "user", content: "hi" },
+        ]
+        expect(await bodyFor("https://openrouter.ai/api/v1", "openai/gpt-6.1-sol")).toEqual(plain)
+        expect(await bodyFor("https://api.anthropic.com/v1", "claude-haiku-5-5")).toEqual(plain)
+    })
 })

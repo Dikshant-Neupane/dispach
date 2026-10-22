@@ -48,6 +48,12 @@ export interface Harness {
     readonly name: string
     prepare(context: HarnessContext): Promise<void>
     turn(text: string, session: string): Promise<{ reply: string; ok: boolean; detail: string }>
+    /**
+     * Put the harness back exactly as `prepare` left it: memory, sessions, notes. Called before every
+     * attempt, so a repeat never recalls itself. In the `309fdf8` head-to-head one agent served all 125
+     * runs of an arm, and repeat 3 of a task was handed repeats 1 and 2 of the same question as memory.
+     */
+    reset(): Promise<void>
     /** Tear down what `prepare` started, such as a container. */
     close?(): Promise<void>
 }
@@ -92,6 +98,7 @@ export async function runTask(options: {
     const sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
     let retries = 0
     for (;;) {
+        await harness.reset()
         server.reset(task.world)
         options.takeRecords()
         const session = `t${TASKS.indexOf(task)}r${repeat}a${retries}`

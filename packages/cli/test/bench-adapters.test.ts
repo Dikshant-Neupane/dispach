@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { forContainer, hermesOutput, openclawReply } from "../../../scripts/bench/adapters.ts"
+import {
+    forContainer,
+    hermesOutput,
+    modelUrlFor,
+    openclawReply,
+    upstreamHost,
+} from "../../../scripts/bench/adapters.ts"
+import { loadRoster } from "../../../scripts/lib/roster.ts"
 
 describe("contained harness adapters", () => {
     test("loopback URLs are rewritten to the host as a container sees it", () => {
@@ -10,6 +17,18 @@ describe("contained harness adapters", () => {
             "http://host.docker.internal:8788/mcp",
         )
         expect(forContainer("https://api.example.com/v1")).toBe("https://api.example.com/v1")
+    })
+
+    test("a container reaches the model proxy under the upstream's own host name", () => {
+        // Harnesses decide things from it: Claude's cache_control is sent only to openrouter.ai, by
+        // this runtime and by Hermes alike, and behind a loopback address neither sent it.
+        const [hosted, local] = loadRoster(["haiku-5.5", "qwen3.5-9b-local"])
+        if (hosted === undefined || local === undefined) throw new Error("roster fixture missing")
+        expect(upstreamHost(hosted)).toBe("openrouter.ai")
+        expect(upstreamHost(local)).toBe("host.docker.internal")
+        expect(modelUrlFor("http://127.0.0.1:51234/v1", "openrouter.ai")).toBe(
+            "http://openrouter.ai:51234/v1",
+        )
     })
 
     test("the OpenClaw reply is its final visible text, however deep the version nests it", () => {

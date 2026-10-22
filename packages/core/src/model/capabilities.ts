@@ -172,7 +172,7 @@ const CLAUDE_BASE = {
 } as const
 
 const CLAUDE_NOTE =
-    "Thinking blocks must be replayed with tool results or multi-step reasoning degrades silently. Prompt caching is unavailable on the OpenAI-compatible endpoint; the native Messages API is the only route to it."
+    "Thinking blocks must be replayed with tool results or multi-step reasoning degrades silently. Prompt caching is unavailable on Anthropic's OpenAI-compatible endpoint; through OpenRouter the chat-completions transport sends cache_control itself (`sendsCacheControl`)."
 
 export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
     // ── OpenAI ─────────────────────────────────────────────────────────────────────────────

@@ -143,6 +143,31 @@ describe("workspace tiers in the assembled prompt", () => {
         expect(before.blocks.some((b) => b.slot === SLOT.volatile)).toBe(true)
     })
 
+    test("nothing that varies is in the leading run of system messages", () => {
+        // The test above compared slot contents and stayed green while the cache was broken. OpenAI
+        // through OpenRouter treats the leading system messages as one block and reuses none of it if
+        // any byte changes: measured on GPT-6.1 Sol, a session's first request cached 0 of 3,331
+        // tokens with the recall block as a system message, and 3,225 with it as a user message.
+        // The volatile tier, the reminder and recall vary between sessions, so they are user turns.
+        const leading = (volatile: string, recalled: string): string => {
+            const { messages } = assembleContext({
+                identity: "You are a test fixture.",
+                volatile,
+                reminder: "Answer in prose.",
+                memory: [{ source: "2026-08.md", at: "2026-08-01T10:00:00Z", text: recalled }],
+                history: [],
+                input: "what now",
+                window: 8192,
+                reserveOutput: 1024,
+            })
+            const end = messages.findIndex((m) => m.role !== "system")
+            return JSON.stringify(messages.slice(0, end))
+        }
+        expect(leading("Known: metric units.", "staging is in frankfurt")).toBe(
+            leading("Known: metric units. Lives in Lisbon.", "the build runs nightly"),
+        )
+    })
+
     test("volatile follows the catalogue and precedes the history", () => {
         const slots = withTiers("Memory.").blocks.map((b) => b.slot)
         expect(slots.indexOf(SLOT.volatile) > slots.indexOf(SLOT.tools)).toBe(true)

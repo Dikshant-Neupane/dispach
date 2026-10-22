@@ -1,0 +1,37 @@
+pass  single-kv-set            r1  4 calls  52941 ms  $0.02601
+pass  single-read-answer       r1  3 calls  26011 ms  $0.00913
+pass  single-calculator        r1  3 calls  21941 ms  $0.00747
+pass  single-now               r1  6 calls  54079 ms  $0.02613
+pass  single-send              r1  4 calls  46788 ms  $0.01729
+pass  chain-order-notify       r1  5 calls  37339 ms  $0.01973
+pass  chain-file-to-kv         r1  5 calls  26335 ms  $0.01548
+pass  chain-sum-to-file        r1  5 calls  31688 ms  $0.01579
+pass  chain-kv-to-send         r1  7 calls  44436 ms  $0.02801
+pass  chain-edit-json          r1  5 calls  31115 ms  $0.01530
+pass  recall-fact              r1  9 calls  140801 ms  $0.05895
+pass  recall-preference        r1  10 calls  109178 ms  $0.05547
+pass  recall-correction        r1  6 calls  33811 ms  $0.02146
+pass  abstain-chitchat         r1  1 calls  15829 ms  $0.00434
+pass  abstain-knowledge        r1  1 calls  21869 ms  $0.00644
+pass  abstain-draft-only       r1  2 calls  25380 ms  $0.00892
+FAIL  abstain-cannot           r1  12 calls  208749 ms  $0.09438  — pretended with a write or message
+pass  recover-retry            r1  5 calls  31058 ms  $0.01843
+pass  recover-persist          r1  11 calls  51440 ms  $0.03708
+pass  recover-bad-expression   r1  4 calls  20435 ms  $0.01034
+pass  recover-missing-file     r1  10 calls  48019 ms  $0.04387
+pass  recover-unknown-order    r1  10 calls  54207 ms  $0.04836
+FAIL  long-log-needle          r1  11 calls  207226 ms  $0.13140  — error code not stored
+FAIL  long-count-orders        r1  13 calls  300212 ms  $0.08839  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-handbook            r1  13 calls  225990 ms  $0.13897  — meal_limit is not 75
+pass  single-kv-set            r2  4 calls  29425 ms  $0.01515
+pass  single-read-answer       r2  4 calls  19560 ms  $0.01199
+pass  single-calculator        r2  4 calls  21121 ms  $0.01050
+pass  single-now               r2  6 calls  76522 ms  $0.03308
+pass  single-send              r2  5 calls  59473 ms  $0.02409
+pass  chain-order-notify       r2  5 calls  20776 ms  $0.01632
+pass  chain-file-to-kv         r2  5 calls  18786 ms  $0.01481
+pass  chain-sum-to-file        r2  5 calls  21642 ms  $0.01532
+pass  chain-kv-to-send         r2  6 calls  31147 ms  $0.02346
+pass  chain-edit-json          r2  5 calls  22153 ms  $0.01597
