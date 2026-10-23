@@ -359,7 +359,7 @@ describe("calls", () => {
             ),
         ).catch((error: unknown) => error)
         const hint = (failure as { hint?: string }).hint ?? ""
-        expect(hint).toContain("If they say the failure is temporary, retry once")
+        expect(hint).toContain("If they say the failure is temporary, retry up to twice")
         expect(hint).not.toContain("none of them is fixed by retrying")
     })
 

@@ -50,6 +50,8 @@ export function mcpToolFailed(server: string, tool: string, detail: string): Too
         // The server's words decide whether a retry helps. This hint said none would, and the harness
         // benchmark measured it overriding a server that said "temporarily unavailable. Try again":
         // recover-retry and recover-persist failed in every arm (`evals/harness/runs/after-ac5dcc5`).
-        hint: "The server's own words above say what went wrong. If they say the failure is temporary, retry once. Otherwise a tool outside the server's allowlist, a missing upstream credential or an invalid argument are the usual causes, and retrying the same call will not fix those.",
+        // "Up to twice" matches the repeat guard's allowance after a temporary failure (14.127, 14.129):
+        // "once" stopped Sonnet 5.5 one attempt short of a write that succeeded on the third.
+        hint: "The server's own words above say what went wrong. If they say the failure is temporary, retry up to twice. Otherwise a tool outside the server's allowlist, a missing upstream credential or an invalid argument are the usual causes, and retrying the same call will not fix those.",
     })
 }
