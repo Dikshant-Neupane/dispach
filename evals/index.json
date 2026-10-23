@@ -308,6 +308,7 @@
             "name": "harness",
             "title": "Harness benchmark",
             "results": [
+                "runs/sweep-4f3e00a/results.json",
                 "runs/after-8267f61/results.json",
                 "runs/baseline-aae8fe4/results.json",
                 "runs/sweep-552660a/results.json",
@@ -315,7 +316,7 @@
                 "runs/h2h-cachefix/results.json",
                 "runs/h2h-309fdf8/results.json"
             ],
-            "measuredAt": "2026-10-22T19:34:24.385Z"
+            "measuredAt": "2026-10-23T14:25:33.222Z"
         },
         {
             "name": "memory",

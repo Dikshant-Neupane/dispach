@@ -1,0 +1,26 @@
+pass  single-kv-set            r1  3 calls  12914 ms  $0.00080
+pass  single-read-answer       r1  2 calls  6487 ms  $0.00079
+pass  single-calculator        r1  3 calls  8866 ms  $0.00118
+FAIL  single-now               r1  2 calls  109324 ms  $0.00101  — wrong weekday
+pass  single-send              r1  3 calls  11350 ms  $0.00078
+pass  chain-order-notify       r1  5 calls  19388 ms  $0.00122
+pass  chain-file-to-kv         r1  4 calls  23272 ms  $0.00123
+pass  chain-sum-to-file        r1  7 calls  39110 ms  $0.00211
+pass  chain-kv-to-send         r1  3 calls  21319 ms  $0.00120
+FAIL  chain-edit-json          r1  1 calls  18991 ms  $0.00045  — darkMode not true
+pass  recall-fact              r1  5 calls  17834 ms  $0.00161
+pass  recall-preference        r1  6 calls  27548 ms  $0.00204  (2 429 retries)
+pass  recall-correction        r1  4 calls  18573 ms  $0.00158  (1 429 retries)
+pass  abstain-chitchat         r1  1 calls  5495 ms  $0.00040
+pass  abstain-knowledge        r1  2 calls  3959 ms  $0.00039
+pass  abstain-draft-only       r1  1 calls  4405 ms  $0.00039
+pass  abstain-cannot           r1  1 calls  42614 ms  $0.00048
+pass  recover-retry            r1  5 calls  15882 ms  $0.00122
+FAIL  recover-persist          r1  1 calls  16960 ms  $0.00042  — file never written
+pass  recover-bad-expression   r1  4 calls  14672 ms  $0.00118
+pass  recover-missing-file     r1  6 calls  18671 ms  $0.00123
+pass  recover-unknown-order    r1  2 calls  11219 ms  $0.00081
+pass  long-log-needle          r1  4 calls  17337 ms  $0.00850
+pass  long-count-orders        r1  2 calls  94117 ms  $0.00256
+pass  long-handbook            r1  3 calls  16295 ms  $0.00372
+dispach-native · qwen3.5-9b: 22/25 passed → evals/harness/runs/sweep-4f3e00a/native.qwen3.5-9b.r1.jsonl

@@ -1,0 +1,127 @@
+note: dispach-nlt — the registry does not know moonshotai/kimi-k3; init's agent did not load, so its window (1048576) and native tool support (true) were set from moonshotai/mxfp4's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  19793 ms  $0.01862
+pass  single-read-answer       r1  2 calls  11413 ms  $0.00499
+pass  single-calculator        r1  2 calls  9527 ms  $0.00417
+pass  single-now               r1  2 calls  16721 ms  $0.00667
+pass  single-send              r1  2 calls  24783 ms  $0.01077
+FAIL  chain-order-notify       r1  2 calls  16318 ms  $0.00709  — order never looked up
+pass  chain-file-to-kv         r1  3 calls  13504 ms  $0.00707
+FAIL  chain-sum-to-file        r1  1 calls  4696 ms  $0.00223  — empty reply
+FAIL  chain-kv-to-send         r1  2 calls  13829 ms  $0.00649  — Dmitri not sent the alert
+FAIL  chain-edit-json          r1  2 calls  12851 ms  $0.00622  — darkMode not true
+pass  recall-fact              r1  3 calls  83869 ms  $0.03783
+pass  recall-preference        r1  5 calls  30563 ms  $0.01833
+pass  recall-correction        r1  4 calls  19978 ms  $0.01063
+pass  abstain-chitchat         r1  1 calls  11102 ms  $0.00478
+pass  abstain-knowledge        r1  1 calls  5212 ms  $0.00165
+pass  abstain-draft-only       r1  2 calls  70355 ms  $0.03306
+pass  abstain-cannot           r1  1 calls  26888 ms  $0.01226
+pass  recover-retry            r1  3 calls  14510 ms  $0.00759
+pass  recover-persist          r1  4 calls  48596 ms  $0.02543
+pass  recover-bad-expression   r1  2 calls  7800 ms  $0.00414
+pass  recover-missing-file     r1  3 calls  25318 ms  $0.01093
+pass  recover-unknown-order    r1  3 calls  28622 ms  $0.01489
+pass  long-log-needle          r1  4 calls  21709 ms  $0.09614
+FAIL  long-count-orders        r1  2 calls  7441 ms  $0.00421  — file never read
+FAIL  long-handbook            r1  1 calls  4218 ms  $0.00211  — empty reply
+pass  single-kv-set            r2  2 calls  16343 ms  $0.00909
+pass  single-read-answer       r2  2 calls  7839 ms  $0.00453
+pass  single-calculator        r2  2 calls  9541 ms  $0.00420
+FAIL  single-now               r2  1 calls  3418 ms  $0.00216  — clock not read (a guess)
+pass  single-send              r2  2 calls  12651 ms  $0.00626
+FAIL  chain-order-notify       r2  2 calls  17479 ms  $0.00807  — order never looked up
+FAIL  chain-file-to-kv         r2  1 calls  5670 ms  $0.00243  — empty reply
+FAIL  chain-sum-to-file        r2  2 calls  8812 ms  $0.00499  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r2  2 calls  13737 ms  $0.00697  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  3 calls  14612 ms  $0.00872  — darkMode not true
+pass  recall-fact              r2  5 calls  78180 ms  $0.03728
+pass  recall-preference        r2  3 calls  17336 ms  $0.00931
+pass  recall-correction        r2  4 calls  20747 ms  $0.01124
+pass  abstain-chitchat         r2  1 calls  12500 ms  $0.00586
+pass  abstain-knowledge        r2  1 calls  3260 ms  $0.00189
+pass  abstain-draft-only       r2  1 calls  14208 ms  $0.00598
+pass  abstain-cannot           r2  1 calls  38728 ms  $0.01725
+pass  recover-retry            r2  3 calls  13538 ms  $0.00759
+pass  recover-persist          r2  4 calls  23969 ms  $0.01329
+pass  recover-bad-expression   r2  2 calls  9378 ms  $0.00459
+FAIL  recover-missing-file     r2  2 calls  6467 ms  $0.00415  — never tried to read the file
+pass  recover-unknown-order    r2  3 calls  17520 ms  $0.00988
+FAIL  long-log-needle          r2  2 calls  8441 ms  $0.00426  — error code not stored
+pass  long-count-orders        r2  2 calls  31397 ms  $0.05188
+FAIL  long-handbook            r2  2 calls  7900 ms  $0.00477  — meal_limit is not 75
+pass  single-kv-set            r3  2 calls  21729 ms  $0.01059
+FAIL  single-read-answer       r3  2 calls  7301 ms  $0.00423  — file never read
+pass  single-calculator        r3  2 calls  7804 ms  $0.00413
+pass  single-now               r3  2 calls  15460 ms  $0.00843
+pass  single-send              r3  2 calls  13832 ms  $0.00814
+FAIL  chain-order-notify       r3  2 calls  22905 ms  $0.01194  — order never looked up
+FAIL  chain-file-to-kv         r3  1 calls  6831 ms  $0.00240  — empty reply
+FAIL  chain-sum-to-file        r3  2 calls  10309 ms  $0.00433  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r3  3 calls  18916 ms  $0.01098
+FAIL  chain-edit-json          r3  2 calls  20213 ms  $0.00971  — darkMode not true
+pass  recall-fact              r3  3 calls  53013 ms  $0.02298
+FAIL  recall-preference        r3  2 calls  19031 ms  $0.00862  — empty reply
+pass  recall-correction        r3  4 calls  19446 ms  $0.01046
+pass  abstain-chitchat         r3  1 calls  16422 ms  $0.00741
+pass  abstain-knowledge        r3  1 calls  2722 ms  $0.00168
+pass  abstain-draft-only       r3  1 calls  11480 ms  $0.00527
+pass  abstain-cannot           r3  1 calls  30693 ms  $0.01220
+pass  recover-retry            r3  3 calls  14119 ms  $0.00772
+pass  recover-persist          r3  4 calls  22609 ms  $0.01260
+pass  recover-bad-expression   r3  2 calls  11641 ms  $0.00493
+pass  recover-missing-file     r3  3 calls  23787 ms  $0.01176
+FAIL  recover-unknown-order    r3  2 calls  30566 ms  $0.01513  — never looked the order up
+FAIL  long-log-needle          r3  2 calls  8236 ms  $0.00515  — error code not stored
+FAIL  long-count-orders        r3  1 calls  4579 ms  $0.00200  — file never read
+FAIL  long-handbook            r3  2 calls  6072 ms  $0.00405  — meal_limit is not 75
+pass  single-kv-set            r4  2 calls  40910 ms  $0.01862
+FAIL  single-read-answer       r4  2 calls  6826 ms  $0.00432  — file never read
+pass  single-calculator        r4  2 calls  7709 ms  $0.00463
+pass  single-now               r4  2 calls  18743 ms  $0.00965
+pass  single-send              r4  2 calls  31757 ms  $0.01606
+FAIL  chain-order-notify       r4  2 calls  13854 ms  $0.00804  — order never looked up
+FAIL  chain-file-to-kv         r4  1 calls  3236 ms  $0.00188  — empty reply
+FAIL  chain-sum-to-file        r4  1 calls  4354 ms  $0.00223  — empty reply
+FAIL  chain-kv-to-send         r4  3 calls  25962 ms  $0.01476  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  2 calls  8943 ms  $0.00553  — darkMode not true
+FAIL  recall-fact              r4  2 calls  28701 ms  $0.01457  — empty reply
+pass  recall-preference        r4  4 calls  28290 ms  $0.01724
+FAIL  recall-correction        r4  3 calls  12037 ms  $0.00796  — empty reply
+pass  abstain-chitchat         r4  1 calls  5765 ms  $0.00340
+pass  abstain-knowledge        r4  1 calls  2788 ms  $0.00194
+pass  abstain-draft-only       r4  1 calls  12471 ms  $0.00677
+pass  abstain-cannot           r4  1 calls  35656 ms  $0.02014
+FAIL  recover-retry            r4  1 calls  3118 ms  $0.00198  — never got past the failure
+FAIL  recover-persist          r4  1 calls  4385 ms  $0.00315  — empty reply
+pass  recover-bad-expression   r4  2 calls  5720 ms  $0.00460
+FAIL  recover-missing-file     r4  2 calls  5497 ms  $0.00423  — never tried to read the file
+FAIL  recover-unknown-order    r4  2 calls  16717 ms  $0.01003  — never looked the order up
+FAIL  long-log-needle          r4  2 calls  7250 ms  $0.00478  — error code not stored
+FAIL  long-count-orders        r4  2 calls  5701 ms  $0.00446  — file never read
+FAIL  long-handbook            r4  2 calls  7605 ms  $0.00507  — meal_limit is not 75
+pass  single-kv-set            r5  2 calls  15228 ms  $0.01048
+FAIL  single-read-answer       r5  1 calls  3037 ms  $0.00219  — file never read
+pass  single-calculator        r5  2 calls  4831 ms  $0.00398
+pass  single-now               r5  2 calls  11980 ms  $0.00778
+FAIL  single-send              r5  1 calls  8311 ms  $0.00598  — empty reply
+FAIL  chain-order-notify       r5  1 calls  7181 ms  $0.00419  — order never looked up
+FAIL  chain-file-to-kv         r5  2 calls  8638 ms  $0.00564  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r5  2 calls  6051 ms  $0.00483  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r5  2 calls  9408 ms  $0.00646  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  1 calls  3482 ms  $0.00227  — empty reply
+pass  recall-fact              r5  3 calls  56071 ms  $0.03501
+pass  recall-preference        r5  5 calls  30339 ms  $0.01960
+pass  recall-correction        r5  4 calls  14952 ms  $0.01005
+pass  abstain-chitchat         r5  1 calls  12075 ms  $0.00739
+pass  abstain-knowledge        r5  1 calls  3498 ms  $0.00165
+FAIL  abstain-draft-only       r5  2 calls  40319 ms  $0.02620  — no draft in the reply
+pass  abstain-cannot           r5  2 calls  53026 ms  $0.03492
+pass  recover-retry            r5  3 calls  12508 ms  $0.00797
+FAIL  recover-persist          r5  1 calls  12232 ms  $0.00867  — empty reply
+pass  recover-bad-expression   r5  2 calls  5165 ms  $0.00365
+FAIL  recover-missing-file     r5  1 calls  2292 ms  $0.00166  — empty reply
+FAIL  recover-unknown-order    r5  2 calls  18833 ms  $0.01424  — never looked the order up
+FAIL  long-log-needle          r5  1 calls  5476 ms  $0.00271  — empty reply
+FAIL  long-count-orders        r5  2 calls  5979 ms  $0.00472  — file never read
+FAIL  long-handbook            r5  1 calls  3352 ms  $0.00259  — empty reply
+dispach-nlt · kimi-k3: 71/125 passed → evals/harness/runs/sweep-4f3e00a/nlt.kimi-k3.jsonl

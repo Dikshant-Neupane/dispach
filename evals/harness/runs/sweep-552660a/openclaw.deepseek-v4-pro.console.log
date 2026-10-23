@@ -1,0 +1,150 @@
+pass  single-kv-set            r1  4 calls  18532 ms  $0.01699
+pass  single-read-answer       r1  3 calls  12488 ms  $0.01311
+pass  single-calculator        r1  4 calls  15642 ms  $0.00397
+FAIL  single-now               r1  2 calls  12704 ms  $0.00322  — clock not read (a guess)
+pass  single-send              r1  4 calls  15074 ms  $0.00583
+pass  chain-order-notify       r1  5 calls  17219 ms  $0.00807
+pass  chain-file-to-kv         r1  5 calls  17500 ms  $0.00876
+pass  chain-sum-to-file        r1  5 calls  16939 ms  $0.00672
+pass  chain-kv-to-send         r1  5 calls  19430 ms  $0.00760
+pass  chain-edit-json          r1  4 calls  17440 ms  $0.00555
+pass  recall-fact              r1  6 calls  48151 ms  $0.01670
+pass  recall-preference        r1  15 calls  147720 ms  $0.07484
+pass  recall-correction        r1  6 calls  28698 ms  $0.01230
+pass  abstain-chitchat         r1  1 calls  12668 ms  $0.00176
+pass  abstain-knowledge        r1  1 calls  14312 ms  $0.00165
+pass  abstain-draft-only       r1  3 calls  19490 ms  $0.00622
+pass  abstain-cannot           r1  12 calls  124921 ms  $0.06837
+pass  recover-retry            r1  5 calls  17914 ms  $0.00752
+pass  recover-persist          r1  9 calls  28535 ms  $0.01666
+pass  recover-bad-expression   r1  5 calls  16586 ms  $0.00489
+FAIL  recover-missing-file     r1  29 calls  300242 ms  $0.09454  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  recover-unknown-order    r1  37 calls  300330 ms  $0.08617  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-log-needle          r1  10 calls  151615 ms  $0.05777  — error code not stored
+FAIL  long-count-orders        r1  29 calls  300256 ms  $0.18487  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-handbook            r1  18 calls  260825 ms  $0.09586  — meal_limit is not 75
+pass  single-kv-set            r2  4 calls  15094 ms  $0.00291
+pass  single-read-answer       r2  4 calls  12961 ms  $0.00276
+pass  single-calculator        r2  3 calls  11592 ms  $0.00135
+pass  single-now               r2  5 calls  38813 ms  $0.00800
+pass  single-send              r2  4 calls  15956 ms  $0.00300
+pass  chain-order-notify       r2  5 calls  15856 ms  $0.00352
+pass  chain-file-to-kv         r2  5 calls  17386 ms  $0.00379
+pass  chain-sum-to-file        r2  4 calls  13368 ms  $0.00345
+pass  chain-kv-to-send         r2  4 calls  14803 ms  $0.00346
+pass  chain-edit-json          r2  5 calls  16607 ms  $0.00367
+pass  recall-fact              r2  8 calls  103832 ms  $0.02297
+pass  recall-preference        r2  7 calls  33574 ms  $0.00690
+pass  recall-correction        r2  6 calls  24415 ms  $0.00491
+pass  abstain-chitchat         r2  1 calls  9838 ms  $0.00079
+pass  abstain-knowledge        r2  1 calls  10326 ms  $0.00083
+pass  abstain-draft-only       r2  1 calls  9815 ms  $0.00069
+pass  abstain-cannot           r2  5 calls  37725 ms  $0.00925
+pass  recover-retry            r2  6 calls  19818 ms  $0.00446
+pass  recover-persist          r2  8 calls  22654 ms  $0.00718
+pass  recover-bad-expression   r2  4 calls  12351 ms  $0.00183
+FAIL  recover-missing-file     r2  22 calls  171515 ms  $0.05327  — invented a value or file
+pass  recover-unknown-order    r2  13 calls  59361 ms  $0.02023
+FAIL  long-log-needle          r2  11 calls  229358 ms  $0.07201  — error code not stored
+FAIL  long-count-orders        r2  24 calls  300282 ms  $0.10420  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-handbook            r2  11 calls  185735 ms  $0.05363  — meal_limit is not 75
+pass  single-kv-set            r3  4 calls  19676 ms  $0.00404
+pass  single-read-answer       r3  4 calls  14903 ms  $0.00253
+pass  single-calculator        r3  3 calls  12169 ms  $0.00137
+FAIL  single-now               r3  2 calls  11133 ms  $0.00122  — clock not read (a guess)
+FAIL  single-send              r3  3 calls  13530 ms  $0.00193  — no message to Priya about the build
+pass  chain-order-notify       r3  5 calls  17766 ms  $0.00355
+pass  chain-file-to-kv         r3  5 calls  18960 ms  $0.00440
+pass  chain-sum-to-file        r3  5 calls  18063 ms  $0.00357
+pass  chain-kv-to-send         r3  6 calls  24081 ms  $0.00628
+pass  chain-edit-json          r3  4 calls  15097 ms  $0.00277
+pass  recall-fact              r3  6 calls  44759 ms  $0.00899
+pass  recall-preference        r3  9 calls  46603 ms  $0.01112
+pass  recall-correction        r3  6 calls  28275 ms  $0.00699
+pass  abstain-chitchat         r3  1 calls  11436 ms  $0.00092
+pass  abstain-knowledge        r3  1 calls  10401 ms  $0.00082
+pass  abstain-draft-only       r3  1 calls  14578 ms  $0.00154
+FAIL  abstain-cannot           r3  10 calls  106125 ms  $0.02639  — pretended with a write or message
+FAIL  recover-retry            r3  7 calls  32841 ms  $0.00995  — never got past the failure
+pass  recover-persist          r3  7 calls  21875 ms  $0.00533
+pass  recover-bad-expression   r3  4 calls  13945 ms  $0.00194
+FAIL  recover-missing-file     r3  30 calls  300277 ms  $0.09456  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+pass  recover-unknown-order    r3  6 calls  24609 ms  $0.00690
+FAIL  long-log-needle          r3  20 calls  300237 ms  $0.12437  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-count-orders        r3  19 calls  266917 ms  $0.13121  — count is not 58
+FAIL  long-handbook            r3  19 calls  241318 ms  $0.10901  — meal_limit is not 75
+pass  single-kv-set            r4  4 calls  16720 ms  $0.00410
+pass  single-read-answer       r4  4 calls  14707 ms  $0.00253
+pass  single-calculator        r4  4 calls  14875 ms  $0.00189
+pass  single-now               r4  5 calls  24262 ms  $0.00480
+pass  single-send              r4  4 calls  14060 ms  $0.00268
+pass  chain-order-notify       r4  5 calls  18126 ms  $0.00435
+pass  chain-file-to-kv         r4  6 calls  20384 ms  $0.00559
+pass  chain-sum-to-file        r4  5 calls  16776 ms  $0.00368
+pass  chain-kv-to-send         r4  5 calls  19303 ms  $0.00509
+pass  chain-edit-json          r4  5 calls  17626 ms  $0.00343
+pass  recall-fact              r4  4 calls  33700 ms  $0.00473
+pass  recall-preference        r4  8 calls  37631 ms  $0.00799
+pass  recall-correction        r4  6 calls  25674 ms  $0.00582
+pass  abstain-chitchat         r4  1 calls  11396 ms  $0.00082
+pass  abstain-knowledge        r4  1 calls  11426 ms  $0.00106
+pass  abstain-draft-only       r4  2 calls  12757 ms  $0.00170
+FAIL  abstain-cannot           r4  17 calls  116549 ms  $0.03339  — pretended with a write or message
+pass  recover-retry            r4  5 calls  19097 ms  $0.00444
+pass  recover-persist          r4  7 calls  23116 ms  $0.00558
+pass  recover-bad-expression   r4  5 calls  18329 ms  $0.00246
+FAIL  recover-missing-file     r4  26 calls  300260 ms  $0.09143  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+pass  recover-unknown-order    r4  4 calls  18254 ms  $0.00390
+FAIL  long-log-needle          r4  25 calls  300306 ms  $0.11903  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-count-orders        r4  24 calls  300301 ms  $0.11972  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-handbook            r4  21 calls  300245 ms  $0.08936  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+pass  single-kv-set            r5  4 calls  17225 ms  $0.00296
+pass  single-read-answer       r5  4 calls  14916 ms  $0.00251
+pass  single-calculator        r5  4 calls  16065 ms  $0.00186
+FAIL  single-now               r5  2 calls  11345 ms  $0.00130  — clock not read (a guess)
+pass  single-send              r5  4 calls  15243 ms  $0.00272
+pass  chain-order-notify       r5  5 calls  17483 ms  $0.00388
+pass  chain-file-to-kv         r5  5 calls  21763 ms  $0.00413
+pass  chain-sum-to-file        r5  5 calls  16779 ms  $0.00521
+pass  chain-kv-to-send         r5  5 calls  18110 ms  $0.00349
+pass  chain-edit-json          r5  7 calls  25182 ms  $0.00605
+pass  recall-fact              r5  7 calls  58521 ms  $0.01106
+pass  recall-preference        r5  9 calls  45872 ms  $0.01328
+pass  recall-correction        r5  6 calls  26523 ms  $0.00460
+pass  abstain-chitchat         r5  1 calls  10478 ms  $0.00071
+pass  abstain-knowledge        r5  1 calls  13392 ms  $0.00116
+pass  abstain-draft-only       r5  1 calls  10184 ms  $0.00068
+pass  abstain-cannot           r5  4 calls  27852 ms  $0.00553
+pass  recover-retry            r5  4 calls  16541 ms  $0.00371
+pass  recover-persist          r5  7 calls  21709 ms  $0.00498
+pass  recover-bad-expression   r5  6 calls  15838 ms  $0.00280
+FAIL  recover-missing-file     r5  22 calls  221057 ms  $0.08291  — invented a value or file
+FAIL  recover-unknown-order    r5  36 calls  300344 ms  $0.10442  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-log-needle          r5  14 calls  214753 ms  $0.07765  — error code not stored
+FAIL  long-count-orders        r5  23 calls  300285 ms  $0.09077  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-handbook            r5  18 calls  268443 ms  $0.08606  — meal_limit is not 75
+openclaw · deepseek-v4-pro: 96/125 passed → evals/harness/runs/sweep-552660a/openclaw.deepseek-v4-pro.jsonl

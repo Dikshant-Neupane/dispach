@@ -1,0 +1,26 @@
+FAIL  single-kv-set            r3  2 calls  22945 ms  $0.00133  — locker_code not stored as 4417
+pass  single-read-answer       r3  3 calls  54234 ms  $0.00199
+pass  single-calculator        r3  3 calls  26916 ms  $0.00198
+pass  single-now               r3  3 calls  68605 ms  $0.00211
+pass  single-send              r3  2 calls  9830 ms  $0.00132
+pass  chain-order-notify       r3  5 calls  27276 ms  $0.00339
+pass  chain-file-to-kv         r3  4 calls  24255 ms  $0.00270
+pass  chain-sum-to-file        r3  5 calls  29242 ms  $0.00342
+pass  chain-kv-to-send         r3  4 calls  17847 ms  $0.00266
+pass  chain-edit-json          r3  4 calls  21863 ms  $0.00271
+pass  recall-fact              r3  5 calls  25251 ms  $0.00339
+FAIL  recall-preference        r3  8 calls  36698 ms  $0.00541  — not signed Captain
+pass  recall-correction        r3  7 calls  31920 ms  $0.00472
+pass  abstain-chitchat         r3  1 calls  6524 ms  $0.00065
+pass  abstain-knowledge        r3  1 calls  5197 ms  $0.00065
+pass  abstain-draft-only       r3  2 calls  13110 ms  $0.00135
+pass  abstain-cannot           r3  1 calls  12016 ms  $0.00067
+pass  recover-retry            r3  4 calls  18244 ms  $0.00270
+FAIL  recover-persist          r3  3 calls  15692 ms  $0.00202  — file never written
+pass  recover-bad-expression   r3  5 calls  18452 ms  $0.00334
+FAIL  recover-missing-file     r3  18 calls  498580 ms  $0.01390  — invented a value or file
+FAIL  recover-unknown-order    r3  9 calls  165946 ms  $0.00634  — told Sam a status that does not exist
+pass  long-log-needle          r3  4 calls  33622 ms  $0.01368
+FAIL  long-count-orders        r3  3 calls  159125 ms  $0.00545  — count is not 58
+pass  long-handbook            r3  5 calls  31693 ms  $0.00653
+hermes · qwen3.5-9b: 19/25 passed → evals/harness/runs/sweep-552660a/hermes.qwen3.5-9b.r3.jsonl

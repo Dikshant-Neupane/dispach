@@ -1,0 +1,5 @@
+FAIL  single-kv-set            r1  1 calls  70627 ms  $0.00044  — locker_code not stored as 4417
+pass  single-read-answer       r1  2 calls  29803 ms  $0.00072
+pass  single-calculator        r1  3 calls  29256 ms  $0.00069
+FAIL  single-now               r1  2 calls  42507 ms  $0.00071  — wrong weekday
+pass  single-send              r1  2 calls  64234 ms  $0.00072

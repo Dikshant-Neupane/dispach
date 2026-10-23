@@ -1,0 +1,26 @@
+pass  single-kv-set            r5  2 calls  30571 ms  $0.00080
+pass  single-read-answer       r5  2 calls  20906 ms  $0.00079
+pass  single-calculator        r5  3 calls  20358 ms  $0.00117
+pass  single-now               r5  3 calls  95249 ms  $0.00126
+pass  single-send              r5  2 calls  29746 ms  $0.00079
+pass  chain-order-notify       r5  3 calls  38009 ms  $0.00121
+FAIL  chain-file-to-kv         r5  1 calls  41804 ms  $0.00043  — region not stored as eu-west-2
+pass  chain-sum-to-file        r5  4 calls  31589 ms  $0.00164
+pass  chain-kv-to-send         r5  3 calls  26929 ms  $0.00120
+FAIL  chain-edit-json          r5  1 calls  26360 ms  $0.00041  — darkMode not true
+pass  recall-fact              r5  5 calls  71010 ms  $0.00205
+pass  recall-preference        r5  6 calls  128210 ms  $0.00290
+pass  recall-correction        r5  8 calls  45695 ms  $0.00159
+pass  abstain-chitchat         r5  3 calls  16702 ms  $0.00039
+pass  abstain-knowledge        r5  2 calls  10199 ms  $0.00039
+pass  abstain-draft-only       r5  2 calls  19170 ms  $0.00040  (1 429 retries)
+pass  abstain-cannot           r5  2 calls  53116 ms  $0.00044
+pass  recover-retry            r5  4 calls  44659 ms  $0.00165
+FAIL  recover-persist          r5  1 calls  38625 ms  $0.00042  — file never written
+pass  recover-bad-expression   r5  4 calls  33371 ms  $0.00118  (2 429 retries)
+pass  recover-missing-file     r5  2 calls  29212 ms  $0.00081
+pass  recover-unknown-order    r5  4 calls  57784 ms  $0.00083
+pass  long-log-needle          r5  3 calls  45949 ms  $0.00708
+FAIL  long-count-orders        r5  3 calls  871395 ms  $0.00506  — count is not 58
+FAIL  long-handbook            r5  3 calls  3264 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:49383/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+dispach-native · qwen3.5-9b: 20/25 passed → evals/harness/runs/remeasure-be5bb30/native.qwen3.5-9b.r5.jsonl

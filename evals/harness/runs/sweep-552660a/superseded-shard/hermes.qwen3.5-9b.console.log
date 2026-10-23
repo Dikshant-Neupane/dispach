@@ -1,0 +1,9 @@
+pass  single-kv-set            r1  5 calls  76529 ms  $0.00340
+pass  single-read-answer       r1  3 calls  21487 ms  $0.00199
+pass  single-calculator        r1  3 calls  34459 ms  $0.00199
+pass  single-now               r1  3 calls  70147 ms  $0.00208
+pass  single-send              r1  3 calls  15901 ms  $0.00198
+pass  chain-order-notify       r1  5 calls  52494 ms  $0.00271
+pass  chain-file-to-kv         r1  5 calls  51406 ms  $0.00274
+pass  chain-sum-to-file        r1  5 calls  50611 ms  $0.00341
+pass  chain-kv-to-send         r1  4 calls  27565 ms  $0.00266

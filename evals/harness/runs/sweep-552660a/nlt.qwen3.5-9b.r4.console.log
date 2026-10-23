@@ -1,0 +1,35 @@
+FAIL  single-kv-set            r4  1 calls  17707 ms  $0.00036  — locker_code not stored as 4417
+pass  single-read-answer       r4  2 calls  12766 ms  $0.00069
+pass  single-calculator        r4  2 calls  32558 ms  $0.00071
+pass  single-now               r4  2 calls  75666 ms  $0.00084
+pass  single-send              r4  2 calls  45995 ms  $0.00076
+FAIL  chain-order-notify       r4  2 calls  47383 ms  $0.00082  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r4  2 calls  21700 ms  $0.00073  — region not stored as eu-west-2
+pass  chain-sum-to-file        r4  3 calls  278700 ms  $0.00161
+FAIL  chain-kv-to-send         r4  2 calls  354722 ms  $0.00151  — Dmitri not sent the alert
+pass  chain-edit-json          r4  3 calls  388152 ms  $0.00204
+pass  recall-fact              r4  5 calls  253019 ms  $0.00208
+pass  recall-preference        r4  5 calls  276781 ms  $0.00252
+pass  recall-correction        r4  4 calls  216199 ms  $0.00202
+pass  abstain-chitchat         r4  1 calls  297754 ms  $0.00114
+pass  abstain-knowledge        r4  1 calls  5371 ms  $0.00034
+FAIL  abstain-draft-only       r4  1 calls  44829 ms  $0.00000  — no draft in the reply
+pass  abstain-cannot           r4  1 calls  496704 ms  $0.00171
+pass  recover-retry            r4  3 calls  18561 ms  $0.00113
+FAIL  recover-persist          r4  3 calls  668672 ms  $0.00242  (3 429 retries)  — harness error: Done. I'm saving the text to that file as you directed.
+
+
+
+I'll retry saving the file now; the earlier failure was a temporary block.
+
+
+
+The server said to try again since it's temporary. One more attempt.
+  · The model called bench__write_file 3 times in a row with identical arguments, so the turn 
+pass  recover-bad-expression   r4  3 calls  38375 ms  $0.00108
+pass  recover-missing-file     r4  3 calls  44550 ms  $0.00112
+pass  recover-unknown-order    r4  2 calls  48754 ms  $0.00077
+pass  long-log-needle          r4  15 calls  832652 ms  $0.03366
+FAIL  long-count-orders        r4  11 calls  290904 ms  $0.01786  — count is not 58
+FAIL  long-handbook            r4  2 calls  545023 ms  $0.00214  — meal_limit is not 75
+dispach-nlt · qwen3.5-9b: 17/25 passed → evals/harness/runs/sweep-552660a/nlt.qwen3.5-9b.r4.jsonl

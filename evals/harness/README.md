@@ -19,7 +19,9 @@ same tasks, models and tools.
   OpenClaw all send Claude's `cache_control` only on an OpenRouter route. OpenClaw needs its documented
   `request.allowPrivateNetwork` opt-in for that, and Hermes a non-placeholder key in its environment.
 - **Scoring:** an errored run scores 0 and stays in the denominator. A run lost to a 429 is re-run
-  and counted as a retry; none occurred in these runs. Intervals are Wilson 95%.
+  and counted as a retry. One still throttled after eight retries is run again after a cooldown, and if
+  it is throttled even then it is marked `throttled` and left out of the rate (`f97d12e`), because it
+  measures the provider. Intervals are Wilson 95%.
 
 ## Results
 
@@ -47,6 +49,91 @@ in each run's `results.json`.
 4 of 5 (GLM NLT `chain-file-to-kv` 4→1; Luna native `single-kv-set` 5→0, where the model refused to
 store a "sensitive" locker code). Every arm-level change in that pair is inside both intervals. A
 task-level difference of 3 in 5 on these hosted models is not a result.
+
+## Model sweep (`4f3e00a`)
+
+The same 25 tasks, n=5, on 2026-10-23, every arm on an image built from `git archive 4f3e00a` so no
+uncommitted change reached it. Since `552660a` the runtime has gained:
+
+- 14.123: one framed nudge when a step ends with no visible text after a tool result, or promises a
+  call and makes none.
+- 14.124–14.125: `init` writes the endpoint's measured window and `native` where the registry knows the
+  model calls tools.
+- 14.126: an observation's budget is a quarter of the window rather than a twentieth.
+- 14.127 and 14.129: the repeat guard lets an identical call through twice after a failure the server
+  called temporary, and the MCP hint says the same.
+- 14.128: a nudge when the reply says something was saved or sent and nothing that acts ran.
+
+| Model | Native | NLT | Native at `552660a` | Native cost |
+| --- | --- | --- | --- | --- |
+| Claude Opus 5.5 | 125/125 (100%) | 125/125 (100%) | 120 | $2.05 |
+| Claude Sonnet 5.5 | 125/125 (100%) | 124/125 (99%) | 120 | $0.80 |
+| GPT-6.1 Sol | 125/125 (100%) | 125/125 (100%) | 120 | $0.54 |
+| GLM 5.3 | 125/125 (100%) | 119/125 (95%) | 120 | $0.80 |
+| DeepSeek V4 Pro | 125/125 (100%) | 124/125 (99%) | 119 | $0.31 |
+| Gemini 3.8 Flash | 125/125 (100%) | 119/125 (95%) | 115 | $1.38 |
+| Claude Haiku 5.5 | 124/125 (99%) | 124/125 (99%) | 120 | $0.06 |
+| Grok 4.7 | 124/125 (99%) | 62/125 (50%) | 118 | $1.53 |
+| Gemini 4 Argon | 119/125 (95%) | 118/125 (94%) | 114 | $2.29 |
+| Kimi K3 | 115/125 (92%) | 71/125 (57%) | 117 | $2.24 |
+| GPT-6 Luna | 114/125 (91%) | 85/125 (68%) | 118 | $0.05 |
+| Gemma 4 26B-A4B | 112/125 (90%) | 75/125 (60%) | 112 | $0.24 |
+| qwen3.5-9b | 104/125 (83%) | in progress | 76 | $0.18 |
+| gpt-oss-20b | 97/125 (78%) | in progress | 88 | $0.05 |
+
+Intervals, per-category and per-task results are in `runs/sweep-4f3e00a/results.json`, with deltas
+against `552660a`.
+
+**Against the other harnesses.** The Hermes 0.19.0 and OpenClaw 2026.10.5 arms were not re-run: they
+come from `runs/sweep-bfaf549/` (Claude and Argon), `runs/h2h-cachefix/` (Sol and GLM) and
+`runs/sweep-552660a/` (the open models). The tasks, isolation and pinned providers are the same, and
+nothing in this runtime's changes reaches them.
+
+| Model | Dispach native | Hermes | OpenClaw |
+| --- | --- | --- | --- |
+| Opus 5.5 | 125 · $2.05 | 119 · $2.24 | 105 · $7.10 |
+| Sonnet 5.5 | 125 · $0.80 | 120 · $1.76 | 105 · $4.21 |
+| Haiku 5.5 | 124 · $0.06 | 120 · $0.07 | 102 · $0.21 |
+| GPT-6.1 Sol | 125 · $0.54 | 120 · $0.53 | 95 · $1.73 |
+| GLM 5.3 | 125 · $0.80 | 123 · $1.18 | 98 · $4.86 |
+| DeepSeek V4 Pro | 125 · $0.31 | 120 · $0.50 | 96 · $2.83 |
+| Gemini 4 Argon | 119 · $2.29 | 123 · $2.79 | 108 · $5.47 |
+| Kimi K3 | 115 · $2.24 | 115 · $2.36 | 98 · $10.27 |
+| Gemma 4 26B-A4B | 112 · $0.24 | 108 · $0.41 | 91 · $2.95 |
+| qwen3.5-9b | 104 · $0.18 | 112 · $0.42 | 60 · $0.78 |
+| gpt-oss-20b | 97 · $0.05 | 111 · $0.10 | 51 · $0.12 |
+
+**Read plainly.**
+
+- **Native:** 99–100% on eight of fourteen models, and 112/125 or better on twelve. `recover-persist`, which
+  failed in every Dispach arm before, now passes, through the transient retry of 14.127 and 14.129.
+- **Against Hermes:** Dispach is higher on seven models, level on Kimi, and lower on Argon, qwen3.5-9b and
+  gpt-oss-20b. Every gap is inside the 95% intervals except gpt-oss-20b, where Hermes leads by 14 runs
+  and the intervals only just touch (Dispach 70–84%, Hermes 82–93%).
+- **Cost:** Dispach costs least on ten of eleven models, and is level with Hermes on Sol ($0.54 against
+  $0.53).
+- **OpenClaw** trails both on every model, by 11–60 runs.
+- **NLT** matches native on the Claude models, Sol, DeepSeek and Argon. It falls on Grok 4.7 (50%),
+  Kimi K3 (57%), Gemma (60%) and GPT-6 Luna (68%), so `native` stays the default `init` writes.
+- **The small models are where the gap is.** gpt-oss-20b fails `chain-order-notify` 4 of 5 by asking
+  "do you want me to send Sam the status?" instead of acting. On `recover-persist` it once said
+  `file_write` "isn't enabled" when it was pinned, the same misreading of the "Not enabled for you" list
+  seen on Luna and qwen.
+
+**Errored rows**, read from the replies:
+
+- *Grok 4.7 NLT (4) and Argon NLT (5):* `tool_repair_failed`, almost all "the block started in the
+  middle of a line", meaning the model glued `…text.ACTION:` onto prose. The parser does not read that
+  shape, and it is the open NLT follow-up.
+- *Sonnet NLT (1):* the model wrote Anthropic's own `<invoke name=…>` markup instead of an `ACTION`
+  block.
+- *Gemma native (3):* provider 400s and a 503, scored as they would be for any harness.
+
+**Throttling.** Before `f97d12e` the runner scored a run that ran out of four retries. That happened
+to 8 Gemma rows in this sweep, and to most of the qwen3.5-9b spot checks that day, when nine qwen
+shards shared one upstream. The Gemma rows were re-run on the same image; the rows they replaced are
+in `*.throttled-orig.jsonl`. The spot checks are in `runs/remeasure-*/superseded-throttled/` and are
+not results.
 
 ## Model sweep (`552660a`)
 

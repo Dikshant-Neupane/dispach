@@ -1,0 +1,131 @@
+pass  single-kv-set            r1  2 calls  10527 ms  $0.01229
+pass  single-read-answer       r1  2 calls  12704 ms  $0.01211
+pass  single-calculator        r1  2 calls  9740 ms  $0.01195
+pass  single-now               r1  2 calls  16395 ms  $0.01600
+pass  single-send              r1  2 calls  8597 ms  $0.01163
+pass  chain-order-notify       r1  3 calls  19452 ms  $0.02100
+pass  chain-file-to-kv         r1  3 calls  18375 ms  $0.01687
+pass  chain-sum-to-file        r1  3 calls  23874 ms  $0.01987
+pass  chain-kv-to-send         r1  3 calls  18858 ms  $0.01767
+pass  chain-edit-json          r1  3 calls  16881 ms  $0.01743
+pass  recall-fact              r1  4 calls  57901 ms  $0.02485
+pass  recall-preference        r1  5 calls  42879 ms  $0.03082
+pass  recall-correction        r1  4 calls  34976 ms  $0.02391
+pass  abstain-chitchat         r1  1 calls  5074 ms  $0.00714
+pass  abstain-knowledge        r1  1 calls  15083 ms  $0.00703
+FAIL  abstain-draft-only       r1  1 calls  61997 ms  $0.00753  — no draft in the reply
+pass  abstain-cannot           r1  1 calls  6007 ms  $0.00810
+FAIL  recover-retry            r1  3 calls  30316 ms  $0.01702  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: bench__lookup_order.order_id was given 2 times but takes a single value.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a valid value lo
+FAIL  recover-persist          r1  4 calls  53164 ms  $0.02254  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: bench__write_file.path was given 2 times but takes a single value. bench__write_file.contentACTION is not a field of this tool.
+  hint: Usually the catalogue rather than the model: check that 
+pass  recover-bad-expression   r1  2 calls  23338 ms  $0.01198
+pass  recover-missing-file     r1  2 calls  8168 ms  $0.01304
+pass  recover-unknown-order    r1  2 calls  14061 ms  $0.01257
+pass  long-log-needle          r1  3 calls  67398 ms  $0.09076
+pass  long-count-orders        r1  2 calls  23026 ms  $0.04645
+pass  long-handbook            r1  3 calls  44245 ms  $0.04974
+pass  single-kv-set            r2  2 calls  20077 ms  $0.01094
+pass  single-read-answer       r2  2 calls  57449 ms  $0.00905
+pass  single-calculator        r2  2 calls  14373 ms  $0.00903
+pass  single-now               r2  2 calls  21698 ms  $0.01032
+pass  single-send              r2  2 calls  16974 ms  $0.00963
+pass  chain-order-notify       r2  3 calls  59207 ms  $0.01440
+pass  chain-file-to-kv         r2  3 calls  19344 ms  $0.01695
+pass  chain-sum-to-file        r2  4 calls  40036 ms  $0.02281
+pass  chain-kv-to-send         r2  3 calls  14169 ms  $0.01788
+pass  chain-edit-json          r2  3 calls  37873 ms  $0.01744
+pass  recall-fact              r2  4 calls  36625 ms  $0.02482
+pass  recall-preference        r2  5 calls  146587 ms  $0.02612
+pass  recall-correction        r2  4 calls  96469 ms  $0.02093
+pass  abstain-chitchat         r2  1 calls  3621 ms  $0.00713
+pass  abstain-knowledge        r2  1 calls  22646 ms  $0.00703
+FAIL  abstain-draft-only       r2  1 calls  4226 ms  $0.00752  — no draft in the reply
+pass  abstain-cannot           r2  1 calls  8259 ms  $0.01070
+FAIL  recover-retry            r2  3 calls  30356 ms  $0.01721  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: bench__lookup_order.order_id was given 3 times but takes a single value.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a valid value lo
+pass  recover-persist          r2  6 calls  106816 ms  $0.03479
+pass  recover-bad-expression   r2  2 calls  13560 ms  $0.00875
+pass  recover-missing-file     r2  2 calls  25714 ms  $0.01254
+pass  recover-unknown-order    r2  2 calls  25593 ms  $0.01038
+pass  long-log-needle          r2  3 calls  116742 ms  $0.09130
+pass  long-count-orders        r2  2 calls  30135 ms  $0.01642
+pass  long-handbook            r2  3 calls  36125 ms  $0.04834
+pass  single-kv-set            r3  2 calls  33026 ms  $0.01077
+pass  single-read-answer       r3  2 calls  31486 ms  $0.00905
+pass  single-calculator        r3  2 calls  10253 ms  $0.01195
+pass  single-now               r3  2 calls  13724 ms  $0.01015
+pass  single-send              r3  2 calls  92567 ms  $0.00880
+pass  chain-order-notify       r3  3 calls  29715 ms  $0.01414
+pass  chain-file-to-kv         r3  3 calls  49960 ms  $0.01770
+pass  chain-sum-to-file        r3  3 calls  27373 ms  $0.01811
+pass  chain-kv-to-send         r3  3 calls  13045 ms  $0.01394
+pass  chain-edit-json          r3  3 calls  91702 ms  $0.01796
+pass  recall-fact              r3  4 calls  41976 ms  $0.02167
+pass  recall-preference        r3  5 calls  72280 ms  $0.02886
+pass  recall-correction        r3  5 calls  68987 ms  $0.02928
+pass  abstain-chitchat         r3  1 calls  4837 ms  $0.00715
+pass  abstain-knowledge        r3  1 calls  4468 ms  $0.00703
+pass  abstain-draft-only       r3  2 calls  10318 ms  $0.01298
+pass  abstain-cannot           r3  1 calls  9102 ms  $0.01115
+pass  recover-retry            r3  3 calls  24136 ms  $0.01944
+pass  recover-persist          r3  4 calls  30135 ms  $0.02250
+pass  recover-bad-expression   r3  2 calls  76940 ms  $0.01236
+pass  recover-missing-file     r3  2 calls  18117 ms  $0.01393
+pass  recover-unknown-order    r3  2 calls  97500 ms  $0.00977
+pass  long-log-needle          r3  3 calls  127437 ms  $0.09006
+pass  long-count-orders        r3  2 calls  54621 ms  $0.02060
+pass  long-handbook            r3  3 calls  125142 ms  $0.04844
+pass  single-kv-set            r4  2 calls  21416 ms  $0.01201
+pass  single-read-answer       r4  2 calls  13172 ms  $0.01212
+pass  single-calculator        r4  2 calls  13024 ms  $0.01195
+pass  single-now               r4  2 calls  38791 ms  $0.01029
+pass  single-send              r4  2 calls  9775 ms  $0.01270
+pass  chain-order-notify       r4  3 calls  48527 ms  $0.01423
+pass  chain-file-to-kv         r4  3 calls  57062 ms  $0.01714
+pass  chain-sum-to-file        r4  3 calls  37712 ms  $0.01975
+pass  chain-kv-to-send         r4  3 calls  16553 ms  $0.01386
+pass  chain-edit-json          r4  3 calls  11810 ms  $0.01731
+pass  recall-fact              r4  4 calls  52804 ms  $0.02508
+pass  recall-preference        r4  5 calls  86988 ms  $0.02662
+pass  recall-correction        r4  4 calls  113238 ms  $0.02131
+pass  abstain-chitchat         r4  1 calls  5137 ms  $0.00723
+pass  abstain-knowledge        r4  1 calls  4886 ms  $0.00703
+pass  abstain-draft-only       r4  1 calls  5731 ms  $0.00513
+pass  abstain-cannot           r4  1 calls  42767 ms  $0.01024
+pass  recover-retry            r4  3 calls  27423 ms  $0.01737
+FAIL  recover-persist          r4  4 calls  49009 ms  $0.02280  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: bench__write_file.path was given 2 times but takes a single value. bench__write_file.contentACTION is not a field of this tool.
+  hint: Usually the catalogue rather than the model: check that 
+pass  recover-bad-expression   r4  2 calls  36508 ms  $0.00887
+pass  recover-missing-file     r4  2 calls  9923 ms  $0.01383
+pass  recover-unknown-order    r4  2 calls  48250 ms  $0.01003
+pass  long-log-needle          r4  3 calls  48481 ms  $0.09050
+pass  long-count-orders        r4  2 calls  30435 ms  $0.04913
+pass  long-handbook            r4  3 calls  130736 ms  $0.04591
+pass  single-kv-set            r5  2 calls  11738 ms  $0.00958
+pass  single-read-answer       r5  2 calls  36839 ms  $0.00905
+pass  single-calculator        r5  2 calls  8818 ms  $0.01195
+pass  single-now               r5  3 calls  17073 ms  $0.01622
+pass  single-send              r5  2 calls  93691 ms  $0.00892
+pass  chain-order-notify       r5  3 calls  55489 ms  $0.01520
+pass  chain-file-to-kv         r5  3 calls  69570 ms  $0.01680
+pass  chain-sum-to-file        r5  5 calls  75474 ms  $0.02791
+pass  chain-kv-to-send         r5  3 calls  70781 ms  $0.01706
+pass  chain-edit-json          r5  3 calls  28610 ms  $0.01745
+pass  recall-fact              r5  4 calls  24640 ms  $0.02453
+pass  recall-preference        r5  4 calls  85041 ms  $0.02414
+pass  recall-correction        r5  4 calls  38009 ms  $0.02095
+pass  abstain-chitchat         r5  1 calls  6512 ms  $0.00713
+pass  abstain-knowledge        r5  1 calls  6926 ms  $0.00703
+pass  abstain-draft-only       r5  1 calls  3940 ms  $0.00766
+pass  abstain-cannot           r5  1 calls  5791 ms  $0.00833
+pass  recover-retry            r5  3 calls  17696 ms  $0.01683
+FAIL  recover-persist          r5  4 calls  25251 ms  $0.02290  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: the block started in the middle of a line, so it was read as prose and nothing ran.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a val
+pass  recover-bad-expression   r5  2 calls  64083 ms  $0.00878
+pass  recover-missing-file     r5  2 calls  13388 ms  $0.00980
+pass  recover-unknown-order    r5  2 calls  14866 ms  $0.00977
+pass  long-log-needle          r5  3 calls  33232 ms  $0.09039
+pass  long-count-orders        r5  2 calls  21136 ms  $0.02059
+pass  long-handbook            r5  3 calls  67912 ms  $0.04898
+dispach-nlt · gemini-4-argon: 118/125 passed → evals/harness/runs/sweep-4f3e00a/nlt.gemini-4-argon.jsonl

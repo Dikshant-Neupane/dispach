@@ -29,6 +29,8 @@ export interface Arm {
     readonly provider?: string
     readonly overall: Rate
     readonly errored: number
+    /** Rows still rate-limited after every retry: left out of every rate, since they measure the provider. */
+    readonly throttled: number
     readonly retries: number
     readonly cost: number
     readonly promptTokens: number
@@ -61,36 +63,54 @@ function rateBy(rows: readonly RunRow[], key: (row: RunRow) => string): Record<s
 export function summarise(arm: string, rows: readonly RunRow[]): Arm {
     const first = rows[0]
     if (first === undefined) throw new Error(`${arm} has no rows.\n  hint: did run.ts finish?`)
+    // Cost and tokens count every row, since they were spent; rates count only what was measured.
     const sum = (f: (r: RunRow) => number) => rows.reduce((t, r) => t + f(r), 0)
-    const walls = rows.map((r) => r.wallMs).sort((a, b) => a - b)
+    const scored = rows.filter((r) => r.throttled !== true)
+    const walls = scored.map((r) => r.wallMs).sort((a, b) => a - b)
     return {
         arm,
         harness: first.harness,
         model: first.model,
         ...(first.provider === undefined ? {} : { provider: first.provider }),
-        overall: wilson(rows.filter((r) => r.pass).length, rows.length),
-        errored: rows.filter((r) => r.errored).length,
+        overall: wilson(scored.filter((r) => r.pass).length, scored.length),
+        errored: scored.filter((r) => r.errored).length,
+        throttled: rows.length - scored.length,
         retries: sum((r) => r.retries),
         cost: Number(sum((r) => r.cost).toFixed(4)),
         promptTokens: sum((r) => r.promptTokens),
         completionTokens: sum((r) => r.completionTokens),
         medianWallMs: walls[Math.floor(walls.length / 2)] ?? 0,
-        categories: rateBy(rows, (r) => r.category),
-        tasks: rateBy(rows, (r) => r.task),
+        categories: rateBy(scored, (r) => r.category),
+        tasks: rateBy(scored, (r) => r.task),
     }
 }
 
+/**
+ * The arm a results file belongs to: a slow model's repeats run as `<arm>.r<n>.jsonl` shards and are one
+ * arm. `undefined` for the raw request log and for the originals a throttled re-run replaced.
+ */
+export function armOf(name: string): string | undefined {
+    if (!name.endsWith(".jsonl") || /\.(raw|throttled-orig)\.jsonl$/.test(name)) return undefined
+    return basename(name, ".jsonl").replace(/\.r\d+$/, "")
+}
+
 export function load(dir: string): Arm[] {
-    return readdirSync(dir)
-        .filter((name) => name.endsWith(".jsonl") && !name.endsWith(".raw.jsonl"))
-        .sort()
-        .map((name) => {
-            const rows = readFileSync(join(dir, name), "utf8")
-                .split("\n")
-                .filter((line) => line.trim() !== "")
-                .map((line) => JSON.parse(line) as RunRow)
-            return summarise(basename(name, ".jsonl"), rows)
-        })
+    const files = new Map<string, string[]>()
+    for (const name of readdirSync(dir).sort()) {
+        const arm = armOf(name)
+        if (arm !== undefined) files.set(arm, [...(files.get(arm) ?? []), name])
+    }
+    return [...files].map(([arm, names]) =>
+        summarise(
+            arm,
+            names.flatMap((name) =>
+                readFileSync(join(dir, name), "utf8")
+                    .split("\n")
+                    .filter((line) => line.trim() !== "")
+                    .map((line) => JSON.parse(line) as RunRow),
+            ),
+        ),
+    )
 }
 
 /** Percentage points, `after − before`, for every key the two share. */

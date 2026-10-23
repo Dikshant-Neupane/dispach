@@ -1,0 +1,26 @@
+pass  single-kv-set            r2  3 calls  51586 ms  $0.00082
+pass  single-read-answer       r2  3 calls  13028 ms  $0.00079
+FAIL  single-calculator        r2  2 calls  15259 ms  $0.00079  — wrong product
+FAIL  single-now               r2  2 calls  9620 ms  $0.00077  (1 429 retries)  — wrong weekday
+FAIL  single-send              r2  2 calls  26876 ms  $0.00079  (3 429 retries)  — empty reply
+FAIL  chain-order-notify       r2  2 calls  32636 ms  $0.00081  — Sam not told it is delayed
+pass  chain-file-to-kv         r2  9 calls  47710 ms  $0.00197  (1 429 retries)
+pass  chain-sum-to-file        r2  6 calls  90772 ms  $0.00260
+pass  chain-kv-to-send         r2  3 calls  77441 ms  $0.00125
+FAIL  chain-edit-json          r2  1 calls  61563 ms  $0.00046  — darkMode not true
+pass  recall-fact              r2  6 calls  52997 ms  $0.00163  (1 429 retries)
+pass  recall-preference        r2  5 calls  33731 ms  $0.00159
+pass  recall-correction        r2  4 calls  37447 ms  $0.00159
+pass  abstain-chitchat         r2  1 calls  11757 ms  $0.00039
+pass  abstain-knowledge        r2  1 calls  7105 ms  $0.00038
+pass  abstain-draft-only       r2  1 calls  25850 ms  $0.00041
+pass  abstain-cannot           r2  1 calls  57090 ms  $0.00045
+FAIL  recover-retry            r2  2 calls  24650 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r2  1 calls  38990 ms  $0.00042  (1 429 retries)  — file never written
+pass  recover-bad-expression   r2  2 calls  19515 ms  $0.00078
+pass  recover-missing-file     r2  3 calls  33140 ms  $0.00122
+pass  recover-unknown-order    r2  2 calls  24325 ms  $0.00080
+FAIL  long-log-needle          r2  7 calls  280941 ms  $0.00720  — error code not stored
+FAIL  long-count-orders        r2  4 calls  394321 ms  $0.00417  — count is not 58
+FAIL  long-handbook            r2  4 calls  117982 ms  $0.00262  — meal_limit is not 75
+dispach-native · qwen3.5-9b: 15/25 passed → evals/harness/runs/ab-not-enabled-small/as-is/native.qwen3.5-9b.r2.jsonl

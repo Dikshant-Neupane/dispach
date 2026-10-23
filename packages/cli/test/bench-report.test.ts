@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { summarise, wilson } from "../../../scripts/bench/report.ts"
+import { armOf, summarise, wilson } from "../../../scripts/bench/report.ts"
 import type { RunRow } from "../../../scripts/bench/run.ts"
 
 const row = (task: string, pass: boolean, errored = false): RunRow => ({
@@ -40,5 +40,25 @@ describe("bench report", () => {
         expect(arm.overall.rate).toBe(0.5)
         expect(arm.errored).toBe(1)
         expect(arm.categories.single?.n).toBe(2)
+    })
+
+    test("a throttled row is counted apart and never scored", () => {
+        const arm = summarise("x", [
+            row("single-a", true),
+            { ...row("single-a", false), throttled: true },
+        ])
+        expect(arm.overall).toMatchObject({ pass: 1, n: 1 })
+        expect(arm.throttled).toBe(1)
+        expect(arm.tasks["single-a"]?.n).toBe(1)
+        // It was still paid for.
+        expect(arm.cost).toBe(0.002)
+    })
+
+    test("shards are one arm; the raw log and replaced originals are no arm", () => {
+        expect(armOf("nlt.qwen3.5-9b.r3.jsonl")).toBe("nlt.qwen3.5-9b")
+        expect(armOf("native.glm-5.3.jsonl")).toBe("native.glm-5.3")
+        expect(armOf("native.glm-5.3.raw.jsonl")).toBeUndefined()
+        expect(armOf("native.gemma4-26b-a4b.throttled-orig.jsonl")).toBeUndefined()
+        expect(armOf("results.json")).toBeUndefined()
     })
 })

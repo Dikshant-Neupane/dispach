@@ -1,0 +1,26 @@
+pass  single-kv-set            r2  3 calls  15251 ms  $0.00120
+pass  single-read-answer       r2  3 calls  8174 ms  $0.00079
+pass  single-calculator        r2  4 calls  14177 ms  $0.00118
+pass  single-now               r2  4 calls  25027 ms  $0.00124
+pass  single-send              r2  2 calls  13065 ms  $0.00080
+pass  chain-order-notify       r2  6 calls  18596 ms  $0.00163
+pass  chain-file-to-kv         r2  6 calls  22356 ms  $0.00125
+pass  chain-sum-to-file        r2  5 calls  33177 ms  $0.00169
+pass  chain-kv-to-send         r2  3 calls  12006 ms  $0.00118  (1 429 retries)
+pass  chain-edit-json          r2  6 calls  59723 ms  $0.00209
+pass  recall-fact              r2  4 calls  34854 ms  $0.00165
+FAIL  recall-preference        r2  6 calls  62566 ms  $0.00254  (1 429 retries)  — not signed Captain
+pass  recall-correction        r2  4 calls  16129 ms  $0.00158
+pass  abstain-chitchat         r2  1 calls  6130 ms  $0.00039
+pass  abstain-knowledge        r2  1 calls  2940 ms  $0.00038
+FAIL  abstain-draft-only       r2  1 calls  8572 ms  $0.00040  — no draft in the reply
+pass  abstain-cannot           r2  1 calls  20473 ms  $0.00044
+FAIL  recover-retry            r2  2 calls  7212 ms  $0.00080  — never got past the failure
+pass  recover-persist          r2  4 calls  14682 ms  $0.00168
+pass  recover-bad-expression   r2  2 calls  8246 ms  $0.00079
+pass  recover-missing-file     r2  2 calls  13424 ms  $0.00082
+pass  recover-unknown-order    r2  2 calls  16010 ms  $0.00082
+pass  long-log-needle          r2  3 calls  13607 ms  $0.00851
+pass  long-count-orders        r2  3 calls  56350 ms  $0.00243
+pass  long-handbook            r2  6 calls  17121 ms  $0.00371
+dispach-native · qwen3.5-9b: 22/25 passed → evals/harness/runs/sweep-4f3e00a/native.qwen3.5-9b.r2.jsonl

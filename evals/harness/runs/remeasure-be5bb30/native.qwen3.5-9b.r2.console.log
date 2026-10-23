@@ -1,0 +1,26 @@
+FAIL  single-kv-set            r2  2 calls  54934 ms  $0.00082  — locker_code not stored as 4417
+pass  single-read-answer       r2  2 calls  31468 ms  $0.00080
+pass  single-calculator        r2  2 calls  16467 ms  $0.00078
+pass  single-now               r2  4 calls  222906 ms  $0.00180
+pass  single-send              r2  2 calls  19249 ms  $0.00080
+pass  chain-order-notify       r2  3 calls  27935 ms  $0.00121
+pass  chain-file-to-kv         r2  3 calls  36028 ms  $0.00122
+pass  chain-sum-to-file        r2  5 calls  90843 ms  $0.00211
+FAIL  chain-kv-to-send         r2  2 calls  32648 ms  $0.00080  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  1 calls  51737 ms  $0.00044  — darkMode not true
+pass  recall-fact              r2  6 calls  59281 ms  $0.00243
+pass  recall-preference        r2  6 calls  81520 ms  $0.00250
+pass  recall-correction        r2  8 calls  55461 ms  $0.00159
+pass  abstain-chitchat         r2  1 calls  16644 ms  $0.00040  (2 429 retries)
+pass  abstain-knowledge        r2  1 calls  9023 ms  $0.00039
+pass  abstain-draft-only       r2  1 calls  31380 ms  $0.00042
+pass  abstain-cannot           r2  1 calls  50093 ms  $0.00043
+FAIL  recover-retry            r2  2 calls  24273 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r2  2 calls  69375 ms  $0.00085  (2 429 retries)  — file never written
+pass  recover-bad-expression   r2  3 calls  30661 ms  $0.00118
+pass  recover-missing-file     r2  2 calls  28801 ms  $0.00080
+pass  recover-unknown-order    r2  2 calls  50355 ms  $0.00083
+pass  long-log-needle          r2  3 calls  45165 ms  $0.00708
+FAIL  long-count-orders        r2  2 calls  58510 ms  $0.00231  — count is not 58
+pass  long-handbook            r2  3 calls  41726 ms  $0.00371
+dispach-native · qwen3.5-9b: 19/25 passed → evals/harness/runs/remeasure-be5bb30/native.qwen3.5-9b.r2.jsonl

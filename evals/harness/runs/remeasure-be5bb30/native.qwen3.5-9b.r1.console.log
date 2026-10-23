@@ -1,0 +1,26 @@
+pass  single-kv-set            r1  2 calls  29395 ms  $0.00080
+pass  single-read-answer       r1  3 calls  46463 ms  $0.00124
+pass  single-calculator        r1  3 calls  21587 ms  $0.00117
+FAIL  single-now               r1  3 calls  73165 ms  $0.00123  — wrong weekday
+pass  single-send              r1  2 calls  15213 ms  $0.00078
+FAIL  chain-order-notify       r1  2 calls  17567 ms  $0.00080  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r1  1 calls  58323 ms  $0.00045  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r1  1 calls  76535 ms  $0.00047  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r1  2 calls  19057 ms  $0.00078  — Dmitri not sent the alert
+pass  chain-edit-json          r1  6 calls  71053 ms  $0.00208
+pass  recall-fact              r1  5 calls  46819 ms  $0.00202
+FAIL  recall-preference        r1  6 calls  93321 ms  $0.00248  — not signed Captain
+pass  recall-correction        r1  5 calls  56389 ms  $0.00202
+pass  abstain-chitchat         r1  1 calls  21838 ms  $0.00040
+pass  abstain-knowledge        r1  1 calls  6617 ms  $0.00038
+pass  abstain-draft-only       r1  1 calls  20957 ms  $0.00042
+pass  abstain-cannot           r1  1 calls  35596 ms  $0.00042
+FAIL  recover-retry            r1  2 calls  26635 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r1  2 calls  65200 ms  $0.00084  — file never written
+pass  recover-bad-expression   r1  3 calls  38294 ms  $0.00120
+pass  recover-missing-file     r1  2 calls  25498 ms  $0.00080
+pass  recover-unknown-order    r1  2 calls  36876 ms  $0.00082
+pass  long-log-needle          r1  3 calls  68609 ms  $0.00709
+pass  long-count-orders        r1  3 calls  194040 ms  $0.00433  (3 429 retries)
+FAIL  long-handbook            r1  2 calls  34344 ms  $0.00205  — meal_limit is not 75
+dispach-native · qwen3.5-9b: 16/25 passed → evals/harness/runs/remeasure-be5bb30/native.qwen3.5-9b.r1.jsonl

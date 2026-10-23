@@ -1,0 +1,24 @@
+pass  single-kv-set            r5  2 calls  31178 ms  $0.00070
+pass  single-read-answer       r5  2 calls  428626 ms  $0.00113
+pass  single-calculator        r5  3 calls  57911 ms  $0.00072
+pass  single-now               r5  3 calls  97218 ms  $0.00113
+pass  single-send              r5  2 calls  30272 ms  $0.00070
+pass  chain-order-notify       r5  3 calls  53264 ms  $0.00108  (1 429 retries)
+FAIL  chain-file-to-kv         r5  2 calls  900074 ms  $0.00000  (3 429 retries)  — harness error: 
+FAIL  chain-sum-to-file        r5  3 calls  3092 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:49984/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  chain-kv-to-send         r5  2 calls  149422 ms  $0.00082  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  3 calls  4385 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:49984/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  recall-fact              r5  6 calls  407418 ms  $0.00203  (2 429 retries)
+pass  recall-preference        r5  3 calls  61673 ms  $0.00110
+pass  recall-correction        r5  4 calls  71622 ms  $0.00146
+pass  abstain-chitchat         r5  1 calls  290979 ms  $0.00084
+pass  abstain-knowledge        r5  1 calls  5776 ms  $0.00034
+pass  abstain-draft-only       r5  1 calls  13452 ms  $0.00035
+pass  abstain-cannot           r5  1 calls  30785 ms  $0.00040
+FAIL  recover-retry            r5  1 calls  17655 ms  $0.00036  — never got past the failure
+pass  recover-persist          r5  6 calls  300964 ms  $0.00203
+pass  recover-bad-expression   r5  2 calls  19672 ms  $0.00071
+pass  recover-missing-file     r5  2 calls  14941 ms  $0.00073
+pass  recover-unknown-order    r5  2 calls  14857 ms  $0.00073
+pass  long-log-needle          r5  5 calls  25009 ms  $0.00696
+pass  long-count-orders        r5  6 calls  68014 ms  $0.00238

@@ -1,0 +1,130 @@
+note: dispach-native — the registry does not know openai/gpt-oss-20b; init's agent did not load, so its window (131072) and native tool support (true) were set from deepinfra/bf16's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  3267 ms  $0.00020
+pass  single-read-answer       r1  2 calls  3743 ms  $0.00022
+pass  single-calculator        r1  2 calls  2665 ms  $0.00020
+pass  single-now               r1  2 calls  6055 ms  $0.00027
+pass  single-send              r1  2 calls  5345 ms  $0.00023
+pass  chain-order-notify       r1  3 calls  10065 ms  $0.00041
+pass  chain-file-to-kv         r1  3 calls  7021 ms  $0.00034
+FAIL  chain-sum-to-file        r1  2 calls  5474 ms  $0.00026  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r1  3 calls  5913 ms  $0.00034
+FAIL  chain-edit-json          r1  1 calls  5241 ms  $0.00017  — darkMode not true
+FAIL  recall-fact              r1  2 calls  6049 ms  $0.00026  — flight not stored as BA 286
+pass  recall-preference        r1  3 calls  8140 ms  $0.00038
+pass  recall-correction        r1  4 calls  6936 ms  $0.00042
+pass  abstain-chitchat         r1  1 calls  1266 ms  $0.00010
+pass  abstain-knowledge        r1  1 calls  1744 ms  $0.00010
+pass  abstain-draft-only       r1  1 calls  2380 ms  $0.00012
+pass  abstain-cannot           r1  1 calls  4074 ms  $0.00014
+pass  recover-retry            r1  3 calls  4463 ms  $0.00032
+FAIL  recover-persist          r1  1 calls  5231 ms  $0.00017  — file never written
+pass  recover-bad-expression   r1  2 calls  3467 ms  $0.00021
+pass  recover-missing-file     r1  2 calls  6199 ms  $0.00027
+pass  recover-unknown-order    r1  2 calls  6291 ms  $0.00027
+FAIL  long-log-needle          r1  2 calls  6357 ms  $0.00057  — error code not stored
+FAIL  long-count-orders        r1  4 calls  10642 ms  $0.00160  — count is not 58
+FAIL  long-handbook            r1  2 calls  6213 ms  $0.00046  — meal_limit is not 75
+pass  single-kv-set            r2  2 calls  6829 ms  $0.00027
+pass  single-read-answer       r2  2 calls  2942 ms  $0.00020
+FAIL  single-calculator        r2  2 calls  3340 ms  $0.00021  — wrong product
+pass  single-now               r2  2 calls  8519 ms  $0.00030
+pass  single-send              r2  2 calls  4705 ms  $0.00023
+FAIL  chain-order-notify       r2  1 calls  3123 ms  $0.00013  — order never looked up
+FAIL  chain-file-to-kv         r2  1 calls  1580 ms  $0.00010  — region not stored as eu-west-2
+pass  chain-sum-to-file        r2  3 calls  6227 ms  $0.00034
+pass  chain-kv-to-send         r2  3 calls  5975 ms  $0.00034
+pass  chain-edit-json          r2  3 calls  7912 ms  $0.00038
+pass  recall-fact              r2  3 calls  5368 ms  $0.00032
+pass  recall-preference        r2  3 calls  4635 ms  $0.00031
+pass  recall-correction        r2  4 calls  6465 ms  $0.00043
+pass  abstain-chitchat         r2  1 calls  2026 ms  $0.00011
+pass  abstain-knowledge        r2  1 calls  2096 ms  $0.00011
+pass  abstain-draft-only       r2  1 calls  2241 ms  $0.00011
+pass  abstain-cannot           r2  1 calls  4903 ms  $0.00015
+pass  recover-retry            r2  3 calls  4573 ms  $0.00032
+FAIL  recover-persist          r2  2 calls  4615 ms  $0.00024  — file never written
+pass  recover-bad-expression   r2  2 calls  3098 ms  $0.00020
+pass  recover-missing-file     r2  2 calls  4102 ms  $0.00022
+FAIL  recover-unknown-order    r2  1 calls  4171 ms  $0.00015  — never looked the order up
+FAIL  long-log-needle          r2  3 calls  6620 ms  $0.00097  — error code not stored
+FAIL  long-count-orders        r2  2 calls  7923 ms  $0.00062  — count is not 58
+FAIL  long-handbook            r2  3 calls  7426 ms  $0.00092  — meal_limit is not 75
+pass  single-kv-set            r3  2 calls  3008 ms  $0.00020
+pass  single-read-answer       r3  2 calls  4047 ms  $0.00022
+pass  single-calculator        r3  2 calls  4695 ms  $0.00022
+pass  single-now               r3  2 calls  6230 ms  $0.00026
+pass  single-send              r3  2 calls  6975 ms  $0.00026
+FAIL  chain-order-notify       r3  2 calls  5986 ms  $0.00026  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  6783 ms  $0.00035
+pass  chain-sum-to-file        r3  3 calls  6939 ms  $0.00037
+pass  chain-kv-to-send         r3  3 calls  9048 ms  $0.00037
+FAIL  chain-edit-json          r3  2 calls  3519 ms  $0.00022  — darkMode not true
+pass  recall-fact              r3  3 calls  6703 ms  $0.00033
+pass  recall-preference        r3  3 calls  6821 ms  $0.00034
+pass  recall-correction        r3  4 calls  6250 ms  $0.00042
+pass  abstain-chitchat         r3  1 calls  1580 ms  $0.00010
+pass  abstain-knowledge        r3  1 calls  1856 ms  $0.00011
+FAIL  abstain-draft-only       r3  1 calls  2298 ms  $0.00012  — no draft in the reply
+pass  abstain-cannot           r3  1 calls  6995 ms  $0.00019
+pass  recover-retry            r3  3 calls  5476 ms  $0.00034
+FAIL  recover-persist          r3  3 calls  6189 ms  $0.00034  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r3  2 calls  3856 ms  $0.00022
+pass  recover-missing-file     r3  2 calls  4190 ms  $0.00022
+pass  recover-unknown-order    r3  2 calls  5372 ms  $0.00024
+FAIL  long-log-needle          r3  3 calls  8916 ms  $0.00132  — error code not stored
+FAIL  long-count-orders        r3  1 calls  2332 ms  $0.00012  — file never read
+FAIL  long-handbook            r3  2 calls  4838 ms  $0.00043  — meal_limit is not 75
+pass  single-kv-set            r4  2 calls  2624 ms  $0.00020
+pass  single-read-answer       r4  2 calls  3774 ms  $0.00022
+pass  single-calculator        r4  2 calls  3213 ms  $0.00020
+pass  single-now               r4  2 calls  28256 ms  $0.00069
+pass  single-send              r4  2 calls  6558 ms  $0.00027
+pass  chain-order-notify       r4  3 calls  8952 ms  $0.00040
+pass  chain-file-to-kv         r4  3 calls  6590 ms  $0.00034
+pass  chain-sum-to-file        r4  3 calls  6586 ms  $0.00037
+FAIL  chain-kv-to-send         r4  2 calls  6909 ms  $0.00028  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  1 calls  5112 ms  $0.00016  — darkMode not true
+pass  recall-fact              r4  4 calls  7499 ms  $0.00044
+pass  recall-preference        r4  3 calls  5767 ms  $0.00033
+pass  recall-correction        r4  4 calls  7146 ms  $0.00043
+pass  abstain-chitchat         r4  1 calls  2512 ms  $0.00012
+pass  abstain-knowledge        r4  1 calls  1493 ms  $0.00010
+pass  abstain-draft-only       r4  1 calls  2540 ms  $0.00012
+pass  abstain-cannot           r4  1 calls  5202 ms  $0.00015
+pass  recover-retry            r4  3 calls  5669 ms  $0.00033
+FAIL  recover-persist          r4  3 calls  7221 ms  $0.00038  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r4  2 calls  2686 ms  $0.00020
+pass  recover-missing-file     r4  2 calls  5112 ms  $0.00024
+pass  recover-unknown-order    r4  2 calls  5199 ms  $0.00025
+FAIL  long-log-needle          r4  3 calls  9549 ms  $0.00101  — error code not stored
+FAIL  long-count-orders        r4  2 calls  14014 ms  $0.00074  — count is not 58
+FAIL  long-handbook            r4  7 calls  24976 ms  $0.00356  — harness error: · The model called bench__read_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — 
+pass  single-kv-set            r5  2 calls  2923 ms  $0.00020
+pass  single-read-answer       r5  2 calls  2561 ms  $0.00020
+pass  single-calculator        r5  2 calls  2737 ms  $0.00020
+pass  single-now               r5  2 calls  6436 ms  $0.00026
+pass  single-send              r5  2 calls  4931 ms  $0.00023
+FAIL  chain-order-notify       r5  2 calls  3726 ms  $0.00021  — Sam not told it is delayed
+pass  chain-file-to-kv         r5  3 calls  4461 ms  $0.00031
+pass  chain-sum-to-file        r5  3 calls  7480 ms  $0.00036
+pass  chain-kv-to-send         r5  3 calls  10553 ms  $0.00041
+FAIL  chain-edit-json          r5  1 calls  7155 ms  $0.00021  — darkMode not true
+pass  recall-fact              r5  3 calls  8281 ms  $0.00038
+pass  recall-preference        r5  3 calls  5547 ms  $0.00032
+pass  recall-correction        r5  4 calls  5626 ms  $0.00040
+pass  abstain-chitchat         r5  1 calls  1467 ms  $0.00010
+pass  abstain-knowledge        r5  1 calls  1539 ms  $0.00010
+FAIL  abstain-draft-only       r5  1 calls  1624 ms  $0.00010  — no draft in the reply
+pass  abstain-cannot           r5  1 calls  6479 ms  $0.00016
+pass  recover-retry            r5  3 calls  5069 ms  $0.00033
+FAIL  recover-persist          r5  1 calls  3047 ms  $0.00012  — file never written
+pass  recover-bad-expression   r5  2 calls  3577 ms  $0.00021
+pass  recover-missing-file     r5  2 calls  3906 ms  $0.00022
+pass  recover-unknown-order    r5  2 calls  8139 ms  $0.00029
+FAIL  long-log-needle          r5  1 calls  2589 ms  $0.00012  — error code not stored
+FAIL  long-count-orders        r5  2 calls  6463 ms  $0.00058  — count is not 58
+FAIL  long-handbook            r5  3 calls  11456 ms  $0.00103  — meal_limit is not 75
+dispach-native · gpt-oss-20b: 90/125 passed → evals/harness/runs/ab-not-enabled-small/as-is/native.gpt-oss-20b.jsonl
