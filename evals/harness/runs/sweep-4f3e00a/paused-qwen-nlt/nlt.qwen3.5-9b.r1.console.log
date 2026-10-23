@@ -1,0 +1,14 @@
+FAIL  single-kv-set            r1  1 calls  25930 ms  $0.00040  — locker_code not stored as 4417
+pass  single-read-answer       r1  2 calls  11060 ms  $0.00070
+pass  single-calculator        r1  3 calls  20634 ms  $0.00071
+pass  single-now               r1  2 calls  36069 ms  $0.00080
+pass  single-send              r1  2 calls  17599 ms  $0.00072
+pass  chain-order-notify       r1  4 calls  241932 ms  $0.00191
+pass  chain-file-to-kv         r1  3 calls  24088 ms  $0.00108
+pass  chain-sum-to-file        r1  4 calls  313901 ms  $0.00244
+pass  chain-kv-to-send         r1  3 calls  34833 ms  $0.00115
+pass  chain-edit-json          r1  6 calls  25402 ms  $0.00111
+pass  recall-fact              r1  5 calls  344040 ms  $0.00252
+pass  recall-preference        r1  6 calls  90352 ms  $0.00155  (2 429 retries)
+pass  abstain-chitchat         r1  1 calls  406300 ms  $0.00107
+pass  abstain-knowledge        r1  1 calls  9817 ms  $0.00034

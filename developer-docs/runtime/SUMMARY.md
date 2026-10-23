@@ -2,6 +2,7 @@
 
 - [Overview](README.md)
 - [Stable and pre-releases](releases.md)
+- [Benchmarks](benchmarks.md)
 - Quickstart
   - [Run with Docker](quickstart/run-with-docker.md)
   - [Create an agent](quickstart/create-an-agent.md)

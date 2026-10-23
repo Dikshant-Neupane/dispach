@@ -1,0 +1,529 @@
+{
+    "generatedBy": "scripts/bench/summary.ts",
+    "tasks": 25,
+    "repeats": 5,
+    "sweep": {
+        "dir": "sweep-4f3e00a",
+        "commit": "4f3e00a",
+        "harness": "Dispach"
+    },
+    "rivals": {
+        "hermes": {
+            "name": "Hermes",
+            "version": "0.19.0"
+        },
+        "openclaw": {
+            "name": "OpenClaw",
+            "version": "2026.10.5"
+        }
+    },
+    "models": [
+        {
+            "key": "opus-5.5",
+            "name": "Claude Opus 5.5",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 2.0485,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 2.5809,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 119,
+                "n": 125,
+                "rate": 0.952,
+                "low": 0.8992,
+                "high": 0.9778,
+                "cost": 2.2399,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 105,
+                "n": 125,
+                "rate": 0.84,
+                "low": 0.7658,
+                "high": 0.894,
+                "cost": 7.1018,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "sonnet-5.5",
+            "name": "Claude Sonnet 5.5",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 0.7972,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 124,
+                "n": 125,
+                "rate": 0.992,
+                "low": 0.9561,
+                "high": 0.9986,
+                "cost": 1.9537,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 120,
+                "n": 125,
+                "rate": 0.96,
+                "low": 0.9098,
+                "high": 0.9828,
+                "cost": 1.7635,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 105,
+                "n": 125,
+                "rate": 0.84,
+                "low": 0.7658,
+                "high": 0.894,
+                "cost": 4.2064,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "haiku-5.5",
+            "name": "Claude Haiku 5.5",
+            "native": {
+                "pass": 124,
+                "n": 125,
+                "rate": 0.992,
+                "low": 0.9561,
+                "high": 0.9986,
+                "cost": 0.0596,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 124,
+                "n": 125,
+                "rate": 0.992,
+                "low": 0.9561,
+                "high": 0.9986,
+                "cost": 0.0745,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 120,
+                "n": 125,
+                "rate": 0.96,
+                "low": 0.9098,
+                "high": 0.9828,
+                "cost": 0.0686,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 102,
+                "n": 125,
+                "rate": 0.816,
+                "low": 0.739,
+                "high": 0.8741,
+                "cost": 0.2081,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "gpt-6.1-sol",
+            "name": "GPT-6.1 Sol",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 0.5439,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 0.8442,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 120,
+                "n": 125,
+                "rate": 0.96,
+                "low": 0.9098,
+                "high": 0.9828,
+                "cost": 0.5262,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 95,
+                "n": 125,
+                "rate": 0.76,
+                "low": 0.6781,
+                "high": 0.8264,
+                "cost": 1.7341,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "gpt-6-luna",
+            "name": "GPT-6 Luna",
+            "native": {
+                "pass": 114,
+                "n": 125,
+                "rate": 0.912,
+                "low": 0.8493,
+                "high": 0.9502,
+                "cost": 0.0463,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 85,
+                "n": 125,
+                "rate": 0.68,
+                "low": 0.5939,
+                "high": 0.7554,
+                "cost": 0.0459,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "gemini-4-argon",
+            "name": "Gemini 4 Argon",
+            "native": {
+                "pass": 119,
+                "n": 125,
+                "rate": 0.952,
+                "low": 0.8992,
+                "high": 0.9778,
+                "cost": 2.2857,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 118,
+                "n": 125,
+                "rate": 0.944,
+                "low": 0.8889,
+                "high": 0.9726,
+                "cost": 2.4809,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 123,
+                "n": 125,
+                "rate": 0.984,
+                "low": 0.9435,
+                "high": 0.9956,
+                "cost": 2.7896,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 108,
+                "n": 125,
+                "rate": 0.864,
+                "low": 0.793,
+                "high": 0.9133,
+                "cost": 5.4695,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "gemini-3.8-flash",
+            "name": "Gemini 3.8 Flash",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 1.383,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 119,
+                "n": 125,
+                "rate": 0.952,
+                "low": 0.8992,
+                "high": 0.9778,
+                "cost": 1.8226,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "grok-4.7",
+            "name": "Grok 4.7",
+            "native": {
+                "pass": 124,
+                "n": 125,
+                "rate": 0.992,
+                "low": 0.9561,
+                "high": 0.9986,
+                "cost": 1.5309,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 62,
+                "n": 125,
+                "rate": 0.496,
+                "low": 0.4098,
+                "high": 0.5825,
+                "cost": 1.1165,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "glm-5.3",
+            "name": "GLM 5.3",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 0.7993,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 119,
+                "n": 125,
+                "rate": 0.952,
+                "low": 0.8992,
+                "high": 0.9778,
+                "cost": 1.0769,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 123,
+                "n": 125,
+                "rate": 0.984,
+                "low": 0.9435,
+                "high": 0.9956,
+                "cost": 1.1844,
+                "measured": "2026-10-22"
+            },
+            "openclaw": {
+                "pass": 98,
+                "n": 125,
+                "rate": 0.784,
+                "low": 0.704,
+                "high": 0.8471,
+                "cost": 4.8562,
+                "measured": "2026-10-22"
+            }
+        },
+        {
+            "key": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "native": {
+                "pass": 125,
+                "n": 125,
+                "rate": 1,
+                "low": 0.9702,
+                "high": 1,
+                "cost": 0.3115,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 124,
+                "n": 125,
+                "rate": 0.992,
+                "low": 0.9561,
+                "high": 0.9986,
+                "cost": 0.2533,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 120,
+                "n": 125,
+                "rate": 0.96,
+                "low": 0.9098,
+                "high": 0.9828,
+                "cost": 0.5033,
+                "measured": "2026-10-23"
+            },
+            "openclaw": {
+                "pass": 96,
+                "n": 125,
+                "rate": 0.768,
+                "low": 0.6867,
+                "high": 0.8333,
+                "cost": 2.8347,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "kimi-k3",
+            "name": "Kimi K3",
+            "native": {
+                "pass": 115,
+                "n": 125,
+                "rate": 0.92,
+                "low": 0.859,
+                "high": 0.956,
+                "cost": 2.2448,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 71,
+                "n": 125,
+                "rate": 0.568,
+                "low": 0.4804,
+                "high": 0.6515,
+                "cost": 1.2426,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 115,
+                "n": 125,
+                "rate": 0.92,
+                "low": 0.859,
+                "high": 0.956,
+                "cost": 2.3637,
+                "measured": "2026-10-23"
+            },
+            "openclaw": {
+                "pass": 98,
+                "n": 125,
+                "rate": 0.784,
+                "low": 0.704,
+                "high": 0.8471,
+                "cost": 10.2697,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "gemma4-26b-a4b",
+            "name": "Gemma 4 26B-A4B",
+            "native": {
+                "pass": 112,
+                "n": 125,
+                "rate": 0.896,
+                "low": 0.8302,
+                "high": 0.9382,
+                "cost": 0.2351,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 75,
+                "n": 125,
+                "rate": 0.6,
+                "low": 0.5124,
+                "high": 0.6817,
+                "cost": 0.1701,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 108,
+                "n": 125,
+                "rate": 0.864,
+                "low": 0.793,
+                "high": 0.9133,
+                "cost": 0.4103,
+                "measured": "2026-10-23"
+            },
+            "openclaw": {
+                "pass": 91,
+                "n": 125,
+                "rate": 0.728,
+                "low": 0.6441,
+                "high": 0.7983,
+                "cost": 2.9536,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "qwen3.5-9b",
+            "name": "qwen3.5-9b",
+            "native": {
+                "pass": 104,
+                "n": 125,
+                "rate": 0.832,
+                "low": 0.7568,
+                "high": 0.8874,
+                "cost": 0.1828,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 45,
+                "n": 52,
+                "rate": 0.8654,
+                "low": 0.7473,
+                "high": 0.9332,
+                "cost": 0.0582,
+                "measured": "2026-10-23",
+                "paused": true
+            },
+            "hermes": {
+                "pass": 112,
+                "n": 125,
+                "rate": 0.896,
+                "low": 0.8302,
+                "high": 0.9382,
+                "cost": 0.4167,
+                "measured": "2026-10-23"
+            },
+            "openclaw": {
+                "pass": 60,
+                "n": 125,
+                "rate": 0.48,
+                "low": 0.3943,
+                "high": 0.5669,
+                "cost": 0.7795,
+                "measured": "2026-10-23"
+            }
+        },
+        {
+            "key": "gpt-oss-20b",
+            "name": "gpt-oss-20b",
+            "native": {
+                "pass": 97,
+                "n": 125,
+                "rate": 0.776,
+                "low": 0.6953,
+                "high": 0.8402,
+                "cost": 0.0461,
+                "measured": "2026-10-23"
+            },
+            "nlt": {
+                "pass": 89,
+                "n": 125,
+                "rate": 0.712,
+                "low": 0.6272,
+                "high": 0.7841,
+                "cost": 0.04,
+                "measured": "2026-10-23"
+            },
+            "hermes": {
+                "pass": 111,
+                "n": 125,
+                "rate": 0.888,
+                "low": 0.8208,
+                "high": 0.9321,
+                "cost": 0.0982,
+                "measured": "2026-10-23"
+            },
+            "openclaw": {
+                "pass": 51,
+                "n": 125,
+                "rate": 0.408,
+                "low": 0.3258,
+                "high": 0.4957,
+                "cost": 0.122,
+                "measured": "2026-10-23"
+            }
+        }
+    ]
+}

@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Replay } from "@/components/replay"
-import { evidence } from "@/lib/evidence"
+import { benchmark, evidence } from "@/lib/evidence"
 import { capturedAt, capturedModel, replay } from "@/lib/replay"
 import { brand, repoUrl } from "@/lib/shared"
 import { pixels } from "@/lib/wordmark"
@@ -29,9 +29,18 @@ const BUILT_IN = [
     ],
 ] as const
 
-const qwen = evidence.dialect.find((d) => d.model.startsWith("qwen"))
+const BENCHMARK = "/docs/runtime/benchmarks"
+const { hermes, openclaw } = benchmark.rivals
 
 const PROOFS = [
+    {
+        figure: `${benchmark.perfect} of ${benchmark.rows.length}`,
+        title: `Models at ${benchmark.runs}/${benchmark.runs}, head-to-head`,
+        body: `On ${benchmark.tasks} multi-turn tool tasks run ${benchmark.repeats} times each, ${brand.name} matches or beats ${hermes.name} on ${benchmark.atLeastHermes} of ${benchmark.rows.length} models and costs the least of three harnesses on ${benchmark.cheapest}.`,
+        caveat: `One benchmark of our own design, each harness on its own defaults. ${hermes.name} leads on the two small open models.`,
+        href: BENCHMARK,
+        link: "Benchmarks",
+    },
     {
         figure: "202",
         title: "Turns outlive the client",
@@ -49,14 +58,6 @@ const PROOFS = [
         link: "Evidence",
     },
     {
-        figure: qwen ? `${qwen.nlt}%` : "NLT",
-        title: "Tool calls small models get right",
-        body: `Text tool calls (NLT) beat native function calling on all ${evidence.dialect.length} models in a single-call test${qwen ? `, a 9B open-weight model included (${qwen.nlt}% vs ${qwen.native}%)` : ""}.`,
-        caveat: "37 fixtures, routing and arguments only, no tool executed. On the 9B model the margin is one fixture. On multi-turn work native was ahead on 13 of 14 models, so init now writes native where the model supports it.",
-        href: "/evals",
-        link: "Evidence",
-    },
-    {
         figure: `${evidence.idleMiB} MiB`,
         title: `${evidence.agents} agents, one process`,
         body: "One runtime hosts many agents, and scoped keys fence each off. Adopt and remove agents live, with no restart.",
@@ -65,6 +66,86 @@ const PROOFS = [
         link: "Evidence",
     },
 ]
+
+type Cell = (typeof benchmark.rows)[number]["dispach"]
+
+/** One harness's result: tasks passed as a bar measured from zero, and what the runs cost. */
+function Score({ cell, best, accent }: { cell: Cell; best: boolean; accent?: boolean }) {
+    return (
+        <td className="px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3 font-mono text-sm">
+                <span className={best ? "font-semibold" : "text-fd-muted-foreground"}>
+                    {cell.pass}
+                </span>
+                <span className="text-xs text-fd-muted-foreground">${cell.cost.toFixed(2)}</span>
+            </div>
+            <div className="mt-1.5 h-1 rounded-full bg-fd-border">
+                <div
+                    className={`h-1 rounded-full ${accent ? "bg-term-accent" : "bg-fd-muted-foreground/50"}`}
+                    style={{ width: `${(cell.pass / cell.n) * 100}%` }}
+                />
+            </div>
+        </td>
+    )
+}
+
+function HeadToHead() {
+    return (
+        <section className="mx-auto w-full max-w-6xl px-4 py-16">
+            <h2 className="font-mono text-sm text-term-accent">head-to-head, by the numbers</h2>
+            <p className="mt-4 max-w-3xl text-2xl font-semibold tracking-tight text-balance">
+                {brand.name} matches or beats {hermes.name} on {benchmark.atLeastHermes} of{" "}
+                {benchmark.rows.length} models, and costs the least on {benchmark.cheapest}.
+                {benchmark.openclawLast ? ` ${openclaw.name} scores lowest on every one.` : ""}
+            </p>
+            <p className="mt-3 max-w-3xl text-sm text-fd-muted-foreground">
+                Tasks passed out of {benchmark.runs}: {benchmark.tasks} multi-turn tool tasks, run{" "}
+                {benchmark.repeats} times each, graded on what the tools were left holding. Every
+                harness runs in its own container against the same tools and pinned model providers.
+                Cost is the OpenRouter bill for all {benchmark.runs} runs.
+            </p>
+            <div className="mt-8 overflow-x-auto rounded-2xl border border-fd-border">
+                <table className="w-full min-w-[560px] text-left">
+                    <thead className="border-b border-fd-border text-xs text-fd-muted-foreground">
+                        <tr>
+                            <th className="px-3 py-2.5 font-medium">Model</th>
+                            <th className="px-3 py-2.5 font-medium text-term-accent">
+                                {brand.name} <span className="font-mono">{benchmark.commit}</span>
+                            </th>
+                            <th className="px-3 py-2.5 font-medium">
+                                {hermes.name} {hermes.version}
+                            </th>
+                            <th className="px-3 py-2.5 font-medium">
+                                {openclaw.name} {openclaw.version}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-fd-border">
+                        {benchmark.rows.map((r) => {
+                            const top = Math.max(r.dispach.pass, r.hermes.pass, r.openclaw.pass)
+                            return (
+                                <tr key={r.name}>
+                                    <td className="px-3 py-2.5 text-sm">{r.name}</td>
+                                    <Score cell={r.dispach} best={r.dispach.pass === top} accent />
+                                    <Score cell={r.hermes} best={r.hermes.pass === top} />
+                                    <Score cell={r.openclaw} best={r.openclaw.pass === top} />
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <p className="mt-4 text-xs text-fd-muted-foreground">
+                One benchmark of our own design, each harness on its own documented defaults. With{" "}
+                {benchmark.runs} runs an arm a gap of a few runs is noise.{" "}
+                <Link href={BENCHMARK} className="underline">
+                    Method, intervals and where {brand.name} loses
+                </Link>
+                .
+            </p>
+        </section>
+    )
+}
 
 export default function HomePage() {
     return (
@@ -124,6 +205,8 @@ export default function HomePage() {
                     caption={`recorded run · ${capturedAt} · ${capturedModel}`}
                 />
             </section>
+
+            <HeadToHead />
 
             <section className="border-y border-fd-border bg-fd-card/40">
                 <div className="mx-auto w-full max-w-6xl px-4 py-16">

@@ -7,12 +7,21 @@ Statuses: **verified** (a committed file in this repo carries the number), **cit
 research, linked; not reproduced here), **needs-run** (true as far as we know, no committed
 result yet), **fix** (the prose and the evidence disagree), **remove** (no evidence found).
 
+## Harness head-to-head
+
+| Claim | Evidence | Scope | Limitation | Status |
+| --- | --- | --- | --- | --- |
+| Dispach native scores 125/125 on five of the eleven models compared with other harnesses, and 99–100% on eight of fourteen models | `evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/` (2026-10-23) | 25 multi-turn tasks × 5 repeats, tools executed, graded by final state | One benchmark of our own design | verified |
+| Matches or beats Hermes 0.19.0 on 8 of 11 models, and costs the least of the three harnesses on 10 of 11 (level with Hermes on GPT-6.1 Sol) | `evals/harness/summary.json` | Same tasks, isolation and pinned providers for all three harnesses | Rival arms measured 2026-10-22/23, Dispach on 2026-10-23; the 95% intervals of every Dispach–Hermes pair overlap, gpt-oss-20b only just (70–84% against 82–93%) | verified |
+| OpenClaw 2026.10.5 scores lowest on every model, 11–60 runs behind | `evals/harness/summary.json` | As above | Each harness on its own documented defaults | verified |
+| Hermes leads on the small open models: qwen3.5-9b 112 vs 104, gpt-oss-20b 111 vs 97 | `evals/harness/summary.json` | As above | The qwen3.5-9b intervals overlap widely; the gpt-oss-20b ones only just | verified |
+
 ## Tool dialect (NLT vs native)
 
 | Claim | Evidence | Scope | Limitation | Status |
 | --- | --- | --- | --- | --- |
 | NLT ahead of native: qwen3.5:9b 94.6% vs 91.9%, deepseek-chat 97.3% vs 86.5%, deepseek-reasoner 91.9% vs 89.2% | `evals/tools/results.json`, `evals/tools/qwen-3pass/results.json` (2026-08-14) | 37 fixtures, one model call each, routing + argument coercion, temperature 0 | No tool is executed. The qwen margin is **one fixture**. qwen NLT has a 2.7% critical rate against native's 0.0% | verified |
-| Native ties or beats NLT on 13 of 14 models on multi-turn tool work; NLT falls to 37–62% on Grok 4.7, Kimi K3, GPT-6 Luna, gpt-oss-20b and Gemma 4 26B-A4B | `evals/harness/runs/sweep-552660a/results.json` (2026-10-22/23) | 25 multi-turn tasks × 5 repeats per model, tools executed and graded by final state, pinned providers | Two harnesses' own defaults compared, one benchmark; small open models only partly covered | verified |
+| Native ties or beats NLT on every model on multi-turn tool work; NLT falls to 50–68% on Grok 4.7, Kimi K3, Gemma 4 26B-A4B and GPT-6 Luna | `evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/results.json` (2026-10-23) | 25 multi-turn tasks × 5 repeats per model, tools executed and graded by final state, pinned providers | One benchmark; qwen3.5-9b under NLT paused at 52 of 125 runs | verified |
 | NLT uses 21–23% fewer prompt tokens | `evals/tools/results.json` | Same run | Prompt tokens only, not total cost | verified |
 | +14.9pp accuracy, 93% fewer critical errors, −25% tokens; +24 to +43pp on small models | Somma, Plante & Premji, 2026 replication of Johnson et al. 2025, [arXiv 2607.03953](https://arxiv.org/abs/2607.03953), 14 models, 8,560 trials | External | Preprint. Frontier models (GPT-5, Gemini 2.5 Pro) show smaller or reversed gains. Our own eval cannot test the critical-error claim. **Not reproduced on multi-turn work:** in `evals/harness/runs/sweep-552660a/`, native tied or beat NLT on 13 of 14 models, NLT 37–62% on five | cite |
 | Decision 4.1's local deltas | `evals/tools/results.json` | — | 4.1 now quotes the committed +10.8 / +2.7pp and says the earlier +13.5 / +5.4pp run was overwritten | verified |

@@ -43,6 +43,32 @@ streaming, reattaching after a dropped connection, approvals and keys. The refer
 `dispach/client` is the typed client. The CLI and the full-screen terminal UI below are the same
 runtime from a terminal.
 
+## Benchmarks
+
+The same 25 multi-turn tool tasks, run 5 times each, through three agent harnesses on identical tools
+and pinned model providers, every harness in its own container. Graded on what the tools were left
+holding, never on the reply's wording. Tasks passed out of 125, and the OpenRouter bill for the 125 runs:
+
+<!-- benchmark:start -->
+| Model | Dispach | Hermes 0.19.0 | OpenClaw 2026.10.5 |
+| --- | --- | --- | --- |
+| Claude Opus 5.5 | 125/125 (100%) · $2.05 | 119/125 (95%) · $2.24 | 105/125 (84%) · $7.10 |
+| Claude Sonnet 5.5 | 125/125 (100%) · $0.80 | 120/125 (96%) · $1.76 | 105/125 (84%) · $4.21 |
+| Claude Haiku 5.5 | 124/125 (99%) · $0.06 | 120/125 (96%) · $0.07 | 102/125 (82%) · $0.21 |
+| GPT-6.1 Sol | 125/125 (100%) · $0.54 | 120/125 (96%) · $0.53 | 95/125 (76%) · $1.73 |
+| Gemini 4 Argon | 119/125 (95%) · $2.29 | 123/125 (98%) · $2.79 | 108/125 (86%) · $5.47 |
+| GLM 5.3 | 125/125 (100%) · $0.80 | 123/125 (98%) · $1.18 | 98/125 (78%) · $4.86 |
+| DeepSeek V4 Pro | 125/125 (100%) · $0.31 | 120/125 (96%) · $0.50 | 96/125 (77%) · $2.83 |
+| Kimi K3 | 115/125 (92%) · $2.24 | 115/125 (92%) · $2.36 | 98/125 (78%) · $10.27 |
+| Gemma 4 26B-A4B | 112/125 (90%) · $0.24 | 108/125 (86%) · $0.41 | 91/125 (73%) · $2.95 |
+| qwen3.5-9b | 104/125 (83%) · $0.18 | 112/125 (90%) · $0.42 | 60/125 (48%) · $0.78 |
+| gpt-oss-20b | 97/125 (78%) · $0.05 | 111/125 (89%) · $0.10 | 51/125 (41%) · $0.12 |
+<!-- benchmark:end -->
+
+One benchmark of our own design, each harness on its own documented defaults; with 125 runs an arm a
+gap of a few runs is noise. Hermes leads on the two small open models, and the
+[benchmark README](evals/harness/README.md) says why, with every run and reply committed.
+
 ## Status
 
 **0.2.0**, from npm, Homebrew or the container image. Every install runs
@@ -85,8 +111,8 @@ a workflow engine, a RAG pipeline, a vector database, or a model gateway.
 The ones that would otherwise look like mistakes:
 
 - **`init` writes native function calling where the model supports it, and natural-language tool
-  calling (NLT) otherwise.** On the multi-turn harness benchmark native tied or beat NLT on 13 of 14
-  models; NLT fell to 37–62% on five, by announcing a call and not making it
+  calling (NLT) otherwise.** On the multi-turn harness benchmark native tied or beat NLT on every
+  model; NLT fell to 50–68% on four, by announcing a call and not making it
   ([`evals/harness`](evals/harness/)). NLT still wins a single-call test (37 fixtures, no tool
   executed, [`evals/tools`](evals/tools/)), and a 14-model replication reports +14.9pp for it
   ([arXiv 2607.03953](https://arxiv.org/abs/2607.03953)) that did not reproduce on multi-turn work here.

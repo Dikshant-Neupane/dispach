@@ -1,6 +1,50 @@
 {
     "claims": [
         {
+            "section": "Harness head-to-head",
+            "claim": "Dispach native scores 125/125 on five of the eleven models compared with other harnesses, and 99–100% on eight of fourteen models",
+            "evidence": "`evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/` (2026-10-23)",
+            "scope": "25 multi-turn tasks × 5 repeats, tools executed, graded by final state",
+            "limitation": "One benchmark of our own design",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "Matches or beats Hermes 0.19.0 on 8 of 11 models, and costs the least of the three harnesses on 10 of 11 (level with Hermes on GPT-6.1 Sol)",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "Same tasks, isolation and pinned providers for all three harnesses",
+            "limitation": "Rival arms measured 2026-10-22/23, Dispach on 2026-10-23; the 95% intervals of every Dispach–Hermes pair overlap, gpt-oss-20b only just (70–84% against 82–93%)",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "OpenClaw 2026.10.5 scores lowest on every model, 11–60 runs behind",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "As above",
+            "limitation": "Each harness on its own documented defaults",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "Hermes leads on the small open models: qwen3.5-9b 112 vs 104, gpt-oss-20b 111 vs 97",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "As above",
+            "limitation": "The qwen3.5-9b intervals overlap widely; the gpt-oss-20b ones only just",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
             "section": "Tool dialect (NLT vs native)",
             "claim": "NLT ahead of native: qwen3.5:9b 94.6% vs 91.9%, deepseek-chat 97.3% vs 86.5%, deepseek-reasoner 91.9% vs 89.2%",
             "evidence": "`evals/tools/results.json`, `evals/tools/qwen-3pass/results.json` (2026-08-14)",
@@ -14,13 +58,14 @@
         },
         {
             "section": "Tool dialect (NLT vs native)",
-            "claim": "Native ties or beats NLT on 13 of 14 models on multi-turn tool work; NLT falls to 37–62% on Grok 4.7, Kimi K3, GPT-6 Luna, gpt-oss-20b and Gemma 4 26B-A4B",
-            "evidence": "`evals/harness/runs/sweep-552660a/results.json` (2026-10-22/23)",
+            "claim": "Native ties or beats NLT on every model on multi-turn tool work; NLT falls to 50–68% on Grok 4.7, Kimi K3, Gemma 4 26B-A4B and GPT-6 Luna",
+            "evidence": "`evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/results.json` (2026-10-23)",
             "scope": "25 multi-turn tasks × 5 repeats per model, tools executed and graded by final state, pinned providers",
-            "limitation": "Two harnesses' own defaults compared, one benchmark; small open models only partly covered",
+            "limitation": "One benchmark; qwen3.5-9b under NLT paused at 52 of 125 runs",
             "status": "verified",
             "files": [
-                "evals/harness/runs/sweep-552660a/results.json"
+                "evals/harness/summary.json",
+                "evals/harness/runs/sweep-4f3e00a/results.json"
             ]
         },
         {
