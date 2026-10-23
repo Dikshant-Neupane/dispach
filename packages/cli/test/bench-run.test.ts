@@ -109,7 +109,46 @@ describe("bench runner", () => {
             takeRecords,
             sleep: async () => {},
         })
-        expect(row).toMatchObject({ pass: false, retries: MAX_RETRIES })
+        expect(row).toMatchObject({ pass: false, retries: MAX_RETRIES, throttled: true })
+    })
+
+    test("the backoff is capped, so the retry budget is minutes and not hours", async () => {
+        const { server, harness, takeRecords } = setup(Array(MAX_RETRIES + 1).fill("429"))
+        const waits: number[] = []
+        await runTask({
+            harness,
+            model,
+            task,
+            repeat: 1,
+            server,
+            takeRecords,
+            sleep: async (ms) => {
+                waits.push(ms)
+            },
+        })
+        expect(waits).toHaveLength(MAX_RETRIES)
+        expect(Math.max(...waits)).toBe(120_000)
+    })
+
+    test("a failure with no throttling behind it is not marked throttled", async () => {
+        const server = createToolServer()
+        const harness: Harness = {
+            name: "wrong",
+            prepare: async () => {},
+            reset: async () => {},
+            turn: async () => ({ reply: "done", ok: true, detail: "" }),
+        }
+        const row = await runTask({
+            harness,
+            model,
+            task,
+            repeat: 1,
+            server,
+            takeRecords: () => [record(200)],
+            sleep: async () => {},
+        })
+        expect(row.pass).toBe(false)
+        expect(row.throttled).toBeUndefined()
     })
 
     test("a harness that exits non-zero scores 0 and stays a row", async () => {

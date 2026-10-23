@@ -33,6 +33,8 @@ export interface RunRow {
     /** The harness exited non-zero or timed out on some turn. */
     readonly errored: boolean
     readonly retries: number
+    /** Still rate-limited after every retry, so the failure is the provider's and not a measurement. */
+    readonly throttled?: boolean
     readonly wallMs: number
     readonly toolCalls: number
     readonly modelCalls: number
@@ -68,7 +70,15 @@ export interface HarnessContext {
     readonly dir: string
 }
 
-export const MAX_RETRIES = 4
+/**
+ * Eight, with the backoff capped at 120 s: about twelve minutes of patience per attempt. Four (150 s in
+ * all) ran out on 24 of 125 qwen3.5-9b rows with nine qwen shards sharing one upstream, and every one of
+ * them was scored as the model's failure.
+ */
+export const MAX_RETRIES = 8
+const BACKOFF_CAP_MS = 120_000
+/** Before the one re-run an arm gives a row still throttled at the end of its retries. */
+export const COOLDOWN_MS = 300_000
 
 /**
  * The provider throttled this run: a 429, or OpenRouter's 402 for too many requests in flight at
@@ -127,10 +137,14 @@ export async function runTask(options: {
             retries += 1
             // OpenRouter asks for 120 s after an in-flight 402; the 429 backoff is shorter.
             await sleep(
-                Math.max(5_000 * 2 ** retries, records.some((r) => r.status === 402) ? 120_000 : 0),
+                Math.max(
+                    Math.min(5_000 * 2 ** retries, BACKOFF_CAP_MS),
+                    records.some((r) => r.status === 402) ? 120_000 : 0,
+                ),
             )
             continue
         }
+        const throttled = failure !== undefined && rateLimited(records)
         const sum = (pick: (r: ProxyRecord) => number | undefined) =>
             records.reduce((total, r) => total + (pick(r) ?? 0), 0)
         return {
@@ -145,6 +159,7 @@ export async function runTask(options: {
             reply,
             errored,
             retries,
+            ...(throttled ? { throttled } : {}),
             wallMs,
             toolCalls: state.calls.length,
             modelCalls: records.length,
@@ -217,29 +232,44 @@ if (import.meta.main) {
     // ponytail: sequential, because the tool server holds one world; parallel runs need a world per session.
     let passed = 0
     let total = 0
+    const attempt = (task: Task, repeat: number) => {
+        current = `${task.id}#${repeat}`
+        return runTask({
+            harness,
+            model,
+            task,
+            repeat,
+            server,
+            takeRecords: () => {
+                const taken = records
+                records = []
+                return taken
+            },
+        })
+    }
+    const write = (row: RunRow) => {
+        appendFileSync(out, `${JSON.stringify(row)}\n`)
+        total += 1
+        if (row.pass) passed += 1
+        console.log(
+            `${row.pass ? "pass" : "FAIL"}  ${row.task.padEnd(24)} r${row.repeat}  ${row.modelCalls} calls  ${row.wallMs} ms  $${row.cost.toFixed(5)}${row.retries > 0 ? `  (${row.retries} 429 retries)` : ""}${row.throttled ? "  [throttled]" : ""}${row.reason === undefined ? "" : `  — ${row.reason}`}`,
+        )
+    }
+    // A row still throttled after its retries is held back and run once more after a cooldown, so a
+    // throttled stretch of the upstream is never written down as the model failing.
+    const deferred: [Task, number][] = []
     try {
         for (let repeat = only1 ?? 1; repeat <= (only1 ?? repeats); repeat += 1) {
             for (const task of tasks) {
-                current = `${task.id}#${repeat}`
-                const row = await runTask({
-                    harness,
-                    model,
-                    task,
-                    repeat,
-                    server,
-                    takeRecords: () => {
-                        const taken = records
-                        records = []
-                        return taken
-                    },
-                })
-                appendFileSync(out, `${JSON.stringify(row)}\n`)
-                total += 1
-                if (row.pass) passed += 1
-                console.log(
-                    `${row.pass ? "pass" : "FAIL"}  ${task.id.padEnd(24)} r${repeat}  ${row.modelCalls} calls  ${row.wallMs} ms  $${row.cost.toFixed(5)}${row.retries > 0 ? `  (${row.retries} 429 retries)` : ""}${row.reason === undefined ? "" : `  — ${row.reason}`}`,
-                )
+                const row = await attempt(task, repeat)
+                if (row.throttled) deferred.push([task, repeat])
+                else write(row)
             }
+        }
+        if (deferred.length > 0) {
+            console.log(`${deferred.length} throttled; re-running after ${COOLDOWN_MS / 1000} s`)
+            await new Promise((r) => setTimeout(r, COOLDOWN_MS))
+            for (const [task, repeat] of deferred) write(await attempt(task, repeat))
         }
     } finally {
         await harness.close?.()
