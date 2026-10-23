@@ -125,9 +125,9 @@ describe("bench proxy", () => {
             label: "h",
             model: MODEL,
             record: (r) => records.push(r),
-            fetch: async () => {
+            fetch: (async (_url: unknown, _init?: RequestInit): Promise<Response> => {
                 throw new Error("Unable to connect")
-            },
+            }) as typeof fetch,
         })
         const response = await post(handler, REQUEST)
         expect(response.status).toBe(502)

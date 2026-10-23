@@ -31,6 +31,15 @@ describe("contained harness adapters", () => {
         )
     })
 
+    test("a model's own turn limit survives the roster load, so a slow endpoint is not scored as failure", () => {
+        // A field on a conditional spread is the shape this repo has dropped six times; read it back.
+        const roster = loadRoster(["qwen3.5-9b", "gpt-6.1-sol"])
+        const slow = roster.find((m) => m.key === "qwen3.5-9b")
+        const fast = roster.find((m) => m.key === "gpt-6.1-sol")
+        expect(slow?.turnTimeoutMs).toBe(900_000)
+        expect(fast?.turnTimeoutMs).toBeUndefined()
+    })
+
     test("the OpenClaw reply is its final visible text, however deep the version nests it", () => {
         // Its --json output, shape as measured on 2026.10.5, with log lines before the object.
         const stdout = `[agent] starting\n${JSON.stringify({

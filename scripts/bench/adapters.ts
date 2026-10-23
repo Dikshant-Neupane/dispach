@@ -89,21 +89,16 @@ function containedHarness(name: string, spec: Contained): Harness {
     // The harness's own session id, when it issues one rather than taking ours.
     const sessions = new Map<string, string>()
     const env = Object.entries(spec.env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`])
+    // The model's own limit when the roster gives one (a slow endpoint), else the bench default.
+    let turnMs = TURN_TIMEOUT_MS
     const exec = (argv: readonly string[]) =>
         // `timeout` inside the container: killing a `docker exec` client leaves the process running.
-        run([
-            "docker",
-            "exec",
-            ...env,
-            container,
-            "timeout",
-            String(TURN_TIMEOUT_MS / 1000),
-            ...argv,
-        ])
+        run(["docker", "exec", ...env, container, "timeout", String(turnMs / 1000), ...argv])
     const sh = (command: string) => exec(["sh", "-c", command])
     return {
         name,
         async prepare(context) {
+            turnMs = context.model.turnTimeoutMs ?? TURN_TIMEOUT_MS
             const built = await run(["docker", "build", "-q", "-t", spec.image, ...spec.build])
             if (!built.ok)
                 throw new Error(

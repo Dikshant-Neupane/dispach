@@ -25,6 +25,11 @@ export interface RosterModel {
     readonly openWeight: boolean
     /** Billions of parameters (total), where published. */
     readonly params?: number
+    /**
+     * A per-turn limit longer than the bench default, for an endpoint too slow for it. Applies to every
+     * harness on this model, so a slow provider is not scored as one harness's failure.
+     */
+    readonly turnTimeoutMs?: number
 }
 
 interface RosterFile {
@@ -39,6 +44,7 @@ interface RosterFile {
         readonly host?: "ollama"
         readonly openWeight: boolean
         readonly params?: number
+        readonly turnTimeoutMs?: number
     }[]
 }
 
@@ -55,6 +61,7 @@ export function loadRoster(only?: readonly string[]): RosterModel[] {
             ...(local ? {} : { apiKeyEnv: file.openrouter.apiKeyEnv }),
             ...(m.provider === undefined ? {} : { provider: m.provider }),
             ...(m.params === undefined ? {} : { params: m.params }),
+            ...(m.turnTimeoutMs === undefined ? {} : { turnTimeoutMs: m.turnTimeoutMs }),
         }
     })
     if (only === undefined || only.length === 0) return models

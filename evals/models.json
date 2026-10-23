@@ -102,7 +102,16 @@
             "id": "qwen/qwen3.5-9b",
             "provider": "deepinfra/bf16",
             "openWeight": true,
-            "params": 9
+            "params": 9,
+            "turnTimeoutMs": 900000
+        },
+        {
+            "key": "gemma4-26b-a4b",
+            "tier": "open-small",
+            "id": "google/gemma-4-26b-a4b-it",
+            "provider": "google-vertex/global",
+            "openWeight": true,
+            "params": 26
         },
         {
             "key": "qwen3.5-9b-local",
