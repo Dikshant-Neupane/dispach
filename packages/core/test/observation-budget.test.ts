@@ -93,9 +93,12 @@ limits:
 }
 
 describe("the observation budget follows the window", () => {
-    test("5% of the window, between 2,000 and 32,000, unless the manifest pins one", () => {
-        expect(observationBudget(undefined, 8_192)).toBe(2_000)
-        expect(observationBudget(undefined, 131_072)).toBe(6_553)
+    test("a quarter of the window, between 2,000 and 32,000, unless the manifest pins one", () => {
+        expect(observationBudget(undefined, 4_096)).toBe(2_000)
+        expect(observationBudget(undefined, 8_192)).toBe(2_048)
+        // gpt-oss-20b's window: 5% gave 6,553 and cut an 11k-token file it then could not answer from.
+        expect(observationBudget(undefined, 65_536)).toBe(16_384)
+        expect(observationBudget(undefined, 131_072)).toBe(32_000)
         expect(observationBudget(undefined, 1_048_576)).toBe(32_000)
         expect(observationBudget(500, 1_048_576)).toBe(500)
     })

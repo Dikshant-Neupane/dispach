@@ -223,14 +223,18 @@ export function measuredPressure(input: {
 }
 
 /**
- * The default ceiling on one tool observation: 5% of the window, between 2,000 and 32,000 tokens.
+ * The default ceiling on one tool observation: a quarter of the window, between 2,000 and 32,000 tokens.
  *
  * A flat 2,000 was right for an 8k local model and cut an 11k file in the middle on a 1M-window one,
  * where the answer sat (`evals/harness/runs/baseline-aae8fe4`, long-handbook) — a cap that changed
- * the answer. The floor keeps every window up to 40k exactly where it was; the ceiling keeps one
- * observation from becoming most of a turn's cost on a very large window. An explicit
+ * the answer. The first fix was 5% of the window, and it changed the answer again on a mid-size one:
+ * gpt-oss-20b's 131,072 gave 6,553 tokens, so the same file arrived as 25,000 of its 43,000 characters
+ * and the model reported, correctly for what it saw, that the limit was not there (long files 0/15,
+ * against Hermes's 11/15 passing the file whole; decision 14.126). A quarter keeps one observation from
+ * crowding out a turn on a small window while letting an ordinary file through on anything from 64k up;
+ * the ceiling keeps a very large window from spending most of a turn on one result. An explicit
  * `context.observationMaxTokens` always wins.
  */
 export function observationBudget(configured: number | undefined, window: number): number {
-    return configured ?? Math.min(32_000, Math.max(2_000, Math.floor(window * 0.05)))
+    return configured ?? Math.min(32_000, Math.max(2_000, Math.floor(window * 0.25)))
 }

@@ -10,8 +10,9 @@
  */
 
 import type { ChatMessage } from "../model/provider.ts"
+import type { ToolResult } from "../tools/types.ts"
 
-export type Silence = "empty" | "promise"
+export type Silence = "empty" | "promise" | "claim"
 
 /**
  * An announcement of the model's own next action as the last sentence. "Let me know" is a closing, not an
@@ -20,13 +21,28 @@ export type Silence = "empty" | "promise"
 const PROMISE =
     /^(?:(?:ok(?:ay)?|now|next|first|sure)[,:]?\s+)?(?:i['’]ll|i will|let me|i['’]m going to|i am going to)\b(?!\s+know\b)/i
 
-/** Why this step needs a nudge, or `undefined` when it is a reply. */
-export function silenceOf(text: string, trace: readonly ChatMessage[]): Silence | undefined {
+/**
+ * A report that something was done: "I've saved it under meal_limit", "I sent Dmitri the alert". Only acted
+ * on when nothing that changes anything ran this turn, which the loop knows and the reply does not.
+ */
+const CLAIM =
+    /\b(?:i['’]ve|i have|i)\s+(?:just\s+|now\s+|also\s+)?(?:saved|stored|sent|written|wrote|updated|recorded|messaged|notified|set|turned|deleted|created|scheduled)\b/i
+
+/**
+ * Why this step needs a nudge, or `undefined` when it is a reply. `acted` is whether a mutating tool
+ * succeeded this turn: a claimed save with no save behind it is the one shape here that misleads the person.
+ */
+export function silenceOf(
+    text: string,
+    trace: readonly ChatMessage[],
+    acted = false,
+): Silence | undefined {
     const visible = text.trim()
     if (visible === "") {
         // A first-step empty reply is something else: the reasoning budget, which has its own error.
         return trace.some((message) => message.origin === "observation") ? "empty" : undefined
     }
+    if (!acted && CLAIM.test(visible)) return "claim"
     const sentences = visible.split(/(?<=[.!?])\s+/)
     const last = (sentences.at(-1) ?? "").trim()
     if (last.endsWith("?")) return undefined
@@ -38,4 +54,21 @@ export const SILENCE_NOTE: Readonly<Record<Silence, string>> = {
     empty: "From the runtime, not the person: your last response had no visible text, so nothing reached them. You have the tool result above. Answer them now, or make the call you need.",
     promise:
         "From the runtime, not the person: you said you would do that, but no tool call was made, so nothing happened. Make the call now, or tell them plainly why you cannot.",
+    claim: "From the runtime, not the person: your reply says it is done, but nothing that saves, sends or changes anything ran in this turn, so it was not done. Make the call now, or tell them it was not done.",
+}
+
+/** Identical calls let past the repeat guard per signature, per turn, after a temporary failure (14.127). */
+export const TRANSIENT_RETRIES = 2
+
+/**
+ * The failure's own words say it is temporary. Read from `error.message`, which carries what the tool or
+ * server said, and never from `output`: the MCP hint appended there tells the model *how* to judge a
+ * failure ("if they say the failure is temporary, retry once"), so matching the whole output would call
+ * every MCP failure temporary and switch the guard off.
+ */
+export function failedTransiently(result: ToolResult): boolean {
+    if (result.ok || result.error === undefined) return false
+    return /temporar|try again|retry later|unavailable|timed out|rate.?limit|overloaded|\b(429|503)\b/i.test(
+        result.error.message,
+    )
 }

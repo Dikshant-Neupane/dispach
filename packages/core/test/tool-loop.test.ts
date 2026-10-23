@@ -362,6 +362,34 @@ describe("silence after a tool result, or a promise with no call (14.123)", () =
         await runtime.stop()
     })
 
+    test("a reply claiming a save that never happened gets one note", async () => {
+        // qwen3.5-9b read a file and answered "I've saved it under the key meal_limit" with no save.
+        const { result, events, requests, runtime } = await run([
+            "ACTION: now\nEND",
+            "It is nine, and I've saved that for you.",
+            "ACTION: memory_write\ntext: nine\nEND",
+            "Saved.",
+        ])
+        expect(
+            payload<{ errors: string[] }>(events.find((e) => e.type === "tool.repair")).errors,
+        ).toEqual(["said it was done and nothing that acts ran"])
+        expect(requests[2]?.messages.some((m) => m.content.includes("so it was not done"))).toBe(
+            true,
+        )
+        expect(result.reason).toBe("final")
+        await runtime.stop()
+    })
+
+    test("the same claim after a real write is a reply", async () => {
+        const { result, events, runtime } = await run([
+            "ACTION: memory_write\ntext: nine\nEND",
+            "I've saved that for you.",
+        ])
+        expect(result.steps).toBe(2)
+        expect(events.some((e) => e.type === "tool.repair")).toBe(false)
+        await runtime.stop()
+    })
+
     test("a closing like 'let me know' or a question is a reply, not a promise", async () => {
         const closing = await run(["It is nine. Let me know if you need anything else."])
         expect(closing.result.steps).toBe(1)
@@ -748,6 +776,72 @@ describe("what a native message costs", () => {
         const { requests, runtime } = await runNative([{ text: "Nine." }])
         const tools = requests[0]?.tools ?? []
         expect(tools.length).toBe(2)
+        await runtime.stop()
+    })
+})
+
+// ─── a retry the server asked for (14.127) ───────────────────────────────────────────────
+
+/** A read tool that fails with `message` on its first two calls and works on the third. */
+function flakyProvider(message: string): ToolProviderFactory {
+    let calls = 0
+    return () => ({
+        id: "flaky",
+        resolve: (slugs) =>
+            Promise.resolve(
+                slugs.includes("check_status")
+                    ? [
+                          {
+                              spec: {
+                                  slug: "check_status",
+                                  provider: "flaky",
+                                  summary: "Reads the status board.",
+                                  whenToUse: "the person asks for the status",
+                                  whenNotToUse: "they did not ask about status",
+                                  mutating: false,
+                                  trust: "trusted" as const,
+                                  trustReason: "a test fixture",
+                                  tags: ["read"],
+                                  parameters: { type: "object" as const, properties: {} },
+                              },
+                              handler: () => {
+                                  calls += 1
+                                  if (calls <= 2) throw new Error(message)
+                                  return "all green"
+                              },
+                          },
+                      ]
+                    : [],
+            ),
+    })
+}
+
+async function runFlaky(message: string) {
+    const dir = workspace("  provider: flaky\n  pinned:\n    - check_status\n")
+    const call = "Checking.\nACTION: check_status\nEND"
+    const { fetch } = scripted([call, call, call, "All green."])
+    const runtime = await Runtime.create({
+        agents: [join(dir, "agent.yaml")],
+        env: ENV,
+        fetch,
+        toolProviders: { flaky: flakyProvider(message) },
+    })
+    const result = await runtime.agent("test").send("what is the status?")
+    return { result, runtime }
+}
+
+describe("the repeat guard and a temporary failure", () => {
+    test("a third identical call goes through when the last two failed as temporary", async () => {
+        // recover-persist: two "temporarily unavailable" refusals, then a write. The guard refused it on every model.
+        const { result, runtime } = await runFlaky("Service temporarily unavailable. Try again.")
+        expect(result.reason).toBe("final")
+        expect(result.text).toContain("All green.")
+        await runtime.stop()
+    })
+
+    test("a failure that is not temporary still ends the turn on the third identical call", async () => {
+        const { result, runtime } = await runFlaky("Invalid argument: no such board.")
+        expect(result.reason).toBe("no_progress")
         await runtime.stop()
     })
 })

@@ -57,7 +57,7 @@ import {
     type TurnSender,
     trustOfSender,
 } from "./sender.ts"
-import { SILENCE_NOTE, silenceOf } from "./silence.ts"
+import { failedTransiently, SILENCE_NOTE, silenceOf, TRANSIENT_RETRIES } from "./silence.ts"
 import { runStep, type StepUsage } from "./step.ts"
 
 export interface TurnLimits {
@@ -647,6 +647,15 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
      */
     const identicalCalls = input.limits.noProgress.identicalCalls
     const recentCalls: string[] = []
+    /**
+     * The signature whose last run failed in words that say the failure is temporary, and how many times
+     * each signature has been let past the identical-call check for that (decision 14.127). A retry the
+     * server asked for is not a loop: `recover-persist` writes after two "temporarily unavailable" refusals,
+     * and the guard refused the third attempt on every model. Bounded, so a tool that always says "try
+     * again" still ends the turn.
+     */
+    let transientFailed: string | undefined
+    const transientRetries = new Map<string, number>()
     const sameTool = input.limits.noProgress.sameTool
     /** Calls per tool this turn, for `sameTool`. */
     const callsByTool = new Map<string, number>()
@@ -1236,7 +1245,9 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 // A step that ends the turn without doing what it needs (nothing visible after a tool
                 // result, or a promise to act with no call) gets one framed note and one more step.
                 const silence =
-                    tools === undefined || nudged ? undefined : silenceOf(parsed.text, trace)
+                    tools === undefined || nudged
+                        ? undefined
+                        : silenceOf(parsed.text, trace, sideEffects)
                 if (silence !== undefined && tools !== undefined) {
                     nudged = true
                     const said: ChatMessage[] =
@@ -1258,7 +1269,9 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                             errors: [
                                 silence === "empty"
                                     ? "no visible reply after a tool result"
-                                    : "said it would act and made no call",
+                                    : silence === "claim"
+                                      ? "said it was done and nothing that acts ran"
+                                      : "said it would act and made no call",
                             ],
                         },
                         context,
@@ -1285,7 +1298,13 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 recentCalls.push(signature)
                 if (recentCalls.length > identicalCalls) recentCalls.shift()
             }
+            const forgiven =
+                signature === transientFailed &&
+                (transientRetries.get(signature) ?? 0) < TRANSIENT_RETRIES
+            if (forgiven)
+                transientRetries.set(signature, (transientRetries.get(signature) ?? 0) + 1)
             if (
+                !forgiven &&
                 recentCalls.length === identicalCalls &&
                 recentCalls.every((entry) => entry === signature)
             ) {
@@ -1461,6 +1480,11 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                               ? {}
                               : { defer: input.deferMutations }),
                       })
+
+            transientFailed =
+                outcome.results.length > 0 && outcome.results.every(failedTransiently)
+                    ? signature
+                    : undefined
 
             if (outcome.results.some((result) => result.ok)) {
                 // Optional-chained rather than narrowed: `tools` became reassignable when phases landed,

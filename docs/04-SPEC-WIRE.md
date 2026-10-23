@@ -1575,8 +1575,8 @@ of these back to back is the signal that a catalogue needs work rather than that
 
 It also fires, once per turn, with an empty `slugs` and one entry in `errors`, when a step would have
 ended the turn without doing what the turn needs: `no visible reply after a tool result`, or `said it
-would act and made no call` (decision 14.123). The loop sends one framed note and takes one more step;
-a second silence is the reply.
+would act and made no call` (decision 14.123), or `said it was done and nothing that acts ran`
+(decision 14.128). The loop sends one framed note and takes one more step; a second silence is the reply.
 
 `turn.end.reason`: `final` \| `max_steps` \| `no_progress` \| `truncated` \| `stopped` \| `timeout` \|
 `error`. Everything that is not `final` is reported honestly rather than dressed up as a normal
