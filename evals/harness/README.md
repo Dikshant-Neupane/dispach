@@ -79,7 +79,7 @@ uncommitted change reached it. Since `552660a` the runtime has gained:
 | GPT-6 Luna | 114/125 (91%) | 85/125 (68%) | 118 | $0.05 |
 | Gemma 4 26B-A4B | 112/125 (90%) | 75/125 (60%) | 112 | $0.24 |
 | qwen3.5-9b | 104/125 (83%) | in progress | 76 | $0.18 |
-| gpt-oss-20b | 97/125 (78%) | in progress | 88 | $0.05 |
+| gpt-oss-20b | 97/125 (78%) | 89/125 (71%) | 88 | $0.05 |
 
 Intervals, per-category and per-task results are in `runs/sweep-4f3e00a/results.json`, with deltas
 against `552660a`.

@@ -1,14 +1,14 @@
 {
-    "measuredAt": "2026-10-23T14:25:33.222Z",
-    "commit": "f97d12e",
+    "measuredAt": "2026-10-23T14:28:59.470Z",
+    "commit": "d3cf7bf",
     "runtime": "bun 1.3.5",
     "machine": {
         "cpu": "Apple M4 Pro",
         "os": "darwin 27.0.0",
         "loadAverage": [
-            10.43,
-            6.88,
-            5.64
+            5.05,
+            5.8,
+            5.42
         ]
     },
     "arms": [
@@ -5898,19 +5898,19 @@
             "model": "gpt-oss-20b",
             "provider": "deepinfra/bf16",
             "overall": {
-                "pass": 79,
-                "n": 112,
-                "rate": 0.7054,
-                "low": 0.6152,
-                "high": 0.7818
+                "pass": 89,
+                "n": 125,
+                "rate": 0.712,
+                "low": 0.6272,
+                "high": 0.7841
             },
             "errored": 0,
             "throttled": 0,
-            "retries": 68,
-            "cost": 0.0354,
-            "promptTokens": 941105,
-            "completionTokens": 53874,
-            "medianWallMs": 6003,
+            "retries": 75,
+            "cost": 0.04,
+            "promptTokens": 1077055,
+            "completionTokens": 58076,
+            "medianWallMs": 5991,
             "categories": {
                 "single": {
                     "pass": 21,
@@ -5927,32 +5927,32 @@
                     "high": 0.766
                 },
                 "recall": {
-                    "pass": 13,
-                    "n": 14,
-                    "rate": 0.9286,
-                    "low": 0.6853,
-                    "high": 0.9873
+                    "pass": 14,
+                    "n": 15,
+                    "rate": 0.9333,
+                    "low": 0.7018,
+                    "high": 0.9881
                 },
                 "abstention": {
-                    "pass": 13,
-                    "n": 16,
-                    "rate": 0.8125,
-                    "low": 0.5699,
-                    "high": 0.9341
+                    "pass": 17,
+                    "n": 20,
+                    "rate": 0.85,
+                    "low": 0.6396,
+                    "high": 0.9476
                 },
                 "recovery": {
-                    "pass": 14,
-                    "n": 20,
-                    "rate": 0.7,
-                    "low": 0.481,
-                    "high": 0.8545
+                    "pass": 18,
+                    "n": 25,
+                    "rate": 0.72,
+                    "low": 0.5242,
+                    "high": 0.8572
                 },
                 "long": {
-                    "pass": 3,
-                    "n": 12,
-                    "rate": 0.25,
-                    "low": 0.0889,
-                    "high": 0.5323
+                    "pass": 4,
+                    "n": 15,
+                    "rate": 0.2667,
+                    "low": 0.109,
+                    "high": 0.5195
                 }
             },
             "tasks": {
@@ -6041,107 +6041,107 @@
                     "high": 0.9638
                 },
                 "recall-correction": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "abstain-chitchat": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "abstain-knowledge": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "abstain-draft-only": {
-                    "pass": 1,
-                    "n": 4,
-                    "rate": 0.25,
-                    "low": 0.0456,
-                    "high": 0.6994
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
                 },
                 "abstain-cannot": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "recover-retry": {
-                    "pass": 3,
-                    "n": 4,
-                    "rate": 0.75,
-                    "low": 0.3006,
-                    "high": 0.9544
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
                 },
                 "recover-persist": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "recover-bad-expression": {
-                    "pass": 3,
-                    "n": 4,
-                    "rate": 0.75,
-                    "low": 0.3006,
-                    "high": 0.9544
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
                 },
                 "recover-missing-file": {
                     "pass": 0,
-                    "n": 4,
+                    "n": 5,
                     "rate": 0,
                     "low": 0,
-                    "high": 0.4899
+                    "high": 0.4345
                 },
                 "recover-unknown-order": {
-                    "pass": 4,
-                    "n": 4,
+                    "pass": 5,
+                    "n": 5,
                     "rate": 1,
-                    "low": 0.5101,
+                    "low": 0.5655,
                     "high": 1
                 },
                 "long-log-needle": {
-                    "pass": 2,
-                    "n": 4,
-                    "rate": 0.5,
-                    "low": 0.15,
-                    "high": 0.85
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
                 },
                 "long-count-orders": {
                     "pass": 0,
-                    "n": 4,
+                    "n": 5,
                     "rate": 0,
                     "low": 0,
-                    "high": 0.4899
+                    "high": 0.4345
                 },
                 "long-handbook": {
                     "pass": 1,
-                    "n": 4,
-                    "rate": 0.25,
-                    "low": 0.0456,
-                    "high": 0.6994
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
                 }
             },
             "against": {
                 "dir": "evals/harness/runs/sweep-552660a",
-                "overallPp": 11.3,
+                "overallPp": 12,
                 "categoriesPp": {
                     "single": 12,
                     "chain": 28,
-                    "recall": -0.5,
-                    "abstention": 1.2,
-                    "recovery": -2,
-                    "long": 25
+                    "recall": 0,
+                    "abstention": 5,
+                    "recovery": 0,
+                    "long": 26.7
                 },
                 "tasksPp": {
                     "single-kv-set": 20,
@@ -6159,16 +6159,16 @@
                     "recall-correction": 0,
                     "abstain-chitchat": 0,
                     "abstain-knowledge": 0,
-                    "abstain-draft-only": 5,
+                    "abstain-draft-only": 20,
                     "abstain-cannot": 0,
-                    "recover-retry": -25,
+                    "recover-retry": -20,
                     "recover-persist": 100,
-                    "recover-bad-expression": -25,
+                    "recover-bad-expression": -20,
                     "recover-missing-file": -100,
                     "recover-unknown-order": 40,
-                    "long-log-needle": 50,
+                    "long-log-needle": 60,
                     "long-count-orders": 0,
-                    "long-handbook": 25
+                    "long-handbook": 20
                 }
             }
         },
@@ -7298,18 +7298,18 @@
             "model": "qwen3.5-9b",
             "provider": "deepinfra/bf16",
             "overall": {
-                "pass": 42,
-                "n": 48,
-                "rate": 0.875,
-                "low": 0.753,
-                "high": 0.9414
+                "pass": 45,
+                "n": 51,
+                "rate": 0.8824,
+                "low": 0.7662,
+                "high": 0.945
             },
             "errored": 0,
             "throttled": 0,
             "retries": 41,
-            "cost": 0.0549,
-            "promptTokens": 406224,
-            "completionTokens": 98751,
+            "cost": 0.0582,
+            "promptTokens": 426703,
+            "completionTokens": 107342,
             "medianWallMs": 34833,
             "categories": {
                 "single": {
@@ -7327,10 +7327,17 @@
                     "high": 0.9476
                 },
                 "recall": {
-                    "pass": 3,
-                    "n": 3,
+                    "pass": 4,
+                    "n": 4,
                     "rate": 1,
-                    "low": 0.4385,
+                    "low": 0.5101,
+                    "high": 1
+                },
+                "abstention": {
+                    "pass": 2,
+                    "n": 2,
+                    "rate": 1,
+                    "low": 0.3424,
                     "high": 1
                 }
             },
@@ -7406,13 +7413,27 @@
                     "high": 0.9385
                 },
                 "recall-fact": {
-                    "pass": 2,
-                    "n": 2,
+                    "pass": 3,
+                    "n": 3,
                     "rate": 1,
-                    "low": 0.3424,
+                    "low": 0.4385,
                     "high": 1
                 },
                 "recall-preference": {
+                    "pass": 1,
+                    "n": 1,
+                    "rate": 1,
+                    "low": 0.2065,
+                    "high": 1
+                },
+                "abstain-chitchat": {
+                    "pass": 1,
+                    "n": 1,
+                    "rate": 1,
+                    "low": 0.2065,
+                    "high": 1
+                },
+                "abstain-knowledge": {
                     "pass": 1,
                     "n": 1,
                     "rate": 1,
@@ -7422,11 +7443,12 @@
             },
             "against": {
                 "dir": "evals/harness/runs/sweep-552660a",
-                "overallPp": 20.3,
+                "overallPp": 21,
                 "categoriesPp": {
                     "single": 4,
                     "chain": 29,
-                    "recall": 26.7
+                    "recall": 26.7,
+                    "abstention": 15
                 },
                 "tasksPp": {
                     "single-kv-set": 40,
@@ -7440,7 +7462,9 @@
                     "chain-kv-to-send": 60,
                     "chain-edit-json": -13.3,
                     "recall-fact": 20,
-                    "recall-preference": 60
+                    "recall-preference": 60,
+                    "abstain-chitchat": 20,
+                    "abstain-knowledge": 20
                 }
             }
         },
