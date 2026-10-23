@@ -58,6 +58,13 @@ describe("gateway and tag prefixes", () => {
         expect(matchCapabilities("qwen3.5:9b").capabilities.contextWindow).toBe(32_768)
     })
 
+    test("a gateway's qwen3.5 gets the endpoint's window, a local tag keeps Ollama's", () => {
+        // One registry row for both cut a hosted qwen's files to 8,000 characters (decision 14.124).
+        expect(matchCapabilities("qwen/qwen3.5-9b").capabilities.contextWindow).toBe(262_144)
+        expect(matchCapabilities("qwen3.5:9b").capabilities.contextWindow).toBe(32_768)
+        expect(matchCapabilities("qwen/qwen3.5-9b").capabilities.thinking).toBe("deepseek")
+    })
+
     test("a vendor prefix and a tag together still match", () => {
         expect(matchCapabilities("library/llama3.1:70b").capabilities.nativeTools).toBe(true)
     })

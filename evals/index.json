@@ -14,6 +14,17 @@
         },
         {
             "section": "Tool dialect (NLT vs native)",
+            "claim": "Native ties or beats NLT on 13 of 14 models on multi-turn tool work; NLT falls to 37–62% on Grok 4.7, Kimi K3, GPT-6 Luna, gpt-oss-20b and Gemma 4 26B-A4B",
+            "evidence": "`evals/harness/runs/sweep-552660a/results.json` (2026-10-22/23)",
+            "scope": "25 multi-turn tasks × 5 repeats per model, tools executed and graded by final state, pinned providers",
+            "limitation": "Two harnesses' own defaults compared, one benchmark; small open models only partly covered",
+            "status": "verified",
+            "files": [
+                "evals/harness/runs/sweep-552660a/results.json"
+            ]
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
             "claim": "NLT uses 21–23% fewer prompt tokens",
             "evidence": "`evals/tools/results.json`",
             "scope": "Same run",
@@ -28,7 +39,7 @@
             "claim": "+14.9pp accuracy, 93% fewer critical errors, −25% tokens; +24 to +43pp on small models",
             "evidence": "Somma, Plante & Premji, 2026 replication of Johnson et al. 2025, [arXiv 2607.03953](https://arxiv.org/abs/2607.03953), 14 models, 8,560 trials",
             "scope": "External",
-            "limitation": "Preprint. Frontier models (GPT-5, Gemini 2.5 Pro) show smaller or reversed gains. Our own eval cannot test the critical-error claim",
+            "limitation": "Preprint. Frontier models (GPT-5, Gemini 2.5 Pro) show smaller or reversed gains. Our own eval cannot test the critical-error claim. **Not reproduced on multi-turn work:** in `evals/harness/runs/sweep-552660a/`, native tied or beat NLT on 13 of 14 models, NLT 37–62% on five",
             "status": "cite",
             "files": []
         },
@@ -299,10 +310,12 @@
             "results": [
                 "runs/after-8267f61/results.json",
                 "runs/baseline-aae8fe4/results.json",
+                "runs/sweep-552660a/results.json",
                 "runs/after-ac5dcc5/results.json",
+                "runs/h2h-cachefix/results.json",
                 "runs/h2h-309fdf8/results.json"
             ],
-            "measuredAt": "2026-10-21T20:37:31.320Z"
+            "measuredAt": "2026-10-22T19:34:24.385Z"
         },
         {
             "name": "memory",

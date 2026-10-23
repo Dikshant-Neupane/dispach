@@ -6,9 +6,10 @@
  * path in production is worth more than the convenience, and a per-provider difference nobody can
  * reproduce is the bug class this avoids.
  *
- * NLT is the default, on published evidence rather than taste: across 14 models and 8,560 trials,
- * +14.9pp accuracy, 93% fewer critical errors, −25% tokens, and +24 to +43pp on small models
- * specifically. Frontier models show smaller or reversed gains, which is what `native` is for.
+ * NLT is the schema default, so a manifest without `tools.dialect` behaves as it always has. `init`
+ * writes `native` for a model the registry knows to call tools natively (decision 14.125): on the
+ * multi-turn harness benchmark native tied or beat NLT on 13 of 14 models, and NLT fell to 37–62% on
+ * five by announcing a call and not making it. The published +14.9pp for NLT did not reproduce there.
  */
 
 import type { ContextBlock } from "../../context/blocks.ts"

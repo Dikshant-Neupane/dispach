@@ -1573,6 +1573,11 @@ model invented and a field that failed coercion. The first occurrence is followe
 request; a second in a row ends the turn with `tool_repair_failed` rather than asking again, so two
 of these back to back is the signal that a catalogue needs work rather than that a model does.
 
+It also fires, once per turn, with an empty `slugs` and one entry in `errors`, when a step would have
+ended the turn without doing what the turn needs: `no visible reply after a tool result`, or `said it
+would act and made no call` (decision 14.123). The loop sends one framed note and takes one more step;
+a second silence is the reply.
+
 `turn.end.reason`: `final` \| `max_steps` \| `no_progress` \| `truncated` \| `stopped` \| `timeout` \|
 `error`. Everything that is not `final` is reported honestly rather than dressed up as a normal
 completion, and each has its own sentence from `endNote` — the plain CLI, the transcript and the

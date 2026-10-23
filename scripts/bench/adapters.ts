@@ -64,8 +64,8 @@ export function modelUrlFor(url: string, host: string): string {
 /** A harness living in one container: built once, set up once, one exec per turn. */
 interface Contained {
     readonly image: string
-    /** `docker build` arguments after `-t <image>`: the Dockerfile and the context. */
-    readonly build: readonly string[]
+    /** `docker build` arguments after `-t <image>`: the Dockerfile and the context. Absent: a prebuilt image. */
+    readonly build?: readonly string[]
     /** Where the harness keeps every byte of its state, snapshotted after setup and restored per run. */
     readonly home: string
     /** Overrides the image's own entrypoint so the container idles between execs. */
@@ -99,7 +99,10 @@ function containedHarness(name: string, spec: Contained): Harness {
         name,
         async prepare(context) {
             turnMs = context.model.turnTimeoutMs ?? TURN_TIMEOUT_MS
-            const built = await run(["docker", "build", "-q", "-t", spec.image, ...spec.build])
+            const built =
+                spec.build === undefined
+                    ? await run(["docker", "image", "inspect", spec.image])
+                    : await run(["docker", "build", "-q", "-t", spec.image, ...spec.build])
             if (!built.ok)
                 throw new Error(
                     `${name}: docker build failed:\n${built.stderr}\n  hint: is Docker running? \`docker version\` answers when it is.`,
@@ -189,9 +192,14 @@ function runtimeSpec(name: string, variant: Variant): Contained {
     const set = (path: string, value: string) =>
         `${bin} config set ${MANIFEST} ${path} ${quote(value)} --plain --yes`
     return {
-        // The image this runtime ships as, built from the working tree.
-        image: "bench-runtime:local",
-        build: ["-f", join(ROOT, "docker", "Dockerfile"), ROOT],
+        // The image this runtime ships as, built from the working tree; or, for an A/B, a variant image
+        // built beforehand from a patched copy and named here, so the working tree cannot overwrite it.
+        ...(process.env.BENCH_RUNTIME_IMAGE === undefined
+            ? {
+                  image: "bench-runtime:local",
+                  build: ["-f", join(ROOT, "docker", "Dockerfile"), ROOT],
+              }
+            : { image: process.env.BENCH_RUNTIME_IMAGE }),
         home: "/home/dispach",
         entrypoint: "sleep",
         env: { [`${BRAND.envPrefix}NO_BOOTSTRAP`]: "1", BENCH_KEY: "dummy" },
@@ -253,7 +261,9 @@ function runtimeSpec(name: string, variant: Variant): Contained {
                               ),
                           ]
                         : []),
-                    ...(variant.dialect === "native" ? [set("tools.dialect", "native")] : []),
+                    // Always explicit: init picks native or nlt from the registry (14.125), so an arm that
+                    // relied on the default would silently change dialect.
+                    set("tools.dialect", variant.dialect),
                     `${bin} tools ${MANIFEST} --warm --plain`,
                 ],
                 sh,

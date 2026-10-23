@@ -189,6 +189,7 @@ async function dispatch(argv: readonly string[]): Promise<number> {
                 ...(daemon === undefined ? {} : { daemon }),
                 yes: flags.bool("yes"),
                 plain: flags.bool("plain"),
+                measureWindow: flags.bool("measure-window"),
                 installServer: installServerUnit,
             })
         }

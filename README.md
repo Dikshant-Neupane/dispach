@@ -84,12 +84,13 @@ a workflow engine, a RAG pipeline, a vector database, or a model gateway.
 
 The ones that would otherwise look like mistakes:
 
-- **Natural-language tool calling is the default dialect**, not native function calling. Measured
-  here on 37 single-call fixtures (routing and arguments, no tool executed): NLT ahead on all three
-  models tried, by one fixture on qwen3.5:9b and by 10.8pp on deepseek-chat, with 21–23% fewer
-  prompt tokens ([`evals/tools`](evals/tools/)). A 14-model replication reports +14.9pp and 93% fewer
-  critical errors, with smaller or reversed gains on frontier models
-  ([arXiv 2607.03953](https://arxiv.org/abs/2607.03953)). `native` is an explicit opt-in.
+- **`init` writes native function calling where the model supports it, and natural-language tool
+  calling (NLT) otherwise.** On the multi-turn harness benchmark native tied or beat NLT on 13 of 14
+  models; NLT fell to 37–62% on five, by announcing a call and not making it
+  ([`evals/harness`](evals/harness/)). NLT still wins a single-call test (37 fixtures, no tool
+  executed, [`evals/tools`](evals/tools/)), and a 14-model replication reports +14.9pp for it
+  ([arXiv 2607.03953](https://arxiv.org/abs/2607.03953)) that did not reproduce on multi-turn work here.
+  A manifest without a `dialect` line keeps NLT, as it always has.
 - **The tool dialect is config and never auto-detected.** Behaviour must not change silently
   when the model changes.
 - **Tools are pinned at load, not searched at runtime.** Search-then-execute is two-hop

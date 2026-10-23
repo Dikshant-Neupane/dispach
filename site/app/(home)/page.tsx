@@ -51,8 +51,8 @@ const PROOFS = [
     {
         figure: qwen ? `${qwen.nlt}%` : "NLT",
         title: "Tool calls small models get right",
-        body: `The default tool dialect beat native function calling on all ${evidence.dialect.length} models we ran${qwen ? `, a 9B open-weight model included (${qwen.nlt}% vs ${qwen.native}%)` : ""}.`,
-        caveat: "37 fixtures, routing and arguments only, no tool executed. On the 9B model the margin is one fixture.",
+        body: `Text tool calls (NLT) beat native function calling on all ${evidence.dialect.length} models in a single-call test${qwen ? `, a 9B open-weight model included (${qwen.nlt}% vs ${qwen.native}%)` : ""}.`,
+        caveat: "37 fixtures, routing and arguments only, no tool executed. On the 9B model the margin is one fixture. On multi-turn work native was ahead on 13 of 14 models, so init now writes native where the model supports it.",
         href: "/evals",
         link: "Evidence",
     },

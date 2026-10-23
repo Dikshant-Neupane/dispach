@@ -5,14 +5,14 @@
 Every number Dispach states in public has a row in [`CLAIMS.md`](CLAIMS.md) naming the file it
 comes from. Negative results are listed with the positive ones.
 
-**25 claims:** 18 verified, 1 cited from external research, 5 waiting on a run, 0 to fix, 1 removed.
+**26 claims:** 19 verified, 1 cited from external research, 5 waiting on a run, 0 to fix, 1 removed.
 
 | Eval | What it measures | Committed results | Last measured |
 | --- | --- | --- | --- |
 | [`boot`](boot/) | Boot: process start to `runtime.ready` | [`results.json`](boot/results.json) | 2026-10-20 |
 | [`budget`](budget/) | The estimator's bias, and the weight that corrects it | [`results.json`](budget/results.json) | not recorded |
 | [`handoff`](handoff/) | evals/handoff — does delegation cost the parent fewer tokens? | none | not recorded |
-| [`harness`](harness/) | Harness benchmark | [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json), [`runs/h2h-309fdf8/results.json`](harness/runs/h2h-309fdf8/results.json) | 2026-10-21 |
+| [`harness`](harness/) | Harness benchmark | [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/sweep-552660a/results.json`](harness/runs/sweep-552660a/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json), [`runs/h2h-cachefix/results.json`](harness/runs/h2h-cachefix/results.json), [`runs/h2h-309fdf8/results.json`](harness/runs/h2h-309fdf8/results.json) | 2026-10-22 |
 | [`memory`](memory/) | Memory retrieval | [`results.json`](memory/results.json) | 2026-10-20 |
 | [`nlt-heredoc`](nlt-heredoc/) | evals/nlt-heredoc — multi-line values through the NLT parser | [`results.json`](nlt-heredoc/results.json) | 2026-09-13 |
 | [`phases`](phases/) | Phase-scoped tool visibility, measured — and the number is negative | [`results.json`](phases/results.json) | not recorded |

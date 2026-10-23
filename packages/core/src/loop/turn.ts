@@ -57,6 +57,7 @@ import {
     type TurnSender,
     trustOfSender,
 } from "./sender.ts"
+import { SILENCE_NOTE, silenceOf } from "./silence.ts"
 import { runStep, type StepUsage } from "./step.ts"
 
 export interface TurnLimits {
@@ -636,6 +637,8 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
     let error: TurnResult["error"]
     /** Consecutive repair attempts. Reset by any step whose calls were usable. */
     let repairs = 0
+    /** The silence nudge has been spent this turn: once, then the reply stands (decision 14.123). */
+    let nudged = false
     /**
      * Signatures of the most recent tool-calling steps, oldest first, capped at the threshold.
      *
@@ -1230,6 +1233,38 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             // An unreadable call counts as work: breaking here would drop it silently and report the
             // turn as a clean reply, which is the one outcome that must never happen.
             if (tools === undefined || (parsed.intents.length === 0 && unreadable.length === 0)) {
+                // A step that ends the turn without doing what it needs (nothing visible after a tool
+                // result, or a promise to act with no call) gets one framed note and one more step.
+                const silence =
+                    tools === undefined || nudged ? undefined : silenceOf(parsed.text, trace)
+                if (silence !== undefined && tools !== undefined) {
+                    nudged = true
+                    const said: ChatMessage[] =
+                        parsed.text === ""
+                            ? []
+                            : [{ ...tools.dialect.renderCall(output), origin: "call" }]
+                    const note: ChatMessage = {
+                        role: "user",
+                        content: SILENCE_NOTE[silence],
+                        origin: "repair",
+                    }
+                    history.push(...said, note)
+                    trace.push(...said, note)
+                    pendingProse = ""
+                    input.bus.emit(
+                        "tool.repair",
+                        {
+                            slugs: [],
+                            errors: [
+                                silence === "empty"
+                                    ? "no visible reply after a tool result"
+                                    : "said it would act and made no call",
+                            ],
+                        },
+                        context,
+                    )
+                    continue
+                }
                 // The model chose to stop. Recorded, because this is the *only* exit that means the
                 // work is finished, and it is indistinguishable afterwards from the cap being reached:
                 // both leave `steps === maxSteps` when the answer arrives on the last permitted step.

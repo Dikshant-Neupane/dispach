@@ -210,6 +210,11 @@ export const COMMANDS: readonly CommandSpec[] = [
                 kind: "boolean",
                 help: "take every default; never ask, even at a terminal",
             },
+            {
+                name: "measure-window",
+                kind: "boolean",
+                help: "ask the endpoint for the model's window and write it (the wizard always asks)",
+            },
         ],
     },
     {

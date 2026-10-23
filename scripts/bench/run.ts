@@ -171,7 +171,7 @@ if (import.meta.main) {
     const out = flag("out")
     if (harness === undefined || modelKey === undefined || out === undefined) {
         console.error(
-            `usage: run.ts --harness <${Object.keys(HARNESSES).join("|")}> --model <roster key> --out <file.jsonl> [--log <raw.jsonl>] [--repeats n] [--tasks a,b]`,
+            `usage: run.ts --harness <${Object.keys(HARNESSES).join("|")}> --model <roster key> --out <file.jsonl> [--log <raw.jsonl>] [--repeats n | --repeat n] [--tasks a,b]`,
         )
         process.exit(1)
     }
@@ -185,6 +185,9 @@ if (import.meta.main) {
     const only = flag("tasks")?.split(",")
     const tasks = only === undefined ? TASKS : TASKS.filter((t) => only.includes(t.id))
     const repeats = Number(flag("repeats") ?? 1)
+    // One repeat only, so a slow model's repeats can run as separate processes, each with its own world.
+    // Rows carry the same repeat number either way, so shards merge into the arm they came from.
+    const only1 = flag("repeat") === undefined ? undefined : Number(flag("repeat"))
     const log = flag("log")
     let current = ""
 
@@ -215,7 +218,7 @@ if (import.meta.main) {
     let passed = 0
     let total = 0
     try {
-        for (let repeat = 1; repeat <= repeats; repeat += 1) {
+        for (let repeat = only1 ?? 1; repeat <= (only1 ?? repeats); repeat += 1) {
             for (const task of tasks) {
                 current = `${task.id}#${repeat}`
                 const row = await runTask({

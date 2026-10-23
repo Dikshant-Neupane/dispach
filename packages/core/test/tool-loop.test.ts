@@ -318,6 +318,60 @@ describe("repair", () => {
     })
 })
 
+describe("silence after a tool result, or a promise with no call (14.123)", () => {
+    test("an empty reply after a tool result gets one note, and the answer that follows stands", async () => {
+        // qwen3.5-9b put its answer in its reasoning and ended the turn there: 16 of 49 failures.
+        const { result, events, requests, runtime } = await run([
+            "ACTION: now\nEND",
+            "",
+            "It is nine.",
+        ])
+        expect(result.reason).toBe("final")
+        expect(result.steps).toBe(3)
+        expect(result.text).toBe("It is nine.")
+        const repairs = events.filter((event) => event.type === "tool.repair")
+        expect(payload<{ errors: string[] }>(repairs[0]).errors).toEqual([
+            "no visible reply after a tool result",
+        ])
+        expect(requests[2]?.messages.some((m) => m.content.includes("had no visible text"))).toBe(
+            true,
+        )
+        await runtime.stop()
+    })
+
+    test("a promise with no call, on the first step, gets one note and then the call", async () => {
+        // Grok 4.7 under NLT wrote "I'll store it under locker_code." and stopped: 0 of 8 on a chain.
+        const { result, events, requests, runtime } = await run([
+            "I'll check the clock for you.",
+            "ACTION: now\nEND",
+            "It is nine.",
+        ])
+        expect(result.reason).toBe("final")
+        expect(events.some((event) => event.type === "tool.call")).toBe(true)
+        expect(
+            requests[1]?.messages.some((m) => m.content.includes("you said you would do that")),
+        ).toBe(true)
+        await runtime.stop()
+    })
+
+    test("the note is sent once; a second silence is the reply", async () => {
+        const { result, events, runtime } = await run(["I'll check.", "I'll check."])
+        expect(result.reason).toBe("final")
+        expect(result.steps).toBe(2)
+        expect(events.filter((event) => event.type === "tool.repair").length).toBe(1)
+        await runtime.stop()
+    })
+
+    test("a closing like 'let me know' or a question is a reply, not a promise", async () => {
+        const closing = await run(["It is nine. Let me know if you need anything else."])
+        expect(closing.result.steps).toBe(1)
+        await closing.runtime.stop()
+        const question = await run(["Shall I check the clock?"])
+        expect(question.result.steps).toBe(1)
+        await question.runtime.stop()
+    })
+})
+
 describe("the step cap", () => {
     /**
      * Four *different* calls, because the script's last entry repeats forever and identical repeats

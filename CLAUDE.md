@@ -109,9 +109,11 @@ inbound (channel | API | schedule)
 
 **Non-obvious decisions you must not undo without reading the rationale:**
 
-- **NLT is the default tool dialect**, not native function calling. Published data: +14.9pp
-  accuracy, 93% fewer critical errors, −25% tokens across 14 models; +24 to +43pp on small
-  models specifically. `native` is an opt-in manifest field.
+- **`init` writes `native` where the registry knows the model calls tools natively, `nlt` otherwise**
+  (decision 14.125, revising 4.1). On the multi-turn harness benchmark native tied or beat NLT on 13
+  of 14 models, and NLT fell to 37–62% on five by announcing a call and not making it
+  (`evals/harness/`). The *schema* default is still `nlt`, so a manifest that omits the field behaves
+  as it always did; the published +14.9pp NLT result did not reproduce here.
 - **Dialect is config, never auto-detected.** Behaviour must not change silently when the
   model changes.
 - **Tools are pinned at load, not searched at runtime.** Search-then-execute is two-hop

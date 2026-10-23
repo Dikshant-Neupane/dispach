@@ -13,7 +13,8 @@
  * voice, so the `workspace` command keeps warning until a person writes real exchanges.
  */
 
-import { BRAND, whenNotToUseKey } from "@dispach/core"
+import { BRAND, matchCapabilities, whenNotToUseKey } from "@dispach/core"
+import type { MeasuredWindow } from "#lib/measure-window"
 import { fillTemplate, SKILL_TEMPLATE, WORKSPACE_TEMPLATES } from "#lib/templates"
 
 /**
@@ -1673,10 +1674,34 @@ export interface GeneratedFile {
  * it does and how* — responsibilities, workflow, the memory procedure, and eventually the
  * team routing. They coexist; what must not exist is a second *identity* document.
  */
-export function planFiles(answers: InitAnswers): readonly GeneratedFile[] {
+/**
+ * The generated dialect (decision 14.125): native where the capability registry says the model calls
+ * tools natively, NLT otherwise. Measured on fourteen models, native tied or beat NLT on thirteen and NLT
+ * fell to 37-62% on five, by announcing a call and not making it. Written as a literal, so an existing
+ * agent keeps the dialect it has and none changes when its model does.
+ */
+function dialectLines(model: string): readonly string[] {
+    return matchCapabilities(model).capabilities.nativeTools
+        ? [
+              `  # native: the model's own function calling. nlt (calls written as text) is the opt-in for`,
+              `  # a model without it; the harness benchmark in evals/harness/ has both, per model.`,
+              `  dialect: native`,
+          ]
+        : [
+              `  # nlt: calls written as text, because the capability registry does not know this model to`,
+              `  # call tools natively. If it does, \`dialect: native\` was ahead on 13 of 14 measured models.`,
+              `  dialect: nlt`,
+          ]
+}
+
+/**
+ * Every file `init` writes. `window` is the endpoint's published window when `init` could ask it
+ * (decision 14.124), passed beside the answers because every answer is also a flag and this is not.
+ */
+export function planFiles(answers: InitAnswers, window?: MeasuredWindow): readonly GeneratedFile[] {
     const substitutions = substitutionsFor(answers)
     return [
-        { relPath: "agent.yaml", contents: manifestFor(answers) },
+        { relPath: "agent.yaml", contents: manifestFor(answers, window) },
         ...(
             [
                 "SOUL.md",
@@ -2092,7 +2117,7 @@ function hostZoneName(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
 
-function manifestFor(answers: InitAnswers): string {
+function manifestFor(answers: InitAnswers, window: MeasuredWindow | undefined): string {
     const slug = slugify(answers.name)
 
     const lines = [
@@ -2176,6 +2201,15 @@ function manifestFor(answers: InitAnswers): string {
         `  # This is NOT a cap on what the model may generate — nothing is sent as max_tokens unless`,
         `  # you set model.main.maxTokens. Generous because a reasoning model thinks here too.`,
         `  reserveOutput: 8192`,
+        ...(window === undefined
+            ? []
+            : [
+                  ``,
+                  `  # The window the endpoint published for ${answers.model} when this file was made, from`,
+                  `  # ${window.source}. A fact about the endpoint, not the model: change it if the`,
+                  `  # model is served somewhere else.`,
+                  `  window: ${window.tokens}`,
+              ]),
         ``,
         `  # Capability-gated identity: SOUL.md ships only to a model meeting \`requires\`; anything`,
         `  # else gets the hand-edited compact file. Edit SOUL.md first, then re-derive`,
@@ -2198,7 +2232,7 @@ function manifestFor(answers: InitAnswers): string {
         rule("tools"),
         `tools:`,
         `  # Config only, never auto-detected: behaviour must not drift when the model changes.`,
-        `  dialect: nlt`,
+        ...dialectLines(answers.model),
         ``,
         `  # Built-in tools, resolved from memory. Never sent to a remote provider.`,
         `  local:`,

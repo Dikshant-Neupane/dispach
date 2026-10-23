@@ -409,6 +409,28 @@ export const CAPABILITY_REGISTRY: readonly CapabilityEntry[] = [
         verified: "2026-10-21 via OpenRouter, provider z-ai/fp8",
     },
     {
+        // The same model through a gateway (`qwen/qwen3.5-9b`), where the window is the endpoint's, not
+        // Ollama's. The row below was measured on local Ollama, which serves qwen3.5 at 32,768; applied
+        // to DeepInfra's 262,144 it capped every tool observation at 2,000 tokens, cut an 11k-token file
+        // to 8,000 characters, and was the cause of 13 of qwen's 49 failures in the 2026-10-23 sweep
+        // (long files 2/15 against Hermes's 11/15). A vendor-prefixed id is never local, so it gets its own
+        // row; the longer pattern wins over `qwen3.5*`. `init` also writes the measured window into the
+        // manifest when it can reach the endpoint (decision 14.124), which overrides either.
+        pattern: "qwen/qwen3.5*",
+        capabilities: {
+            nativeTools: true,
+            strictSchema: false,
+            thinking: "deepseek",
+            promptCache: "none",
+            parallelToolCalls: false,
+            contextWindow: 262_144,
+            maxOutput: 8192,
+        },
+        note: "Reasoning is billed to the output budget, so context.reserveOutput must cover reasoning plus the reply.",
+        verified:
+            "2026-10-23 via OpenRouter, provider deepinfra/bf16 (published context_length 262,144)",
+    },
+    {
         // qwen3.5 reasons, and the generic `qwen*` row below says it does not. Measured through
         // Ollama's OpenAI-compatible endpoint: reasoning arrives in a `reasoning` delta field,
         // separately from `content`, which is the `deepseek` protocol — separate field, nothing to
