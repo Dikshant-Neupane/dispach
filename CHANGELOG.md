@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-An agent runtime your product calls over HTTP, now with pluggable model transports, MCP, subagents
-and backups. Rooms, stand-ins and team memory ship as experimental, API-only. Every change since
-0.1.3, consolidated from the 0.2.0 pre-releases listed below.
+- Ahead of OpenClaw on all 11 benchmarked models, level with or ahead of Hermes on 8, and the cheapest of the three on 10 ([benchmarks](https://github.com/moeen-mahmud/dispach/blob/main/developer-docs/runtime/benchmarks.md)).
+- Pluggable model transports with Bedrock, MCP, subagents, a larger HTTP API for embedders, and secrets kept out of the agent's reach.
+- A 0.1.3 agent and store boot unchanged. Highlights and the upgrade path: [What's new in 0.2.0](https://github.com/moeen-mahmud/dispach/blob/main/developer-docs/runtime/whats-new-0-2-0.md).
+
+Every change since 0.1.3, consolidated from the 0.2.0 pre-releases listed below. Rooms, stand-ins and team memory ship as experimental, API-only.
 
 ### Upgrading from 0.1.3
 
