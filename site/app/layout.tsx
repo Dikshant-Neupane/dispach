@@ -7,7 +7,11 @@ import { brand } from "@/lib/shared"
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans" })
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
+// Vercel sets this to the production domain, so the address is never written into the tree.
+const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
+
 export const metadata: Metadata = {
+    ...(host === undefined ? {} : { metadataBase: new URL(`https://${host}`) }),
     title: `${brand.name}: the agent backend your product calls over HTTP`,
     description: `${brand.name} is an open-source, self-hosted agent runtime: memory, tools, schedules, channels and approvals behind one HTTP API, on any OpenAI-compatible model.`,
 }
