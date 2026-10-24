@@ -18,6 +18,10 @@ Everything else described in this README is stable.
 **New in 0.2.0:** [what changed and how to upgrade](developer-docs/runtime/whats-new-0-2-0.md) ·
 **Limits:** [what is measured, and what it does not do](developer-docs/runtime/limits-and-evidence.md)
 
+**Contributing:** start with a [good first issue](https://github.com/moeen-mahmud/dispach/labels/good%20first%20issue)
+or the [larger pieces that need an owner](https://github.com/moeen-mahmud/dispach/labels/help%20wanted), and
+[Start here](https://github.com/moeen-mahmud/dispach/discussions/38) for how a change gets in.
+
 > To dispatch is to send a thing on its way with the authority to see it done — to decide
 > what handles it, hand it over, and answer for the result.
 
