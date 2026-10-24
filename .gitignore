@@ -57,3 +57,5 @@ control.db*
 
 # Weekly launch counts, from scripts/launch-metrics.ts
 .metrics/
+# Browser-automation output
+.playwright-mcp/

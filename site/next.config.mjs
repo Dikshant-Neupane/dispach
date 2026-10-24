@@ -11,6 +11,9 @@ const config = {
     reactStrictMode: true,
     turbopack: { root },
     outputFileTracingRoot: root,
+    // Search indexes the OpenAPI document at request time, and the tracer cannot see a path built at
+    // runtime, so without this the deployed function has no file to read and answers 500.
+    outputFileTracingIncludes: { "/api/search": ["../developer-docs/reference/openapi.json"] },
     // `/docs` has no page of its own; the first section is where a reader starts.
     redirects: async () => [{ source: "/docs", destination: "/docs/runtime", permanent: false }],
 }

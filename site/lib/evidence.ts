@@ -61,6 +61,8 @@ export const benchmark = {
     rows: h2h,
     perfect: h2h.filter((r) => r.dispach.pass === r.dispach.n).length,
     atLeastHermes: h2h.filter((r) => r.dispach.pass >= r.hermes.pass).length,
+    /** The models Hermes scores higher on, named on the page rather than summarised. */
+    hermesAhead: h2h.filter((r) => r.hermes.pass > r.dispach.pass).map((r) => r.name),
     cheapest: h2h.filter((r) => r.dispach.cost < Math.min(r.hermes.cost, r.openclaw.cost)).length,
     openclawLast: h2h.every((r) => r.openclaw.pass < Math.min(r.dispach.pass, r.hermes.pass)),
 }
