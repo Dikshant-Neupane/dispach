@@ -34,8 +34,11 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
 export type SocketFactory = (url: string) => WebSocket
 
 export const SLACK_API = "https://slack.com/api/"
-/** Where Slack serves every private file, and so the only host a download may reach. */
-export const SLACK_FILES = "https://files.slack.com"
+/**
+ * Where Slack serves every private file, and so the only place a download may reach. The trailing slash
+ * is load-bearing: without it, a path of `@evil.example/x` appended to the origin names another host.
+ */
+export const SLACK_FILES = "https://files.slack.com/"
 
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000] as const
 
@@ -378,13 +381,18 @@ export class SlackTransport implements ChannelTransport {
     }
 }
 
-/** The path and query of an https files.slack.com URL, or `undefined` for any other address. */
+/**
+ * A private file's path and query below `SLACK_FILES` (no leading slash), or `undefined` for anything
+ * that is not an https files.slack.com `files-pri/` address, or that climbs out of it with `..`.
+ */
 export function slackFilePath(url: string): string | undefined {
     try {
         const parsed = new URL(url)
-        return `${parsed.protocol}//${parsed.host}` === SLACK_FILES
-            ? `${parsed.pathname}${parsed.search}`
-            : undefined
+        if (`${parsed.protocol}//${parsed.host}/` !== SLACK_FILES) return undefined
+        const path = parsed.pathname.slice(1)
+        if (!path.startsWith("files-pri/") || path.split("/").some((s) => s === ".." || s === ""))
+            return undefined
+        return `${path}${parsed.search}`
     } catch {
         return undefined
     }

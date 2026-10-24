@@ -375,7 +375,8 @@ describe("media", () => {
                 {
                     subtype: "slack_audio",
                     mimetype: "audio/webm",
-                    url_private_download: "https://files.slack.com/clip.webm",
+                    url_private_download:
+                        "https://files.slack.com/files-pri/T1-F1/download/clip.webm",
                     size: 800,
                     duration_ms: 2500,
                 },
@@ -390,7 +391,7 @@ describe("media", () => {
             new Response(new Uint8Array([4, 4]), { headers: { "content-type": "audio/webm" } })
         expect([...((await audio?.fetch(new AbortController().signal)) ?? [])]).toEqual([4, 4])
         expect(fake.sent[0]).toMatchObject({
-            url: "https://files.slack.com/clip.webm",
+            url: "https://files.slack.com/files-pri/T1-F1/download/clip.webm",
             authorization: "Bearer xoxb-1",
         })
         await transport.stop()
@@ -413,12 +414,13 @@ describe("media", () => {
             files: [
                 {
                     mimetype: "image/png",
-                    url_private_download: "https://files.slack.com/shot.png",
+                    url_private_download:
+                        "https://files.slack.com/files-pri/T1-F1/download/shot.png",
                     size: 900,
                 },
                 {
                     mimetype: "application/pdf",
-                    url_private_download: "https://files.slack.com/a.pdf",
+                    url_private_download: "https://files.slack.com/files-pri/T1-F1/download/a.pdf",
                 },
             ],
         })
@@ -430,7 +432,7 @@ describe("media", () => {
             new Response(new Uint8Array([5, 5]), { headers: { "content-type": "image/png" } })
         expect([...((await images[0]?.fetch(new AbortController().signal)) ?? [])]).toEqual([5, 5])
         expect(fake.sent[0]).toMatchObject({
-            url: "https://files.slack.com/shot.png",
+            url: "https://files.slack.com/files-pri/T1-F1/download/shot.png",
             authorization: "Bearer xoxb-1",
         })
         await transport.stop()
@@ -480,7 +482,7 @@ describe("media", () => {
 describe("hardening", () => {
     test("the bot token is sent only to https files.slack.com", () => {
         expect(slackFilePath("https://files.slack.com/files-pri/T1-F1/clip.webm?t=x")).toBe(
-            "/files-pri/T1-F1/clip.webm?t=x",
+            "files-pri/T1-F1/clip.webm?t=x",
         )
         for (const url of [
             "http://files.slack.com/clip.webm",
@@ -488,7 +490,9 @@ describe("hardening", () => {
             "https://files.slack.com.evil.example/clip.webm",
             "https://user@evil.example/files.slack.com",
             "https://evil.example/?u=files.slack.com",
-            "https://slack.com/clip.webm",
+            "https://slack.com/files-pri/T1-F1/clip.webm",
+            "https://files.slack.com/api/users.list",
+            "https://files.slack.com/files-pri/T1-F1//clip.webm",
             "not a url",
         ])
             expect(slackFilePath(url)).toBeUndefined()
