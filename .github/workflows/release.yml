@@ -152,7 +152,7 @@ jobs:
     needs: npm
     if: startsWith(github.ref, 'refs/tags/v') && needs.npm.outputs.prerelease != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -167,11 +167,13 @@ jobs:
       - name: download the published tarball
         run: |
           version="${{ needs.npm.outputs.version }}"
-          for _ in $(seq 1 30); do
+          # npm acknowledges a publish before the version resolves ("being processed"), and 0.2.0
+          # took longer than five minutes, so this waits up to thirty.
+          for _ in $(seq 1 90); do
             url=$(npm view "dispach@${version}" dist.tarball 2>/dev/null) && [ -n "$url" ] && break
-            sleep 10
+            sleep 20
           done
-          [ -n "$url" ] || { echo "::error::dispach@${version} is not on the registry yet"; exit 1; }
+          [ -n "$url" ] || { echo "::error::dispach@${version} is not on the registry after 30 minutes"; exit 1; }
           echo "$url"
           curl -fsSL "$url" -o dispach.tgz
           sha256sum dispach.tgz | cut -d' ' -f1 > dispach.sha256
