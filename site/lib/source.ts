@@ -21,7 +21,10 @@ const docs = defineDocs({
             "!**/SUMMARY.md",
         ],
         schema: ({ source }) => {
-            return pageSchema.extend({ title: z.string().default(firstHeading(source)) })
+            const defaultTitle = firstHeading(source)
+            return pageSchema.extend({
+                title: z.string().default(defaultTitle),
+            }) as unknown as typeof pageSchema
         },
     },
     meta: { schema: metaSchema },
