@@ -14,6 +14,9 @@ they work for, and stand in for them, openly, when they are away. That half ship
 **experimental**: on the HTTP API, with no TUI or web screens yet, and it may change within 0.2.x.
 Everything else described in this README is stable.
 
+**Docs:** [dispach.blivius.com/docs](https://dispach.blivius.com/docs) ·
+**New in 0.2.0:** [what changed and how to upgrade](developer-docs/runtime/whats-new-0-2-0.md)
+
 > To dispatch is to send a thing on its way with the authority to see it done — to decide
 > what handles it, hand it over, and answer for the result.
 
@@ -66,7 +69,7 @@ holding, never on the reply's wording. Tasks passed out of 125, and the OpenRout
 <!-- benchmark:end -->
 
 One benchmark of our own design, each harness on its own documented defaults; with 125 runs an arm a
-gap of a few runs is noise. Hermes leads on the two small open models, and the
+gap of a few runs is noise. Hermes leads on Gemini 4 Argon and the two small open models, and the
 [benchmark README](evals/harness/README.md) says why, with every run and reply committed.
 
 ## Status
@@ -81,13 +84,19 @@ Built and in use:
   with two catalogues, and scheduling (cron, interval and one-shot, DST-correct).
 - **Serving and API:** the HTTP/SSE/WS server with detached turns, the typed client, scoped operator
   keys, approvals over the wire, and provisioning an agent over HTTP with no restart.
+- **Models:** any OpenAI-compatible endpoint, AWS Bedrock through a pluggable transport, fallback
+  models, vision input, and replayed signed thinking.
 - **Channels and tools:** Telegram and WhatsApp (the latter a bundled plugin, with a warning;
-  [see below](#whatsapp)), the plugin API with all four middleware wrap points, and system and web
-  tool providers under a policy engine.
+  [see below](#whatsapp)), the plugin API with all four middleware wrap points, system and web
+  tool providers under a policy engine, remote MCP servers, and subagents.
 - **Coordination and delivery:** supervisor delegation with typed handoffs, and an idempotent
   outbox.
 - **Front ends and hosting:** a browser UI on the same origin as the API, the TUI, launchd
-  services, and the Docker image with a compose front door.
+  services, the Docker image with a compose front door, Kubernetes, and `GET /v1/backup` for the
+  whole sandbox.
+
+**Experimental in 0.2.0**, on the HTTP API only: rooms, stand-ins and team memory; the Slack,
+Microsoft Teams and A2A channels; and media (transcription, image generation, spoken replies).
 
 **MCP is a tool provider, never the substrate** (decision 4.7): remote servers over Streamable HTTP,
 their tools pinned by name like any other provider's. Composio is still called directly.
@@ -594,9 +603,9 @@ and a real streaming turn against DeepSeek reconstructs from 26 `model.chunk` fr
 about one afternoon.
 
 Two notes on reading those numbers. The size is `docker image inspect --format '{{.Size}}'`, which
-is what the CI gate uses; `docker images` prints **180 MB** for the same image on the same machine,
-a different accounting, so check which one a figure came from before treating it as a regression.
-And the boot happened with a **deliberately invalid** model key — no network I/O before
+is what CI reports on every push. Older Docker releases printed a much smaller figure under
+`docker images`, a different accounting, so check which one a figure came from before treating it as
+a regression. And the boot happened with a **deliberately invalid** model key — no network I/O before
 `runtime.ready` is the rule this project exists for, and a container reaching healthy on a fake
 credential is that rule visible from outside.
 
@@ -614,7 +623,7 @@ bun run bench:boot   # must stay under 1000 ms
 bun run bench:schedule  # 100 schedules on one timer — reports drift, does not assert it
 ```
 
-Requires Bun. Node 24+ is supported as a soft goal, tested in CI, never a merge blocker.
+Bun is the development toolchain: install, build and test. Everything shipped runs under Node 24+.
 
 A few house rules that bite first, all enforced by tests rather than review:
 
@@ -638,7 +647,7 @@ Public pull requests are welcome; [`CONTRIBUTING.md`](CONTRIBUTING.md) is the co
 Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms. Every number in this
 README has a row in [`evals/CLAIMS.md`](evals/CLAIMS.md) naming the file it comes from.
 
-Measured at **~87 ms** at 0.2.0 — 64 ms of interpreter and imports, 23 ms inside `Runtime.create` —
+Measured at **~65 ms** at 0.2.0 — 45 ms of interpreter and imports, 21 ms inside `Runtime.create` —
 and checked on every phase rather than at the end (it was ~53 ms at 0.1.3; the 0.2.0 packages
 account for the difference):
 
@@ -647,8 +656,8 @@ bun run bench:boot
 ```
 
 Reported with the machine state it was taken on, because without that a boot number is a number
-about somebody's afternoon: the figure above is a 7-run median on an M-series laptop at a load
-average of ~5, and the same tree measured 58 ms with four builds running beside it. The budget has
+about somebody's afternoon: the figure above is a 7-run median on an Apple M4 Pro at a load
+average of ~3.4, and an earlier run of the same tree at a load average of ~5 measured 91 ms. The budget has
 three orders of magnitude of headroom, so the reason to say this is not the arithmetic — it is that
 a regression is only visible against a figure you can reproduce.
 
@@ -792,7 +801,8 @@ hand-written, and was missing five commands at once. `dispach <command> --help` 
 | `docs/12-OPENCLAW-CUTOVER.md` | Moving off the runtime this one replaces |
 | `RELEASING.md` | How a release is cut: the changelog, `bun run release`, and what the tag publishes |
 | `CHANGELOG.md` | What changed in each release, in bullets |
-| `developer-docs/` | Public GitBook source for integrators and contributors |
+| `developer-docs/` | Source of the public docs at `/docs`, for integrators and contributors |
+| `site/` | The landing page and docs site, built with Next.js and Fumadocs |
 | `CONTRIBUTING.md` | Public contribution policy and workflow entry point |
 | `CLAUDE.md` | The standing brief: hard rules and the hazards already paid for |
 | `evals/` | Every performance claim, with the number and a script to reproduce it |

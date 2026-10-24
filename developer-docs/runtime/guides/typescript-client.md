@@ -23,6 +23,7 @@ const agent = client.agent("milo")
 
 ```ts
 const turn = await agent.send("Summarize today's incidents", {
+  chunks: true,
   idempotencyKey: crypto.randomUUID(),
 })
 
@@ -31,7 +32,7 @@ for await (const token of turn.tokens()) {
 }
 ```
 
-`send()` resolves when the server accepts the turn. Dropping the iterator does not cancel it.
+`send()` resolves when the server accepts the turn. Dropping the iterator does not cancel it. Pass `chunks: true` so the server records tokens from the first one; without it, tokens are recorded only once a reader attaches, and a reply that started streaming before then is missing its start.
 
 Persist `turn.turnId` when work must survive a process or page reload:
 
@@ -62,7 +63,7 @@ for await (const item of turn.stream({ chunks: true })) {
 }
 ```
 
-`tokens()` refuses a truncated replay by default because concatenating it would produce incomplete text without an obvious error. Use the full stream report before deliberately accepting a fragment.
+`tokens()` refuses a replay the buffer reports as truncated, because concatenating it would produce incomplete text without an obvious error; pass `{ allowTruncated: true }` only to accept a fragment deliberately. It cannot detect tokens that were never recorded, which is why the send above passes `chunks: true`. For the authoritative final text, read the stored turn.
 
 The package guide at `packages/client/README.md` covers approvals, scoped keys, sessions, errors,
 and server-wide event streams.

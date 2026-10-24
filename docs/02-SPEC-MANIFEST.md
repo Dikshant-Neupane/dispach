@@ -17,6 +17,11 @@ const runtime = await Runtime.create({ agents: [defineAgent({ /* same shape */ }
 The YAML path parses into exactly the object the TS builder produces. There is no
 YAML-only feature and no TS-only feature.
 
+The TypeScript path is in-process and available from a repository checkout only: `@dispach/core` is a
+private workspace package and is not published to npm. The published `dispach` package carries the
+binary and, at `dispach/client` (also its `.` export) and `dispach/wire`, a typed HTTP client — an
+application using it talks to a running server over HTTP rather than embedding the runtime.
+
 ---
 
 ## Full example
@@ -41,7 +46,7 @@ model:
 context:
   window: 32768
   reserveOutput: 4096
-  observationMaxTokens: 2000          # optional; absent = 5% of window, 2,000–32,000
+  observationMaxTokens: 2000          # optional; absent = a quarter of the window, 2,000–32,000
   workspace: ./workspace
   static:
     - AGENTS.md
@@ -58,7 +63,7 @@ context:
     trim: 0.95
 
 tools:
-  dialect: nlt
+  dialect: nlt                        # the schema default; `init` writes native for a model known to call tools natively
   providers:
     composio:
       apiKeyEnv: COMPOSIO_API_KEY
@@ -75,7 +80,7 @@ tools:
     enabled: false
   local:
     - memory_write
-    - phase_set
+    - artifact_read
 
 phases:
   default:
@@ -89,7 +94,7 @@ skills:
 memory:
   retriever: fts5
   dir: ./memory
-  k: 6
+  maxActive: 5
 
 channels:
   - type: telegram
@@ -145,7 +150,10 @@ server:
 
 ### `model`
 
-Three roles. `main` required; `selector` and `compactor` fall back to `main`.
+`main` is required; `selector` and `compactor` fall back to `main`, and `subagent`, when declared, is
+the default role for a sub-agent (see `subagents`). Beyond those, any key under `model:` is a **custom
+role** a schedule may name with `role:` (as may a channel, a sub-agent or an API message). A role
+nothing references is warned about, because that is also what a misspelled `compactor` looks like.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -194,8 +202,8 @@ capabilities:
   promptStyle:            # workspace rendering. Every field optional and merged individually
     delimiters: plain     # xml | markdown | plain
     intensity: emphatic   # emphatic | neutral | soft
-    examplesIn: system    # system | user — user moves example blocks to a user message (slot 2)
-    skillsIn: system      # system | user — carried; consumed when skills arrive in Phase 5
+    examplesIn: system    # system | user — user moves example blocks to a user message (slot 3)
+    skillsIn: system      # system | user — the role the active skill block (slot 5) is sent as
 ```
 
 Capabilities affect thinking-block replay, cache-breakpoint placement, and workspace rendering
@@ -249,7 +257,7 @@ the provider caches nothing: DeepSeek caches context automatically server-side a
 | --- | --- | --- |
 | `window` | from capabilities | Total token budget. |
 | `reserveOutput` | 4096 | How much of the window to keep free for the reply, so the prompt cannot crowd it out. A **prompt-budget** number: it never becomes `max_tokens`. |
-| `observationMaxTokens` | 5% of window, 2,000–32,000 | Above this a single tool observation is trimmed to head+tail with an artifact pointer. Absent, it is sized from the resolved window (0.2.0; a flat 2,000 cut an 11k file in the middle on a 1M-window model, where the answer was). Set it to pin a number. |
+| `observationMaxTokens` | a quarter of the window, 2,000–32,000 | Above this a single tool observation is trimmed to head+tail with an artifact pointer. Absent, it is sized from the resolved window (0.2.0; a flat 2,000 cut an 11k file in the middle on a 1M-window model, where the answer was). Set it to pin a number. |
 | `modelIdentity` | `shown` | `hidden` keeps the agent from seeing which model it runs on (pilot.15). The prompt's settings summary keeps the dialect and window and drops the model id. `config_read` shows `(hidden by the operator)` for `model.<role>` (fallbacks too) `id`, `api`, `baseUrl`, `options` and `apiKeyEnv`, and `media.<section>` `provider`, `model`, `baseUrl`, `options` and `apiKeyEnv`, whether read whole or by path; every other setting, model tuning included, stays readable and settable. Person-only: `config_set` refuses it. Events and the HTTP API keep the real ids. Not covered: `file_read` or `exec` on `agent.yaml`, and an error text that names the model. |
 | `files` | `[]` | **Deprecated.** Alias for `static`, warning at load and naming the replacement. Keeps resolving against the *manifest* directory rather than `workspace`, which is what makes it an alias rather than a rename. Setting both `files` and `static` is a load failure, not a merge. |
 | `thresholds` | `snip .60 · micro .70 · collapse .80 · reset .88 · trim .95` | Compaction ladder trigger fractions **of the prompt budget** — `window` minus `reserveOutput`, not of the whole window. Measured against the window, a large reserve lets `assembleContext`'s oldest-first trim run while the ladder still reports mild pressure, which is the common case on a reasoning model. Must be strictly ascending **in stage order** and within `(0, 1)`; validated. The stage order is `snip → micro → collapse → reset → trim`, ordered by how much information each rung destroys rather than how many bytes it frees: `snip` and `micro` leave an `artifact_read` pointer, `collapse` and `reset` leave the meaning as a digest, `trim` leaves nothing. So `trim` is last despite freeing the most, and it is the fallback for the case where a digest would have grown the prompt and the no-growth guard refused it. A manifest ordered for the pre-reorder ladder (`trim` first) is refused by name, with the rewrite in the hint. |
@@ -265,12 +273,12 @@ the provider caches nothing: DeepSeek caches context automatically server-side a
 | --- | --- | --- |
 | `workspace` | `./workspace` | Directory the tier lists resolve against. Relative to the manifest. |
 | `static` | `[]` | Tier 0, slot 0. Cache-stable, read-only, before breakpoint A. |
-| `volatile` | `[]` | Tier 1, slot 3. Agent-writable, **after** breakpoint A so a write does not invalidate the cached prefix. The **only** writable tier — a `static` or `reminder` file declaring `editable` is refused, not downgraded. |
+| `volatile` | `[]` | Tier 1, slot 4. Agent-writable, **after** breakpoint A so a write does not invalidate the cached prefix. The **only** writable tier — a `static` or `reminder` file declaring `editable` is refused, not downgraded. |
 | `reminder` | none | Tier 2, slot 9. Injected after the conversation history, before the current input. |
 | `budgets` | `{static: 2000, volatile: 3500, reminder: 500, total: 6000}` | Hard caps, measured on the *stripped* text. Over budget **fails the load naming the file** — never silent truncation. A ceiling, not a target: everything inside it is paid every turn. |
 | `rules` | `{perRuleSuccess: 0.90, reliabilityTarget: 0.80, onExceed: fail}` | Imperative-count guard across static + reminder. At 0.90 a 0.80 target permits two rules, not four. The count is a heuristic and reports every line it counted; `onExceed: warn` is the escape. The file named by `soul.file` counts only its `<rules>` blocks — see `07-SPEC-WORKSPACE.md`. |
 | `soul` | none | Capability-gated long-form identity: `file`, `requires` (`contextWindow` comparator, `class: frontier \| small` derived from the model id by size), `onUnmet: distill \| omit \| fail`, and `distilled` (required by `distill`). The selected file loads first in the static tier as the identity document — listing a second identity file ships two identities. Operations (`AGENTS.md`) coexist with it. |
-| `compactionNotice` | true | Runtime-generated line telling the model context compacts automatically, so it does not wrap up work early on budget grounds. **Phase 7** — refused at load until then. |
+| `compactionNotice` | true | Runtime-generated line telling the model context compacts automatically, so it does not wrap up work early on budget grounds. Rendered into the configuration block (slot 2) and naming `artifact_read` when the agent has that tool; `false` leaves it out. |
 
 Per-file frontmatter (`tier`, `editable`, `budget`, `eviction`) is stripped before injection, along
 with HTML comments — so authoring guidance in a template costs nothing at runtime. A file whose
@@ -293,19 +301,18 @@ case-insensitive and whole-word against the current input. See `07-SPEC-WORKSPAC
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `dialect` | `nlt` | `nlt` or `native`. Config only — never auto-detected. `native` is refused at load when the resolved model has `capabilities.nativeTools: false`, and when any resolved slug falls outside a native function name's `[A-Za-z0-9_-]{1,64}`. |
+| `dialect` | `nlt` | `nlt` or `native`. Config only — never auto-detected. The schema default stays `nlt`, so a manifest that omits the field behaves as it always did; `init` writes `native` where the capability registry knows the model calls tools natively and `nlt` otherwise (decision 14.125), as a literal, so a later model change does not move it. `native` is refused at load when the resolved model has `capabilities.nativeTools: false`, and when any resolved slug falls outside a native function name's `[A-Za-z0-9_-]{1,64}`. |
 | `providers` | `{}` | Map of provider id → that provider's own config: `system`, `web`, `composio`, or anything the embedder registered. Several at once. Each block is validated by its provider, which **refuses an unknown key** rather than ignoring it. Secrets are env var *names*. **Naming an unregistered id is a warning, not a load failure** (0.1.3): a provider is an optional capability and is most often one a plugin registers, so refusing here turned one broken plugin into an agent that could not start. It is named by `agent.warnings`, and the pinned slugs it would have supplied are named separately as unresolved — so a reader gets the cause *and* the cost, which is what the old refusal was protecting. |
 | `provider` | none | **Deprecated alias** for a single `providers` entry. Still loads, with a `tools_provider_deprecated` warning naming the rewrite. Setting it *and* `providers` is a load failure, not a merge. |
 | `providerConfig` | `{}` | Goes with `provider`. Non-empty with no `provider` to apply it to earns `tools_provider_config_orphaned`. |
 | `budget.max` | 24 | Hard cap on catalogue size. |
 | `budget.reserveWrite` | 6 | Slots held for mutating tools so reads cannot starve writes. |
 | `pinned` | `[]` | Slugs resolved at load. **An unknown slug is a warning and the tool is absent** (0.1.3), with the slug and provider named — unless a provider claims it with `explainUnresolved()`, which is consulted only once a slug is missing after *every* provider has answered. Warned rather than refused because the commonest cause is a missing *credential*, not a typo; `available()` is what tells the model it was not given a tool its manifest asks for. A cold Composio cache reports itself and names the warm command; the generic nearest-match message would blame correct slugs. |
-| `search.enabled` | false | Exposes a provider search meta-tool as an escape hatch. Off by default: search-then-execute is two-hop reasoning and small models fail it. |
-| `local` | `[]` | Built-in tools: `artifact_read`, `memory_write`, `memory_forget`, `phase_set`, `handoff`, `now`. `artifact_read` follows the pointer compaction leaves behind, so an agent with compaction enabled and this tool unpinned can see that detail was removed and cannot retrieve it. |
+| `search.enabled` | false | Reserved. `true` is refused at load (`not_implemented_yet`): runtime tool search stays off by design, because search-then-execute is two-hop reasoning and small models fail it. Pin the tools instead. |
+| `local` | `[]` | Built-in tools: `artifact_read`, `memory_write`, `memory_forget`, `now`. `phase_set` is not listed here: the runtime registers it when more than one phase is declared. `handoff` is registered by `team`. `artifact_read` follows the pointer compaction leaves behind, so an agent with compaction enabled and this tool unpinned can see that detail was removed and cannot retrieve it. |
 | `policy.mode` | `allow` | What happens to a call no rule mentions. `allow` because **pinning is the primary authorization** — an agent has only the tools its manifest pinned. `ask` on an unattended run means `onNoApprover` answers it, so a schedule would do nothing. |
 | `policy.allow` / `policy.deny` | `[]` | `Tool` or `Tool(pattern)`. Evaluated **deny → allow, first match, specificity never reorders** — so a deny carries no exceptions. A rule naming a primary content field (`exec(command:…)`) is refused: a compound command defeats it. |
 | `policy.onNoApprover` | `deny` | What `ask` means with nobody to ask — a schedule, a pipe, a channel with no approver. |
-| `model.<name>` | — | Beyond `main`, `selector` and `compactor`, any key under `model:` is a **custom role** a schedule may name with `role:`. A role nothing references is warned about, because that is also what a misspelled `compactor` looks like. |
 | `untrusted.onMutate` | `refuse` | What to do when untrusted content is in the turn and a mutating tool is requested: `refuse \| confirm \| allow`. A tainted mutating call needs **explicit** authorization — a matching `policy.allow` rule or a live approval; `mode: allow` is the absence of a rule, not one. `confirm` asks when an approver is reachable and refuses when none is. |
 | `eventDetail` | `none` | Since 0.2.0-pilot.5. `redacted` adds the call's arguments to `tool.call` and the first 2 KB of its output to `tool.result`. Values under credential-named keys (`token`, `password`, `apiKey`, …) and the values of secret-named environment variables (`*_KEY`, `*_TOKEN`, …) are replaced with `[redacted]` wherever they appear. That is a floor, not a guarantee: a secret the agent was told in conversation is in neither list. Settable by a person over `PATCH /config`, not by the agent. |
 
@@ -456,15 +463,18 @@ time the change looked like it succeeded.
 
 **This escalates, and that is the point** — pinning a tool and adding an allow rule is what a person
 asks for. Bounded three ways: `config_set` is `mutating`, so the write gate applies; a `deny` rule can
-put the security fields out of reach; and two edits are refused whatever the policy says —
+put the security fields out of reach; and these edits are refused whatever the policy says —
 
 | refused edit | why |
 | --- | --- |
 | a `writeRoots` list anywhere — `tools.providers.<id>.writeRoots`, or nested inside a `tools.providers` value | where the agent may write is the person's decision. Asked to create a file, an agent granted itself the whole home directory and wrote there |
-| any provider's `baseUrl` (Composio's, the web search backend's, Firecrawl's), by path or nested inside a `tools.providers` value | where a provider sends its requests is where its credential goes; an agent that could set it could send its token and every query anywhere |
+| any provider's `baseUrl` (Composio's, the web search backend's, Firecrawl's — a web backend that is **experimental in 0.2.0** and may change within 0.2.x), by path or nested inside a `tools.providers` value | where a provider sends its requests is where its credential goes; an agent that could set it could send its token and every query anywhere |
 | the system provider's `confineReads`, by path or nested inside a `tools.providers` value | which files the agent may read is the person's; an agent that could turn it off could read the other agents' notes it keeps out of reach (pilot.14) |
 | any provider's `personal` flag (Composio's, an MCP server's), by path or nested inside a `tools.providers` value | whose turns may use the owner's connected accounts is the person's; an agent in a room that could set it to `false` would hand those accounts to everyone there |
 | the system provider's `env`, by path or nested inside a `tools.providers` value | what a command can see of the environment is containment; an agent that could set `inherit` back could hand its shell every secret the scrub keeps out |
+| `skills.trusted`, by path or nested inside a `skills` value | which skills may run code is the person's; an agent that could add a name could make any skill it was handed run its scripts |
+| any `allowFrom`, by path or nested inside a `channels` value | it is the inbound gate; an agent that could widen it could be talked into widening it by the message it is reading |
+| `server.host` and `server.tokenEnv`, by path or nested inside a `server` value | where the API listens and what authenticates it are the person's; enabling it on `127.0.0.1` is settable |
 | replacing `tools.policy.deny` | its only purpose is removing a restriction someone set deliberately |
 | `tools.untrusted.onMutate: allow` | it turns off the check on outside content driving a write |
 
@@ -499,7 +509,7 @@ tools:
 | `headersEnv` | Header name → the variable holding its value, from the environment the agent loaded with. A missing variable fails the call that needs it, naming the variable. |
 | `participantHeader` | Sent with every call as the turn's acting participant id, and absent for a schedule, a peer agent or the operator, which is how the server tells the two apart. |
 | `turnHeader` | Since pilot.9. Sent with every call as the turn id, with the call id in `<turnHeader>-Call`, so a server can trace a write to the answer that made it. |
-| `personal` | Since pilot.15. `true` when the server acts as the agent's owner (their account, their data): its tools are then offered only to turns that act for the owner, like Composio's. Absent, they are shared. |
+| `personal` | Since pilot.15. **Experimental in 0.2.0**; it may change within 0.2.x. `true` when the server acts as the agent's owner (their account, their data): its tools are then offered only to turns that act for the owner, like Composio's. Absent, they are shared. |
 | `policyArgs` | Tool name → the argument a `tools.policy` rule matches. For a proxy tool (`invoke_tool(toolName, arguments)`) this is the inner tool's name, so a rule can reach the call the proxy would make. |
 
 Tools are **pinned by name** like every other provider's, never exposed wholesale, so a server adding
@@ -525,7 +535,8 @@ rule on `invoke_tool` is the guard.
 
 A provider named in `tools.providers` with nothing pinned from it is a **normal and deliberate**
 configuration: naming it is what makes `available()` run, and `available()` is the only reason the
-model knows a tool it was not given exists. `init` generates `system` and `web` that way.
+model knows a tool it was not given exists. `init` names `system`, `web` and `composio` whatever the
+answers, each with nothing pinned unless the matching question enabled it.
 
 The model is told, in one line each, which of the provider's tools this manifest did not pin — and
 told to name the tool, say it is *not permitted yet* rather than that it is unable, and not to reach
@@ -538,8 +549,8 @@ Not a sandbox. A policy decides *whether* a command runs; a sandbox decides *whe
 first, and containment stays a deployment concern.
 
 **`tools.search` is about finding a *tool*, not searching the web.** It exposes a meta-tool over the
-provider's own catalogue — 25,438 entries, for Composio — so the model can discover a tool it was not
-given. Off by design and refused if enabled: search-then-execute is two-hop reasoning, which is where
+provider's own catalogue — 25,438 entries, for Composio — so the model could discover a tool it was not
+given. That meta-tool is not built, and enabling the field is refused by design: search-then-execute is two-hop reasoning, which is where
 small models fail. Searching the *internet* is `web_search`, or a pinned `COMPOSIO_SEARCH_*` tool, and
 has nothing to do with this field. The two have been confused, so they are stated together here.
 
@@ -577,7 +588,7 @@ empty cache fails the load naming the slugs and that command, rather than making
 allowed to make. A warmed agent boots and serves its catalogue with no API key present at all.
 
 `tools.providers.composio` accepts `apiKeyEnv` (default `COMPOSIO_API_KEY`), `userId`, `baseUrl`,
-and `personal` (default `true`: every Composio tool acts as the agent's owner and is offered only to
+and `personal` (**experimental in 0.2.0**, may change within 0.2.x; default `true`: every Composio tool acts as the agent's owner and is offered only to
 turns acting for them; `false` for an entity a team shares on purpose). Anything else is refused: the schema keeps this a free-form record, so nothing upstream
 catches `userid` for `userId`, and a silently ignored setting is a configuration that looks applied
 and is not.
@@ -688,7 +699,8 @@ Text under 12 characters is not looked for elsewhere. A turn whose `memory_write
 | `budget` | 2000 | Total tokens across injected passages. Outside the workspace cap — this tier is retrieved, not carried. |
 | `includeHistory` | true | Index the person's messages and clean agent replies as well as the notes, under `session:<key>`. Never tool observations, runtime-authored messages, or tainted assistant prose. |
 
-**Shared scopes (Phase 29) need no field.** Beside its own memory — everything above, which is the
+**Shared scopes (Phase 29) need no field.** **Status: experimental in 0.2.0.** Multiplayer; it may
+change within 0.2.x. Beside its own memory — everything above, which is the
 agent's *private* scope — an agent recalls the team's shared scopes: its owner's (`owner:<participant>`,
 from the agent's assignment), the `space`, and each `project:<id>` it belongs to. They are written over
 `/v1/memory/notes` (`04-SPEC-WIRE.md`), recalled with the same `maxActive`, `threshold` and `budget`,
@@ -772,16 +784,18 @@ Common fields; type-specific fields are validated by the channel's own schema.
 | `id` | Unique within the agent. Used in session keys and delivery targets. |
 | `allowFrom` | Inbound allowlist. `["*"]` permits anyone. **Inbound only** — it has no effect on outbound delivery. |
 | `enabled` | Default true. |
-| `role` | A model role declared under `model:` that this channel's turns run on (pilot.14), e.g. WhatsApp on a cheaper role than the web chat. Absent is `main`. A role that is not declared refuses the manifest, in `validate`, at load and in a `config_set` edit, rather than falling back. An API turn picks a role per message with `POST …/messages {role}`. |
+| `role` | **Experimental in 0.2.0**; it may change within 0.2.x. A model role declared under `model:` that this channel's turns run on (pilot.14), e.g. WhatsApp on a cheaper role than the web chat. Absent is `main`. A role that is not declared refuses the manifest, in `validate`, at load and in a `config_set` edit, rather than falling back. An API turn picks a role per message with `POST …/messages {role}`. |
 
 Telegram: `tokenEnv`, `mode` (`longpoll` \| `webhook`), `webhookPath`, `secretTokenEnv`.
 
-**`telegram` is the only type this binary registers.** A second one comes from a plugin —
-`PluginContext.defineChannel(id, factory)`, `docs/03-SPEC-PLUGIN-API.md` — and `type` then names
-whatever that plugin registered, with the entry carrying whatever fields it reads. Nothing installs
-at runtime, so a plugin is resolved from `plugins:` at boot.
+**The binary registers four types by default: `telegram`, `whatsapp`, `teams` and `slack`.** It also
+bundles `@dispach/channel-a2a`, whose `a2a` type exists only when a manifest names that plugin in
+`plugins:`. Any other type comes from a plugin — `PluginContext.defineChannel(id, factory)`,
+`docs/03-SPEC-PLUGIN-API.md` — and `type` then names whatever that plugin registered, with the entry
+carrying whatever fields it reads. Nothing installs at runtime, so a plugin is resolved from
+`plugins:` at boot.
 
-#### `whatsapp` — an opt-in plugin, not in this binary
+#### `whatsapp` — bundled, from `@dispach/channel-whatsapp`
 
 This table listed a `whatsapp` type with `authDir` and `printQr` fields before any such package
 existed, and the entry was removed in 0.1.1 because a spec describing a channel that does not exist
@@ -795,9 +809,9 @@ it does **not** read `printQr` — the QR is carried through `needs_input`, neve
 | `allowFrom` | **Digits, no `+`** — `["8801711223344"]`. Compared literally against what WhatsApp reports, so `+8801711223344` matches nobody. Inbound only, and empty permits nobody; the first refused message prints the exact line to paste. |
 
 There is no token and nothing to fill into `.env`: pairing is a QR somebody scans, reported as
-`needs_input` with the code as its payload. It is **not in this binary** — install it with
-`dispach plugins add <agent> <repo>` and name it in `plugins:`. Until you do, the agent starts with
-the channel reported broken, which is 0.1.3's rule for every optional capability.
+`needs_input` with the code as its payload. It is **bundled** and registered by default, so a
+`channels:` entry is all it takes and no `plugins:` entry is needed; nothing connects to WhatsApp
+until a manifest names the channel.
 
 **It pairs under Node and not under Bun** (decision 11.256), measured — which is why every shipped
 install (npm, brew, the container) runs under Node since 0.1.3. From a checkout under `bun run`
@@ -857,6 +871,33 @@ endpoint is needed. Enable Socket Mode on the app and subscribe to the bot event
 The sender is their member id, the handle `allowFrom` matches and the acting participant
 (`slack:<id>`). Replies go through `chat.postMessage` as a `markdown` block, so the model's markdown
 renders as written. A token in the wrong slot (`xoxb-` where `xapp-` belongs) is refused at load.
+
+#### `a2a` — Agent2Agent, from `@dispach/channel-a2a`
+
+**Status: experimental in 0.2.0.** It may change within 0.2.x.
+
+```yaml
+plugins:
+  - spec: "@dispach/channel-a2a"
+    config:
+      card: { name: Crew, description: Triage for the platform team., skills: [] }
+      peers:
+        acme: { key: a2a-acme, ratePerMinute: 30 }                                  # inbound
+        partner: { url: https://partner.example/a2a, tokenEnv: PARTNER_A2A_TOKEN }  # outbound
+channels:
+  - { type: a2a, id: a2a }
+```
+
+A2A v1.0 over JSON-RPC. Bundled, but the type exists only when the plugin is named in `plugins:`,
+because it mounts routes. Peers are agents: untrusted, acting for nobody. The configuration is the
+plugin's, not the channel entry's: `card` (`name`, `description`, `skills`) is served at
+`/v1/agents/<id>/plugins/a2a/.well-known/agent-card.json`; each `peers.<name>` (a lowercase slug)
+is inbound when it names `key` — the label of an operator key minted with `can: ["peer"]` — and
+outbound when it names `url` (with `tokenEnv`), or both; `ratePerMinute` (default 30) and
+`maxChars` (default 20,000) bound an inbound peer. `publicUrl` sets the address the card advertises
+behind a proxy, and `waitMs` (default 60,000) how long a blocking send waits before answering with a
+working task. Outbound, `a2a_send(peer, text)` asks a peer, and `peer` is an enum of the configured
+names, so nothing a model writes chooses a URL.
 
 ### `media`
 
@@ -929,6 +970,9 @@ delivery:
 
 `default` names the channel used when a turn has no originating channel — scheduled runs,
 API-initiated turns.
+
+`targets` is reserved: each entry's `channel` is validated against the declared channels, and
+nothing in this release reads the map. A schedule names its recipient in its own `deliver`.
 
 `reply` (since pilot.14) is what a channel reply carries: `all`, the default, is every step's prose
 joined, as before; `final` is the last step's alone (`finalText`) when there is one, so a lead-in the
@@ -1032,7 +1076,7 @@ Load order is manifest order; middleware composes outermost-first. A plugin whos
 | `toolTimeoutMs` | 120000 | Per tool execution. |
 | `maxParallelTools` | 4 | Read-only tools only; mutating tools always serialise. |
 | `maxConcurrentTurns` | unlimited | Turns of this agent running at once, across sessions. Over it a new turn is **refused, not queued**: `429 agent_at_capacity` over HTTP, a short reply on a channel, an error on a schedule run. Nothing is recorded for a refused turn. Not settable by `config_set` — an agent cannot raise its own cap. |
-| `maxHops` | 4 | In a room, how many agent replies deep a message may be and still make this agent answer. A human's message is hop 0 and each agent reply one more; past it the agent reads the message and does not answer, and `conversation.skipped` says why. The guard against agents replying to each other forever — a count, not a check on names. |
+| `maxHops` | 4 | **Experimental in 0.2.0**; it may change within 0.2.x. In a room, how many agent replies deep a message may be and still make this agent answer. A human's message is hop 0 and each agent reply one more; past it the agent reads the message and does not answer, and `conversation.skipped` says why. The guard against agents replying to each other forever — a count, not a check on names. |
 | `reloadHoldMs` | 30000 | While a reload waits for running turns, how long new turns keep running on the old settings before they wait for the swap and start on the new ones. The bound that stops a busy agent postponing a reload forever; `0` holds new turns at once. Running turns always finish on the settings they started with. See `POST /v1/agents/:id/reload`. |
 | `tokens` | unlimited | `{ max, windowMs }`: prompt + output tokens across every metered model call (compactor included) in a rolling window. Checked when a turn **starts**, so a running turn is never cut off and the overshoot is at most one turn. Over it: `429 agent_token_budget_exhausted`, same paths as above. Not settable by `config_set`. |
 
@@ -1227,7 +1271,8 @@ and there is no evidence anybody needs three.
 
 ## Validation rules
 
-Enforced by `manifest/validate.ts`, all failing at load with a field path and a fix hint:
+Each finding carries a field path and a fix hint. Most are enforced by `manifest/validate.ts` (or
+the schema it runs) and fail at load; the exceptions are named on the rule.
 
 1. `apiVersion` must be exactly `dispach/v1`.
 2. Secrets must be `*Env` references. A literal-looking key (`sk-`, `Bearer`, 32+ char hex) in a value fails.
@@ -1236,14 +1281,18 @@ Enforced by `manifest/validate.ts`, all failing at load with a field path and a 
    `window - reserveOutput`. Values ordered for the old ladder (`trim` first) are refused as
    `manifest_thresholds_legacy_order`, which names the rewrite rather than blaming a field.
 4. `tools.budget.reserveWrite` must be less than `budget.max`.
-5. Every `pinned` slug must resolve against the provider.
-6. Every `phases.*.allow` entry must match at least one resolved tool, or be `*`.
-7. Exactly one phase may be `entry: true`.
+5. A `pinned` slug no provider resolves is a **warning**, not a failure (0.1.3): the tool is absent
+   and the slug is named, by the tool registry at agent construction.
+6. Every `phases.*.allow` entry must match at least one resolved tool, or be `*`. Checked at agent
+   construction, where "resolved" is knowable, so `validate` does not perform it.
+7. `entry: true` marks the starting phase. Not enforced as exactly one: the first phase declaring it
+   wins, and with none the first declared phase is the entry.
 8. Every schedule must have a `deliver` target or explicit `none`.
 9. Every `channels[].id` referenced by `delivery` must exist.
 10. `context.files` must all exist and be readable.
 11. `reserveOutput` must be less than `window`.
-12. Plugin `dispachApi` ranges must satisfy the host version.
+12. Plugin `dispachApi` ranges must satisfy the host version. Checked by the plugin loader
+    (`plugins/loader.ts`) when the plugin is loaded, not by `validate.ts`.
 
 Rule 2 exists because a manifest is a file people paste into issues.
 

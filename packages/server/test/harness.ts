@@ -15,6 +15,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { type BuiltInPlugins, Runtime } from "@dispach/core"
+import type { ApprovalRegistry } from "../src/approvals.ts"
 import { createHandler, type Provisioner, type SecretAdmin } from "../src/handler.ts"
 import type { ClaimTicket } from "../src/keys.ts"
 import type { Principal } from "../src/principal.ts"
@@ -194,6 +195,8 @@ export async function harness(
         files?: Record<string, string | Uint8Array>
         /** The state directory, for `GET /v1/backup?include=home`. */
         home?: string
+        /** An approval registry, wired to both the runtime and the handler as `serve` wires it. */
+        approvals?: ApprovalRegistry
     } = {},
 ) {
     const dir = workspace(options.manifest)
@@ -207,6 +210,7 @@ export async function harness(
         fetch: options.fetch ?? replyFetch(),
         ...(options.streams === undefined ? {} : { streams: options.streams }),
         ...(options.builtInPlugins === undefined ? {} : { builtInPlugins: options.builtInPlugins }),
+        ...(options.approvals === undefined ? {} : { approve: options.approvals.approver }),
     })
     const handler = createHandler({
         runtime,
@@ -220,6 +224,7 @@ export async function harness(
         ...(options.provision === undefined ? {} : { provision: options.provision }),
         ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
         ...(options.home === undefined ? {} : { home: options.home }),
+        ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
     })
 
     const call = (

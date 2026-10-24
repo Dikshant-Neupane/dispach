@@ -3,7 +3,10 @@ import { join } from "node:path"
 import type { Folder, Item, Node, Root } from "fumadocs-core/page-tree"
 import { source } from "./source"
 
-/** Sidebar order is GitBook's: one tab per section, in this order. Titles come from each SUMMARY.md. */
+/**
+ * One tab per section, in this order. Titles come from each SUMMARY.md. `docs:check` fails when this
+ * list and the directories under `developer-docs/` disagree.
+ */
 const SECTIONS = ["runtime", "contributing", "control-plane", "reference"] as const
 const DOCS = join(process.cwd(), "..", "developer-docs")
 

@@ -1,14 +1,15 @@
 # Memory
 
-How Dispach remembers, retrieves, and injects. FTS5 + BM25, not embeddings. This is the running
-account of Phase 6 through 6.5; the locked calls live in `00-DECISIONS.md` (5.29–5.53) and the
-phase checklists in `05-PLAN.md`.
+How Dispach remembers, retrieves, injects, and forgets. FTS5 + BM25, not embeddings. This covers
+memory as shipped in 0.2.0 — Phase 6 through 6.5, team scopes (Phase 29), export and import, and
+`memory_forget`; the locked calls live in `00-DECISIONS.md` (5.29–5.53, 14.39–14.44, 14.110,
+14.112) and the phase checklists in `05-PLAN.md`.
 
 A performance claim without a number here is a guess. Reproduce with `bun run eval:memory`.
 
 ---
 
-## Two tiers, one writer
+## Two tiers, one writer, one way back
 
 ```
 memory_write ──▶ MEMORY.md          slot 4, carried every turn, budgeted
@@ -32,6 +33,17 @@ invisible next turn unless the query happens to match it.
 `volatile` file that declares `eviction: oldest`, falling back to declared order. Letting the model
 name a file is a second decision on every save, and a second decision is the two-hop shape small
 models fail.
+
+`memory_forget` is the only other path that changes memory, and it removes rather than adds
+(`memory/forget.ts`; decisions 14.110, 14.112). Two calls, never one: `{query}` lists the notes
+containing every word of it — substring, not BM25, because recall's threshold and idf are the wrong
+rule for choosing a deletion — and `{ids}` deletes exactly the listed ones, from the carried file and
+the archives. A note is a top-level list item, the unit eviction moves. It also **redacts past
+messages** in place: the asker's own, the turn whose `memory_write` saved a deleted note, and the
+conversation that asked, including tool arguments and results within that reach. Its reach is
+`memory_write`'s on that turn, so it is refused in a room and in a stand-in. It emits
+`memory.forgotten` with the scope and counts, never the deleted text. It is kept out of the generated
+`policy.allow`, so a turn tainted by something the agent read cannot delete.
 
 ---
 
@@ -66,7 +78,11 @@ the last version that loaded. Static files are never re-read, so the cached pref
    excluded, as is the carried file.
 
 Conversations are a separate namespace (`syncSessions`). One shared pass would delete every
-indexed conversation on the next file sync. Tool observations are never indexed: that would make
+indexed conversation on the next file sync. A conversation can be taken out of recall without being
+deleted: `POST /v1/agents/:id/sessions/:key/recall {"recall": false}` sets the session's `recall`
+flag, `enumerateSessions` stops handing it over, and reconciliation drops its passages; its messages
+stay. `{"recall": true}` puts it back. A turn that recalled anything emits `memory.recalled` with
+each passage's source and score. Tool observations are never indexed: that would make
 prompt injection durable. Assistant prose after untrusted output is persisted `tainted` and
 excluded from both the projection and the expansion context.
 
@@ -80,13 +96,16 @@ is what drops "who won the 1998 world cup" matching a filler note that mentions 
 
 | Slot | Content |
 | --- | --- |
-| 4 | Carried `MEMORY.md` / `USER.md` (volatile tier) |
+| 4 | Carried `MEMORY.md` / `USER.md` (volatile tier) — user role |
 | 8 | Recent history |
-| 9 | Reminder (re-asserted rules) |
-| 10 | Retrieved passages, one `# Remembered` block each |
-| 11 | Current input |
+| 9 | Reminder (re-asserted rules) — user role |
+| 10 | Retrieved passages, one `# Remembered` block each — user role |
+| 11 | The embedder's note about this message, when sent |
+| 12 | Current input |
+| — | The current turn's own trace, after the input (`traceAfterInput`) |
 
-Slot number equals prompt position. Memory used to sit in slot 7, ahead of history. A 3B model
+Slots 4, 9 and 10 are user messages, each closed by a static line saying the person's message
+follows separately (decisions 14.118, 14.120). Slot number equals prompt position. Memory used to sit in slot 7, ahead of history. A 3B model
 given the correct passage there answered UNKNOWN; putting the evidence next to the question is
 what recovered it (5.51). Reminder stays after history — that is a recency argument about rules,
 not about evidence.
@@ -118,6 +137,9 @@ UNKNOWN while the correct value was already in the prompt (5.50).
 ## Phase 6.4 — deterministic foundation (2026-08-27)
 
 Decisions 5.45–5.49. Eval at 5,000 passages, threshold 0.2, maxActive 3, budget 600, 21 questions.
+The eval runs at those settings, not the shipped defaults (`memory.maxActive` 5, `memory.budget`
+2000). **Historical:** these figures are from the Phase 6.4 run and have no committed results file;
+they have not been re-run.
 
 | Metric | Baseline | Retained |
 | --- | ---: | ---: |
@@ -157,17 +179,19 @@ vocabulary and retrieve. `parking cluser` does not: a unique neighbour for `clus
 (`analytical database traffic`) stays red — coverage keeps the unmatched terms, and fixing that
 honestly needs a synonym source or embeddings.
 
-Numbers for this phase, 5,000 passages, threshold 0.2, maxActive 3, budget 600, 23 questions:
+Numbers for this phase, 5,000 passages, threshold 0.2, maxActive 3, budget 600 (again the eval's
+settings, not the shipped defaults), 23 questions. The 6.5 column is what the committed
+`evals/memory/results.json` records; the 6.4 column is the historical run above.
 
 | Metric | 6.4 | 6.5 |
 | --- | ---: | ---: |
 | Recall | 88.2% (15/17) | **94.4% (17/18)** |
 | Restraint | 100% (4/4) | **100% (5/5)** |
 | F1 | 93.8% | **97.1%** |
-| Slowest query | 0.98 ms | 3.52 ms |
+| Slowest query | 0.98 ms | 3.67 ms |
 
 Typo 0/1 → 2/2. Paraphrase stays 0/1. The empty-MATCH path loads the vocabulary, which is why the
-slowest query moved; it is still five times inside the 20 ms ceiling.
+slowest query moved.
 
 ---
 

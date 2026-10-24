@@ -11,25 +11,17 @@ dispach run ./agent.yaml
 
 ## How to read it
 
-Everything a phase has delivered is **live**. Everything it has not is **commented**, labelled with
-the phase that unlocks it. Completing a phase means uncommenting a block here and watching it work,
-instead of hunting for a field name in the spec.
+Every section is **live**: `model` (all three roles, fallbacks, capabilities), `context` (the
+workspace tiers, thresholds), `tools` (both dialects, providers, policy), `limits`, `phases`,
+`skills`, `knowledge`, `memory`, `channels`, `delivery`, `server`, `schedules` and `plugins`. What
+stays commented is optional rather than unbuilt — `extends`, `subagents`, and the alternatives
+inside a block, such as a second plugin entry — so uncommenting one is a choice about this agent,
+not a wait for a phase. The section headings still carry the phase that delivered each block.
 
-The commenting is load-bearing rather than tidy. A section this build does not implement is
-**refused at load**, naming the phase — because a runtime that parses configuration and ignores it
-lies about what it is doing. Uncomment `channels` today and you get:
-
-```
-manifest_validation_failed: This build does not implement channels, but the manifest configures it.
-  field: channels
-  hint: channels arrives in Phase 4. Remove the "channels" section for now — it is refused rather
-        than silently ignored, because a runtime that drops configuration lies about what it is doing.
-```
-
-Live now: `model` (all three roles, capabilities, `streamUsage`), `context.files` and
-`context.thresholds`, the whole of `tools` including both dialects and a remote provider, and
-`limits`. Commented, with their phase: the workspace tiers and `promptStyle` (3.5), `channels` /
-`delivery` / `server` (4), `skills` (5), `memory` (6), `phases` (7), `schedules` (8), `plugins` (9).
+A section a build does not implement is **refused at load** rather than parsed and ignored —
+because a runtime that parses configuration and ignores it lies about what it is doing — but no
+section is in that state today; `tools.search: {enabled: true}` is the one setting refused that way,
+and by design.
 
 ## Why this one has tools and `minimal` does not
 

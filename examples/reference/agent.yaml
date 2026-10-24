@@ -1,11 +1,8 @@
 # The reference manifest: every field `agent.yaml` accepts, in one place.
 #
-# Runnable as it stands. Everything a phase has not delivered yet is present but commented, with
-# the phase that unlocks it — so completing a phase means uncommenting a block here and watching it
-# work, rather than discovering the field name in a spec.
-#
-# The commenting is not cosmetic. A section this build does not implement is **refused at load**,
-# naming the phase, rather than parsed and ignored: a runtime that silently drops configuration
+# Runnable as it stands. Every section is live; what stays commented is an alternative inside a
+# block, or a section such as `extends` and `subagents` that an agent opts into. The one field a
+# build refuses by design is `tools.search.enabled: true` (`not_implemented_yet`).
 #
 # `docs/02-SPEC-MANIFEST.md` is the binding reference. This file is the worked copy.
 

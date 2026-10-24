@@ -1,6 +1,7 @@
 # Build with Dispach
 
 - [Overview](README.md)
+- [What's new in 0.2.0](whats-new-0-2-0.md)
 - [Stable and pre-releases](releases.md)
 - [Benchmarks](benchmarks.md)
 - Quickstart

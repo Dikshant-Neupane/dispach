@@ -49,9 +49,13 @@ rule that never saw the half that mattered. Written the ordinary way, `PATH=/tmp
 *part of the command*, `subcommands()` hands it to the matcher as one fragment, and the pattern
 `git status` does not match it. The call asks, or is refused.
 
-The ambient environment **is** passed through, including whatever the agent's `.env` supplied,
-because a shell that cannot see `GITHUB_TOKEN` cannot run `gh`. Stated plainly: a pinned `exec` can
-read every secret the agent itself can.
+By default (`env: inherit`) the ambient environment **is** passed through, including whatever the
+agent's `.env` supplied, because a shell that cannot see `GITHUB_TOKEN` cannot run `gh`. Stated
+plainly: under the default a pinned `exec` can read every secret the agent itself can.
+`tools.providers.system.env: scrub` hands commands only what a shell needs (`PATH`, `HOME`, the
+locale and the like), and `env: [GITHUB_TOKEN]` scrubs and passes those names too. It binds a
+skill's scripts as well as `exec`. A child still runs as the runtime's user and can read
+`/proc/<pid>/environ`, so closing that is a deployment step (`hidepid=2`, secrets as files).
 
 ## The file family
 
@@ -98,8 +102,9 @@ A protected list must anticipate every path worth protecting; a root anticipates
 and the protected set wins inside the root. Paths are resolved before comparison, so `../` out of the
 root is checked as what it actually is.
 
-**Reads are not confined.** Being pointed at a project and asked about it is the ordinary case, and
-credentials are refused everywhere anyway.
+**Reads are not confined by default.** Being pointed at a project and asked about it is the ordinary
+case, and credentials are refused everywhere anyway. `tools.providers.system.confineReads: true`
+confines `file_read`, `glob` and `grep` to the same roots.
 
 **The root does not bind `exec`.** Verified live: an agent with both had `file_write` refused outside
 the root and then wrote the file with `echo … >`. A shell carries its target inside a string no path
@@ -135,10 +140,17 @@ worked. The **source text** is edited rather than the document re-serialised —
 keys belongs to the end of the first as far as the parser is concerned. One change produced a
 thirty-line diff before this was fixed.
 
-It escalates on purpose — pinning a tool and adding an allow rule is what people ask for. Two edits are
-refused whatever the policy says: replacing `tools.policy.deny`, and setting
-`tools.untrusted.onMutate` to `allow`. A guard the agent can switch off on request is not a guard.
-`onMutate: confirm` is settable.
+It escalates on purpose — pinning a tool and adding an allow rule is what people ask for. A floor of
+edits is refused whatever the policy says, each by path and by the same key hidden inside a value
+being written:
+
+- replacing `tools.policy.deny`, and setting `tools.untrusted.onMutate` to `allow`;
+- any `writeRoots`;
+- `allowFrom`, `server.host` and `server.tokenEnv`;
+- under `tools.providers`: a `baseUrl`, `confineReads`, `personal`, and `env`;
+- `skills.trusted`.
+
+A guard the agent can switch off on request is not a guard. `onMutate: confirm` is settable.
 
 ## Tools that were not enabled
 

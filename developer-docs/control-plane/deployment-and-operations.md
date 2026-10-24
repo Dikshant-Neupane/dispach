@@ -27,8 +27,10 @@ After changing `DISPACH_IMAGE` or named silo environment values, restart the con
 
 ## Suspension and monitoring
 
-Set `DISPACH_CONTROL_SUSPEND=on` only when losing channel connectivity during idle periods is acceptable. The sweeper consults each runtime's activity endpoint and wakes before its next schedule.
+The control plane reads `DISPACH_CONTROL_SUSPEND` and `DISPACH_CONTROL_HOOK_URL`. Under the bundled `packages/control/compose.yaml` you set them on the host as `DISPACH_SUSPEND` (default `off`) and `DISPACH_HOOK_URL` (default empty), which compose maps into the container's `DISPACH_CONTROL_*` names.
 
-Setting `DISPACH_CONTROL_HOOK_URL` enables the pilot monitor. It consumes signed runtime webhooks, measures rolling turn and tool-error rates, and alerts once on threshold crossing and once on recovery. Your deployment must allow silos to reach that hook URL.
+Set suspension to `on` only when losing channel connectivity during idle periods is acceptable. The sweeper consults each runtime's activity endpoint and wakes before its next schedule.
+
+Setting the hook URL enables the pilot monitor. It consumes signed runtime webhooks, measures rolling turn and tool-error rates, and alerts once on threshold crossing and once on recovery. Your deployment must allow silos to reach that hook URL.
 
 The complete environment table and routes are maintained in `packages/control/README.md`.

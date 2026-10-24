@@ -24,7 +24,7 @@ bun run check:deps
 bun run docs:check
 ```
 
-`docs:check` verifies that the committed OpenAPI snapshot is current, each GitBook space has navigation, and local Markdown links and anchors resolve.
+`docs:check` verifies that the committed OpenAPI snapshot is current, each docs section has a `SUMMARY.md` listing every page, and local Markdown links and anchors resolve. `bun run --cwd site build` builds the docs site itself.
 
 ## Benchmarks and evaluations
 

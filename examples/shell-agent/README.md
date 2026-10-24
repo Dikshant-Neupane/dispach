@@ -6,10 +6,16 @@ cannot run a command — `minimal` pins no tools at all, so it proves the wire a
 `tools-system`.
 
 ```bash
-cp .env.example .env            # then the key for whatever model agent.yaml names
-cd ../..                        # repo root
-AGENT_DIR=./examples/shell-agent docker compose up -d --wait
+cd ../..                                              # repo root
+cp .env.example .env                                  # token + a model key
+# uncomment the /agent mount and the MODEL_* block in docker-compose.yml, then:
+echo 'AGENT_DIR=./examples/shell-agent' >> .env
+docker compose up -d --build --wait
 ```
+
+`AGENT_DIR` on its own does nothing: the `/agent` mount it feeds is commented out in
+`docker-compose.yml`, so that no clone comes up hosting an example. The root README's *Developing
+against the container* section is the same procedure.
 
 ## Read this before running it outside a container
 
@@ -39,5 +45,6 @@ writes. **Run this on a laptop and the only boundary is the policy.**
 is fetched with it and its absence deletes that feature rather than degrading it; `python3` because
 a skill shipping scripts needs it. Measured cost: 21 MB.
 
-Worth knowing: `/tmp` and `$HOME` are tmpfs and are **wiped on restart**, so `uv` rebuilds its
-cache the first time a Python skill runs after each boot. `/agent` and `/state` persist.
+Worth knowing: only `/tmp` is tmpfs and is **wiped on restart**. `$HOME` (`/home/dispach`) is a
+named volume, so `uv`'s cache and the skills catalogues survive a restart; `/agent` is the mounted
+directory and persists too. `docker compose down -v` discards the home volume.

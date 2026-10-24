@@ -22,8 +22,9 @@
 
 import { describe, expect, test } from "bun:test"
 import type { KeyScope } from "@dispach/core"
+import { createApprovalRegistry } from "../src/approvals.ts"
 import { attachWebSocket } from "../src/ws.ts"
-import { fakeSocket, harness, readUntil } from "./harness.ts"
+import { fakeSocket, harness, readUntil, recordingFetch } from "./harness.ts"
 
 const TOKEN = "t_operator"
 
@@ -217,6 +218,120 @@ describe("sessions outside the scope", () => {
             body: { text: "hello", sessionKey: "team_7:intruder" },
         })
         expect(response.status).toBe(404)
+    })
+
+    test("a turn read by its id belongs to its session, on every route that takes one", async () => {
+        /**
+         * A turn id is handed out by `POST /messages`, so it can be guessed or leaked, and these
+         * routes take one without naming a session. Each had checked only the agent: a key scoped to
+         * `team_42:` read the input and reply of a `team_7:` turn by asking for its id.
+         */
+        const { call } = await harness({ token: TOKEN })
+        const sent = (await (
+            await call("POST", "/v1/agents/assistant/messages", {
+                body: { text: "hello", sessionKey: "team_7:a" },
+            })
+        ).json()) as { turnId: string }
+        for (let attempt = 0; attempt < 400; attempt += 1) {
+            const row = (await (
+                await call("GET", `/v1/agents/assistant/turns/${sent.turnId}`)
+            ).json()) as { status: string }
+            if (row.status !== "running") break
+            await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+
+        const outsider = await keyWith(call, { sessions: "team_42:", can: ["read", "chat"] })
+        const insider = await keyWith(call, { sessions: "team_7:", can: ["read", "chat"] })
+        const imaginary = await call("GET", "/v1/agents/assistant/turns/t_imaginary", {
+            token: outsider,
+        })
+        const imaginaryCode = ((await imaginary.json()) as { error: { code: string } }).error.code
+        for (const [method, path] of [
+            ["GET", `/v1/agents/assistant/turns/${sent.turnId}`],
+            ["GET", `/v1/agents/assistant/turns/${sent.turnId}/stream`],
+            ["POST", `/v1/agents/assistant/turns/${sent.turnId}/stop`],
+        ] as const) {
+            const response = await call(method, path, { token: outsider })
+            const code = ((await response.json()) as { error: { code: string } }).error.code
+            expect({ path, status: response.status, code }).toEqual({
+                path,
+                status: imaginary.status,
+                code: imaginaryCode,
+            })
+        }
+        // The same key shape one session over reaches it, so the refusals are the scope at work.
+        const reached = await call("GET", `/v1/agents/assistant/turns/${sent.turnId}`, {
+            token: insider,
+        })
+        expect(reached.status).toBe(200)
+    })
+
+    test("a pending approval is listed and answered only within its session", async () => {
+        const approvals = createApprovalRegistry()
+        const { call, runtime } = await harness({
+            token: TOKEN,
+            approvals,
+            manifest: `apiVersion: dispach/v1
+id: assistant
+name: Assistant
+model:
+  main:
+    id: gpt-4o-mini
+    baseUrl: https://api.example.com/v1
+    apiKeyEnv: MODEL_API_KEY
+tools:
+  pinned: [now, memory_write]
+  policy:
+    mode: ask
+`,
+            fetch: recordingFetch([
+                "I'll save that.\nACTION: memory_write\ntext: a note worth keeping\nEND",
+                "done",
+            ]).fetch,
+        })
+        try {
+            await call("POST", "/v1/agents/assistant/messages", {
+                body: { text: "save a note", sessionKey: "team_7:a" },
+            })
+            let approvalId: string | undefined
+            for (let attempt = 0; attempt < 300 && approvalId === undefined; attempt += 1) {
+                approvalId = approvals.pending("assistant")[0]?.approvalId
+                if (approvalId === undefined)
+                    await new Promise((resolve) => setTimeout(resolve, 10))
+            }
+            expect(approvalId).toBeDefined()
+
+            const outsider = await keyWith(call, { sessions: "team_42:", can: ["read", "chat"] })
+            const insider = await keyWith(call, { sessions: "team_7:", can: ["read", "chat"] })
+            const listed = async (token: string) =>
+                (
+                    (await (
+                        await call("GET", "/v1/agents/assistant/approvals", { token })
+                    ).json()) as { approvals: unknown[] }
+                ).approvals.length
+            expect(await listed(outsider)).toBe(0)
+            expect(await listed(insider)).toBe(1)
+
+            // Answering one it cannot see is the same 404 as an id that was never asked, and the
+            // question is still waiting afterwards.
+            const answered = await call("POST", `/v1/agents/assistant/approvals/${approvalId}`, {
+                token: outsider,
+                body: { granted: true },
+            })
+            expect(answered.status).toBe(404)
+            expect(((await answered.json()) as { error: { code: string } }).error.code).toBe(
+                "approval_not_found",
+            )
+            expect(approvals.pending("assistant").length).toBe(1)
+
+            const granted = await call("POST", `/v1/agents/assistant/approvals/${approvalId}`, {
+                token: insider,
+                body: { granted: true },
+            })
+            expect(granted.status).toBe(200)
+        } finally {
+            await runtime.stop()
+        }
     })
 
     test("a trailing star means the same as no star", async () => {

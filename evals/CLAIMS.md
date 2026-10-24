@@ -38,9 +38,9 @@ result yet), **fix** (the prose and the evidence disagree), **remove** (no evide
 | Claim | Evidence | Scope | Limitation | Status |
 | --- | --- | --- | --- | --- |
 | Boot to `runtime.ready` under 1000 ms, CI fails at 1200 ms | `scripts/bench-boot.ts:18`, `.github/workflows/ci.yml` | Every CI run | Boot, not response latency | verified |
-| Boot to ready ~87–91 ms (0.2.0; ~53 ms at 0.1.3) | `evals/boot/results.json` (`bench:boot --write`) | 7-run median, Apple M4 Pro, bun, load average recorded | Boot, not response latency. One machine | verified |
+| Boot to ready ~65 ms (0.2.0; ~53 ms at 0.1.3) | `evals/boot/results.json` (`bench:boot --write`) | 7-run median, Apple M4 Pro, bun, load average recorded | Boot, not response latency. One machine | verified |
 | Container image 867 MB | `docker image inspect`, 2026-10-20; re-measured on every push by the `image size` step in `.github/workflows/ci.yml` | arm64 Docker Desktop, 0.2.0 release candidate | 701 MB at 0.1.3; the static `ffmpeg` layer is 104 MB. Reported by CI on every push, no longer gated | verified |
-| `Runtime.create` 23.5 ms | `evals/boot/results.json` (`createMs`) | Same run as boot | — | verified |
+| `Runtime.create` 20.6 ms | `evals/boot/results.json` (`createMs`) | Same run as boot | — | verified |
 | A remote provider's post-ready refresh takes ~1.5 s, so awaiting it in boot would multiply boot | Decision 4.21 prose only (1,474 ms) | Composio, one cold cache | No committed result | needs-run |
 | The gateway Dispach replaced blocked for minutes on network calls during hook initialisation | None committed | OpenClaw gateway on our deployment | The README now says "observed, not measured" and gives no number; a figure needs the log evidence | needs-run |
 | Idle silo: 104 / 120 / 178 MiB RSS and 118 / 151 / 516 ms cold start for 1 / 10 / 100 agents; resume 5–6 ms | `evals/tenancy/results.json` (2026-09-24) | linux/arm64 image, Node 24 | One machine | verified |

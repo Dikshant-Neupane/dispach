@@ -148,7 +148,9 @@ agents actually use:
 | each `peers.<name>.url` in `@dispach/channel-a2a`'s config | as configured | `a2a_send` to that peer only; the tool's `peer` is an enum of these names, so no other host is reachable through it. Inbound A2A is ingress on the runtime's own port |
 | `transcribestreaming.<region>.amazonaws.com` | 443 | `media.transcription.provider: aws`. Image generation on `aws` is Bedrock, above |
 | the media `baseUrl` host | 443 | `media.*.provider: openai` (`api.openai.com`, a gateway) |
-| `api.tavily.com`, `api.search.brave.com`, `api.exa.ai` | 443 | `web_search`, whichever backend is configured |
+| `api.tavily.com`, `api.search.brave.com`, `api.exa.ai`, `api.firecrawl.dev` | 443 | `web_search`, whichever backend is configured |
+| `api.firecrawl.dev` | 443 | `tools.providers.web.firecrawl`: `web_fetch` through its scrape, `web_crawl`, `web_map` (or `firecrawl.baseUrl`'s host, for a relay) |
+| each `tools.providers.mcp.servers.<name>.url` | as configured | the MCP tool provider (`@dispach/tools-mcp`), one host per configured server |
 | any | 443/80 | `web_fetch`, by its nature. Leave it unpinned, or accept that fetches outside the policy fail |
 | `github.com` | 443 | skill catalogues (`sources update`, `skills install`) |
 | the embedder's webhook receiver | 443 | `POST /v1/webhooks` subscriptions |

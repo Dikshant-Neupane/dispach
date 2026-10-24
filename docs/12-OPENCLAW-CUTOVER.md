@@ -6,8 +6,9 @@ and what breaks if a step is skipped.
 
 **Read this if you are doing the migration.** Read 06 if you are asking why it is shaped this way.
 
-Everything below was checked against a real agent in the shipped container on 2026-09-21, running
-`dispach 0.1.0`. Where something was *not* exercised, it says so rather than implying it was.
+Everything below was first checked against a real agent in the shipped container on 2026-09-21,
+running `dispach 0.1.0`, and the version references are updated for `0.2.0`. Where something was
+*not* exercised, it says so rather than implying it was.
 
 ---
 
@@ -53,16 +54,17 @@ docker run --rm -it \
   -e DISPACH_API_TOKEN=dev-token-not-for-production \
   -e MODEL_ID=... -e MODEL_BASE_URL=https://your-litellm/v1 -e MODEL_API_KEY=... \
   -v "$PWD/my-agent:/agent" \
-  ghcr.io/moeen-mahmud/dispach:0.1.0
+  ghcr.io/moeen-mahmud/dispach:0.2.0
 
 curl -s localhost:7420/v1/ready
 curl -s -H "authorization: Bearer dev-token-not-for-production" localhost:7420/v1/agents | jq
 ```
 
 If you have no `agent.yaml` yet, make one on the host with `dispach init` and mount the directory it
-writes. The container will not create one for you: `POST /v1/agents` is gated to a **loopback** bind
-and the image binds `0.0.0.0`, deliberately — provisioning writes files and starts a process, and
-that is not something a container's published port should offer.
+writes. Or let the container create one: `POST /v1/agents` is allowed on a loopback bind, and on a
+non-loopback one — the image binds `0.0.0.0` — only to a caller presenting a credential with `admin`,
+such as the container's `DISPACH_API_TOKEN`. A server that asked for no credential at all never
+provisions from the network, because provisioning writes files and starts a process.
 
 **The one thing to check before moving on** is the context endpoint, because it is the answer to
 almost every "why did it do that" you will have later:
@@ -86,11 +88,11 @@ generator change, not a translation layer: nothing reads the old format.
 openclaw.json                        agent.yaml
 ─────────────────────────────────    ─────────────────────────────
 model: "openclaw/main"            →  model.main.{id, baseUrl, apiKeyEnv}
-modelByChannel: {telegram: X}     →  channels[].modelOverride
+modelByChannel: {telegram: X}     →  channels[].role (a role declared under model:)
 delivery.channel + to             →  delivery.default + targets
 agents.defaults.bootstrapMaxChars →  context.observationMaxTokens
 bootstrapTotalMaxChars            →  context.window budgeting
-memorySearch                      →  memory.{retriever, k}
+memorySearch                      →  memory.{retriever, maxActive, threshold}
 subagents                         →  team
 cron jobs (SQLite)                →  schedules
 ```
@@ -208,10 +210,15 @@ finished, which is the failure the field exists to remove.
 ```ts
 try { await agent.send(text, { sessionKey }) }
 catch (error) {
-    if (error instanceof DispachError && error.code === "agent_turn_in_flight") { /* retry */ }
+    if (error instanceof DispachError && error.code === "agent_at_capacity") { /* retry later */ }
     throw error
 }
 ```
+
+A second send to a session that already has a turn running is not an error: turns in one session
+queue behind each other. The refusal worth catching on `POST /messages` is `429` — `agent_at_capacity`
+when `limits.maxConcurrentTurns` is reached across sessions, or `agent_token_budget_exhausted` at
+`limits.tokens`. `agent_turn_in_flight` comes only from the reload, tools-refresh and stop routes.
 
 ---
 
@@ -219,7 +226,7 @@ catch (error) {
 
 | | OpenClaw | Dispach |
 | --- | --- | --- |
-| image | your OpenClaw tag | `ghcr.io/moeen-mahmud/dispach:0.1.0` |
+| image | your OpenClaw tag | `ghcr.io/moeen-mahmud/dispach:0.2.0` |
 | port | 18789 (WS) | 7420 (HTTP + SSE) |
 | the agent | `openclaw.json` | `agent.yaml`, mounted at `/agent` |
 | state | wherever it was | a volume at `/home/dispach` |
@@ -229,7 +236,7 @@ catch (error) {
 ```yaml
 services:
     agent:
-        image: ghcr.io/moeen-mahmud/dispach:0.1.0
+        image: ghcr.io/moeen-mahmud/dispach:0.2.0
         ports: ["7420:7420"]
         environment:
             DISPACH_API_TOKEN: ${DISPACH_API_TOKEN:?}   # a non-loopback bind refuses without one

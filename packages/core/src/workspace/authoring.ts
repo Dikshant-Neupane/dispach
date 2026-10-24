@@ -226,10 +226,8 @@ function checkFraming(file: AuthoringInput): ErrorDetail[] {
 /**
  * Bullet density.
  *
- * Reported unconditionally for now, and `07-SPEC-WORKSPACE.md` says it should be conditional on
- * every bound channel having `markdown: none | basic`. Channels arrive in Phase 4; gating on a
- * section the runtime refuses to load would make this dead code, so it reports the measurement and
- * names the condition instead of pretending to evaluate it.
+ * Reported unconditionally. No channel declares a markdown capability to gate it on, so the check
+ * reports the measurement rather than pretending to evaluate a condition nothing can express.
  */
 function checkStructure(file: AuthoringInput): ErrorDetail[] {
     if (file.tier !== "static") return []

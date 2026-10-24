@@ -18,9 +18,9 @@ here is a word the model reads a thousand times. Files earn their place or they 
 | Tier | Files | Slot | Cached | Agent may edit | Budget |
 | --- | --- | --- | --- | --- | --- |
 | 0 — static | `SOUL.md` (or `SOUL.compact.md`), `AGENTS.md`, `POLICY.md` | 0 | yes, before breakpoint A | no | 2,000 |
-| 1 — volatile | `USER.md`, `MEMORY.md` | 3 | no | yes, via tools | 3,500 |
+| 1 — volatile | `USER.md`, `MEMORY.md` | 4 | no | yes, via tools | 3,500 |
 | 2 — reminder | `REMINDER.md` | 9 | no | no | 500 |
-| 3 — on demand | `knowledge/`, `skills/` | 5 / 4 | n/a | no | not pinned |
+| 3 — on demand | `knowledge/`, `skills/` | 6 / 5 | n/a | no | not pinned |
 
 Hard total for tiers 0–2 is **6,000 tokens** by default. Over budget fails the load and names the
 file. It does not truncate — an agent running on half its instructions with no error anywhere is

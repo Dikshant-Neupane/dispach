@@ -33,7 +33,7 @@ export const source = loader(
     },
     {
         baseUrl: docsRoute,
-        // `README.md` is each folder's index, as it was under GitBook.
+        // `README.md` is each folder's index.
         slugs: (_file, next) => {
             const slugs = next()
             return slugs.at(-1) === "README" ? slugs.slice(0, -1) : slugs

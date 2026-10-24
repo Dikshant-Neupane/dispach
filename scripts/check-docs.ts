@@ -1,83 +1,41 @@
 #!/usr/bin/env bun
-/** Check the repository-backed GitBook site without calling GitBook. */
+/**
+ * Check the developer docs the site publishes: every top-level directory under `developer-docs/` is a
+ * section with a `README.md` and a `SUMMARY.md`, every page is in its summary, every local link and
+ * anchor resolves, and the site's own section lists name exactly these directories.
+ */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, extname, join, relative, resolve } from "node:path"
-import { parse } from "yaml"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const DOCS = join(ROOT, "developer-docs")
-const CONFIG = join(DOCS, "gitbook-docs.yaml")
 const failures: string[] = []
 
-interface SpaceNode {
-    readonly type: "space"
-    readonly key: string
-    readonly title: string
-    readonly path: string
-    readonly default?: boolean
-    readonly content: { readonly directory: string | null; readonly language?: string }
+const sections = readdirSync(DOCS)
+    .filter((name) => statSync(join(DOCS, name)).isDirectory())
+    .sort()
+const directories = sections.map((name) => join(DOCS, name))
+for (const name of sections) {
+    if (!existsSync(join(DOCS, name, "README.md")))
+        failures.push(`developer-docs/${name} has no README.md`)
 }
 
-interface SectionNode {
-    readonly type: "section"
-    readonly key: string
-    readonly title: string
-    readonly path: string
-    readonly default?: boolean
-    readonly children?: readonly SpaceNode[]
-}
-
-const value = parse(readFileSync(CONFIG, "utf8")) as unknown
-const site =
-    typeof value === "object" && value !== null && "site" in value
-        ? (value.site as Record<string, unknown>)
-        : undefined
-const structure = Array.isArray(site?.structure) ? (site.structure as SectionNode[]) : []
-
-if (typeof site?.title !== "string" || structure.length === 0) {
-    failures.push("gitbook-docs.yaml needs site.title and a non-empty site.structure")
-}
-
-const keys = new Set<string>()
-const directories: string[] = []
-const rememberKey = (key: unknown, where: string): void => {
-    if (typeof key !== "string" || key === "") {
-        failures.push(`${where} has no key`)
-    } else if (keys.has(key)) {
-        failures.push(`duplicate GitBook key: ${key}`)
-    } else {
-        keys.add(key)
-    }
-}
-
-for (const section of structure) {
-    if (section.type !== "section") {
-        failures.push(`top-level ${section.key ?? "node"} is not a section`)
-        continue
-    }
-    rememberKey(section.key, `section ${section.title ?? "(untitled)"}`)
-    const children = Array.isArray(section.children) ? section.children : []
-    if (children.filter((child) => child.default === true).length !== 1) {
-        failures.push(`section ${section.key} needs exactly one default space`)
-    }
-    for (const space of children) {
-        rememberKey(space.key, `space ${space.title ?? "(untitled)"}`)
-        const directory = space.content?.directory
-        if (directory === null) continue
-        if (typeof directory !== "string" || directory.includes("..")) {
-            failures.push(`space ${space.key} has an invalid content.directory`)
-            continue
-        }
-        const absolute = resolve(DOCS, directory)
-        directories.push(absolute)
-        if (!existsSync(join(absolute, "README.md"))) {
-            failures.push(`space ${space.key} has no README.md at ${directory}`)
-        }
-    }
-}
-if (structure.filter((section) => section.default === true).length !== 1) {
-    failures.push("the site needs exactly one default section")
+// The site names its sections twice, as literals its build needs: the sidebar order in `tree.ts` and
+// the page globs in `source.ts`. A directory missing from either is a section the site never shows.
+const named = (file: string, pattern: RegExp): string[] =>
+    [...readFileSync(join(ROOT, file), "utf8").matchAll(pattern)]
+        .map((match) => match[1] ?? "")
+        .sort()
+const sidebar = named("site/lib/tree.ts", /"([\w-]+)"(?=[^\n]*\] as const)/g)
+for (const [file, listed] of [
+    ["site/lib/tree.ts", sidebar],
+    ["site/lib/source.ts", named("site/lib/source.ts", /"([\w-]+)\/\*\*\/\*\.md"/g)],
+] as const) {
+    if (listed.join(",") !== sections.join(","))
+        failures.push(
+            `${file} lists sections ${listed.join(", ")}; developer-docs has ${sections.join(", ")}`,
+        )
 }
 
 const markdownFiles = (directory: string): string[] => {
@@ -159,5 +117,5 @@ if (failures.length > 0) {
 }
 
 process.stdout.write(
-    `developer documentation: ${structure.length} sections, ${directories.length} repository spaces, ${allPages.length} Markdown files\n`,
+    `developer documentation: ${sections.length} sections, ${allPages.length} Markdown files\n`,
 )

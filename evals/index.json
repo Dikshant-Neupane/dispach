@@ -133,7 +133,7 @@
         },
         {
             "section": "Boot and runtime",
-            "claim": "Boot to ready ~87–91 ms (0.2.0; ~53 ms at 0.1.3)",
+            "claim": "Boot to ready ~65 ms (0.2.0; ~53 ms at 0.1.3)",
             "evidence": "`evals/boot/results.json` (`bench:boot --write`)",
             "scope": "7-run median, Apple M4 Pro, bun, load average recorded",
             "limitation": "Boot, not response latency. One machine",
@@ -155,7 +155,7 @@
         },
         {
             "section": "Boot and runtime",
-            "claim": "`Runtime.create` 23.5 ms",
+            "claim": "`Runtime.create` 20.6 ms",
             "evidence": "`evals/boot/results.json` (`createMs`)",
             "scope": "Same run as boot",
             "limitation": "—",
@@ -335,7 +335,7 @@
             "results": [
                 "results.json"
             ],
-            "measuredAt": "2026-10-20T14:01:19.888Z"
+            "measuredAt": "2026-10-24T07:58:53.976Z"
         },
         {
             "name": "budget",

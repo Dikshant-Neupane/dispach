@@ -12,33 +12,38 @@ WhatsApp for a Dispach agent, through [Baileys](https://github.com/WhiskeySocket
 > **Pair a spare number.** Not a personal one, not a business one you rely on, not one that is
 > somebody's two-factor recovery. That is the whole of the advice and it is not hedged.
 >
-> This is why the package ships **outside** the Dispach bundle: the tarball and the container
-> image carry none of it. An operator opts in by name, for an account they chose.
+> The channel is **bundled** with the `dispach` package and the container image, so the code ships
+> to everybody — but nothing connects until a manifest names the channel. The opt-in is configuring
+> it, for an account you chose.
 > If you want WhatsApp with no such risk, the official Cloud API is a different integration behind
 > the same `ChannelTransport` interface, and it is not this.
 
-## Installing it
+## Configuring it
 
-```bash
-dispach plugins add <agent> moeen-mahmud/dispach-whatsapp --ref v0.1.0
-```
-
-Then in `agent.yaml`:
+No install step and no `plugins:` entry. In `agent.yaml`:
 
 ```yaml
-plugins:
-  - "dispach-whatsapp"
-
 channels:
   - type: whatsapp
     id: wa
     authDir: ./.whatsapp              # the paired session. Gitignore it.
+    pairWith: "8801711223344"         # the account the agent runs as. Omit it to pair by QR.
     allowFrom: ["8801711223344"]      # digits, no +. Inbound only, and closed by default.
 ```
 
+`init --whatsapp connected --whatsapp-number <digits>` writes this block for you.
+
 ## Pairing
 
-Start the agent and the channel reports `needs_input` with a QR:
+With `pairWith` set, pairing is an eight-character code typed into the phone under **Linked
+devices** → **Link with phone number**. The channel reports `needs_input` with a `pairing_code`
+payload, and `dispach channels pair <agent> wa` starts a host if none is up, shows the code and
+waits.
+
+`pairWith` is the account the agent *runs as*; `allowFrom` is who may message it, and the paired
+account is always admitted.
+
+Without `pairWith`, the channel reports `needs_input` with a QR:
 
 ```bash
 dispach serve <agent>
@@ -66,7 +71,7 @@ message prints the exact line to paste.
 | --- | --- |
 | Text in and out | yes, including captions on an image or a document |
 | Groups | **no** — a group has its own addressing and `allowFrom` is per sender; out of scope rather than half-supported |
-| Media out | no. Text only in v1 |
+| Media out | images, and audio (including voice notes as `ptt`) |
 | Read receipts, presence | `composing` while a turn runs; nothing else |
 | Message ids | reported, but `idempotentSend` is **false** — WhatsApp does not promise to deduplicate a re-sent id, and claiming otherwise would turn the outbox's visible `uncertain` flag into a silent duplicate |
 
@@ -91,7 +96,7 @@ bun run build     # one self-contained ES module, Baileys inlined
 Nothing is installed at runtime (hard rule 5), so the published artefact is one file with its
 dependencies bundled in — which is what makes the same directory work in a checkout, in the
 npm install and in the container. Three of Baileys' optional media dependencies stay external
-(`sharp`, `jimp`, `link-preview-js`); Baileys loads each inside a `catch` and this channel is text,
+(`sharp`, `jimp`, `link-preview-js`); Baileys loads each inside a `catch`,
 so their absence costs image thumbnails and link previews and nothing else.
 
 Apache-2.0. Baileys is MIT and is its own project.

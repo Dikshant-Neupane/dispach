@@ -41,7 +41,7 @@ model:
 
 Keep the secret in the named environment variable. A literal key in the manifest fails validation.
 
-The model's tool dialect is explicit configuration. `nlt` is the default; use `native` only when you intentionally choose provider-native function calling. Dispach does not change dialect when the model ID changes.
+The model's tool dialect is explicit configuration. The schema default is `nlt`, but `init` writes `native` where the capability registry knows the model calls tools natively, and `nlt` otherwise. Use `native` for those models: on the multi-turn harness benchmark it tied or beat `nlt` on all 13 models measured both ways. Dispach does not change dialect when the model ID changes.
 
 The binding field reference is the Agent manifest specification. The generated starter at
 `examples/reference/agent.yaml` shows a complete current manifest.

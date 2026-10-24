@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** Export the handler's generated OpenAPI document for GitBook. */
+/** Export the handler's generated OpenAPI document for the docs site's API reference. */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
