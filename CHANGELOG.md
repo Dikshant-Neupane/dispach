@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-_Nothing yet._
+### Fixes
+
+- `POST /v1/agents/:id/sessions/:key/phase` takes effect on the next turn of a session that has already run. It answered 200 and the session stayed in its old phase until a restart.
 
 ## 0.2.0 — 2026-10-24
 

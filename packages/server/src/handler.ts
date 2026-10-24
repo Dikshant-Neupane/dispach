@@ -3478,11 +3478,9 @@ export function createHandler(options: HandlerOptions): ServerHandler {
                 }
                 const outside = outsideSession(context, context.params.key ?? "")
                 if (outside !== undefined) return outside
-                await agent.store.sessions.setPhase(
-                    agent.id,
-                    context.params.key ?? "",
-                    phase === null ? undefined : phase,
-                )
+                const key = context.params.key ?? ""
+                if (phase === null) await agent.store.sessions.setPhase(agent.id, key, undefined)
+                else await agent.setPhase(key, phase)
                 return json({ phase })
             }),
         { capability: "write" },
