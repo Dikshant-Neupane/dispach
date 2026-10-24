@@ -25,7 +25,7 @@ import {
     slackChannel,
     toInbound,
 } from "../src/index.ts"
-import { fromSlack } from "../src/transport.ts"
+import { slackFilePath } from "../src/transport.ts"
 
 const BOT = "UBOT"
 
@@ -478,13 +478,20 @@ describe("media", () => {
 })
 
 describe("hardening", () => {
-    test("the bot token is sent only to https slack.com hosts", () => {
-        expect(fromSlack("https://files.slack.com/clip.webm")).toBe(true)
-        expect(fromSlack("https://slack.com/x")).toBe(true)
-        expect(fromSlack("http://files.slack.com/clip.webm")).toBe(false)
-        expect(fromSlack("https://files.slack.com.evil.example/clip.webm")).toBe(false)
-        expect(fromSlack("https://evil.example/?u=files.slack.com")).toBe(false)
-        expect(fromSlack("not a url")).toBe(false)
+    test("the bot token is sent only to https files.slack.com", () => {
+        expect(slackFilePath("https://files.slack.com/files-pri/T1-F1/clip.webm?t=x")).toBe(
+            "/files-pri/T1-F1/clip.webm?t=x",
+        )
+        for (const url of [
+            "http://files.slack.com/clip.webm",
+            "https://files.slack.com:8443/clip.webm",
+            "https://files.slack.com.evil.example/clip.webm",
+            "https://user@evil.example/files.slack.com",
+            "https://evil.example/?u=files.slack.com",
+            "https://slack.com/clip.webm",
+            "not a url",
+        ])
+            expect(slackFilePath(url)).toBeUndefined()
     })
 
     test("a file an event names off Slack is refused before any request is made", async () => {

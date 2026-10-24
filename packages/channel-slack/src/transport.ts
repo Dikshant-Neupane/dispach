@@ -34,6 +34,8 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
 export type SocketFactory = (url: string) => WebSocket
 
 export const SLACK_API = "https://slack.com/api/"
+/** Where Slack serves every private file, and so the only host a download may reach. */
+export const SLACK_FILES = "https://files.slack.com"
 
 const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000] as const
 
@@ -349,14 +351,16 @@ export class SlackTransport implements ChannelTransport {
 
     /** A voice clip's bytes, with the bot token. Needs the `files:read` scope. */
     async #download(url: string, signal: AbortSignal): Promise<Uint8Array> {
-        // The URL comes off the inbound event and the request carries the bot token, so it goes
-        // only to Slack's own hosts: a token handed to whatever an event names is a token leaked.
-        if (!fromSlack(url)) {
+        // The URL comes off the inbound event and the request carries the bot token, so the host is
+        // never the event's: only the path is taken, behind a constant origin. A token handed to
+        // whatever an event names is a token leaked.
+        const path = slackFilePath(url)
+        if (path === undefined) {
             throw new Error(
-                `refused to fetch ${url.slice(0, 80)} with the bot token: not an https slack.com address. Slack serves files from files.slack.com; an event naming anything else is not one to trust.`,
+                `refused to fetch ${url.slice(0, 80)} with the bot token: not an https files.slack.com address. Slack serves private files only from there; an event naming anything else is not one to trust.`,
             )
         }
-        const response = await this.#fetch(url, {
+        const response = await this.#fetch(`${SLACK_FILES}${path}`, {
             method: "GET",
             headers: { authorization: `Bearer ${this.#botToken}` },
             signal,
@@ -374,15 +378,15 @@ export class SlackTransport implements ChannelTransport {
     }
 }
 
-/** An https URL on slack.com or one of its subdomains. */
-export function fromSlack(url: string): boolean {
+/** The path and query of an https files.slack.com URL, or `undefined` for any other address. */
+export function slackFilePath(url: string): string | undefined {
     try {
-        const { protocol, hostname } = new URL(url)
-        return (
-            protocol === "https:" && (hostname === "slack.com" || hostname.endsWith(".slack.com"))
-        )
+        const parsed = new URL(url)
+        return `${parsed.protocol}//${parsed.host}` === SLACK_FILES
+            ? `${parsed.pathname}${parsed.search}`
+            : undefined
     } catch {
-        return false
+        return undefined
     }
 }
 
