@@ -15,7 +15,8 @@ they work for, and stand in for them, openly, when they are away. That half ship
 Everything else described in this README is stable.
 
 **Docs:** [dispach.blivius.com/docs](https://dispach.blivius.com/docs) ·
-**New in 0.2.0:** [what changed and how to upgrade](developer-docs/runtime/whats-new-0-2-0.md)
+**New in 0.2.0:** [what changed and how to upgrade](developer-docs/runtime/whats-new-0-2-0.md) ·
+**Limits:** [what is measured, and what it does not do](developer-docs/runtime/limits-and-evidence.md)
 
 > To dispatch is to send a thing on its way with the authority to see it done — to decide
 > what handles it, hand it over, and answer for the result.

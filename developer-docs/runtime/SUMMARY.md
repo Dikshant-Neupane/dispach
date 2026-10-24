@@ -4,6 +4,7 @@
 - [What's new in 0.2.0](whats-new-0-2-0.md)
 - [Stable and pre-releases](releases.md)
 - [Benchmarks](benchmarks.md)
+- [Limits and evidence](limits-and-evidence.md)
 - Quickstart
   - [Run with Docker](quickstart/run-with-docker.md)
   - [Create an agent](quickstart/create-an-agent.md)

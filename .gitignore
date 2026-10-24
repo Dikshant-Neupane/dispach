@@ -54,3 +54,6 @@ packages/cli/README.md
 
 # The control plane's default database, if it is started from the repository root.
 control.db*
+
+# Weekly launch counts, from scripts/launch-metrics.ts
+.metrics/

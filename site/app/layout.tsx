@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next"
 import { RootProvider } from "fumadocs-ui/provider/next"
 import "./global.css"
 import type { Metadata } from "next"
@@ -22,6 +23,8 @@ export default function Layout({ children }: LayoutProps<"/">) {
             <body className="flex min-h-screen flex-col font-sans">
                 {/* Terminal-native: dark unless the reader picks light. */}
                 <RootProvider theme={{ defaultTheme: "dark" }}>{children}</RootProvider>
+                {/* Page views for launch metrics. Cookieless; reports nothing until Web Analytics is enabled on the project. */}
+                <Analytics />
             </body>
         </html>
     )
