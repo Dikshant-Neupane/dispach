@@ -60,7 +60,7 @@ in the image for voice notes, and one host token shared by every agent in a sand
 
 ## Upgrading from 0.1.3
 
-1. Back up `store.db`. Migrations 20 to 31 run on first boot and have no down-migration.
+1. Back up `store.db`. Migrations 18 to 31 run on first boot and have no down-migration.
 2. Install 0.2.0 (`npm install --global dispach@latest`, `brew upgrade dispach`, or
    `docker pull ghcr.io/moeen-mahmud/dispach:0.2.0`) and start it. No `agent.yaml` change is needed.
 3. Check the four breaking changes, if they touch you:

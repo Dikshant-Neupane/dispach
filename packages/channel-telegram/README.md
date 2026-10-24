@@ -11,6 +11,9 @@ channels:
     allowFrom: ["@moeen"]     # inbound only, and closed by default
 ```
 
+In-process embedding, from a repository checkout — this is a workspace package and is not published
+on its own:
+
 ```ts
 import { telegramChannel } from "@dispach/channel-telegram"
 
@@ -21,7 +24,9 @@ const runtime = await Runtime.create({
 })
 ```
 
-The `dispach` binary registers this for you. A library embedder registers what it wants.
+The published `dispach` package bundles this channel and registers it for you: the `channels:`
+block above is all a manifest needs. A library embedder working from a checkout registers what it
+wants.
 
 ## Fields
 

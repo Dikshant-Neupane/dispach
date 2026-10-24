@@ -104,10 +104,11 @@ const ModelRoleFields = z
         /**
          * Ask the endpoint to report token usage in a streamed response.
          *
-         * `stream_options` is an OpenAI extension, so it is off by default: an endpoint that does
-         * not know it may reject the request outright. Measured: Ollama honours it and reports
-         * nothing without it, so a local model's token counts come from the estimator until this is
-         * set — which matters the moment a number is being compared rather than displayed.
+         * On by default (since Phase 7A); `false` stops asking. `stream_options` is an OpenAI
+         * extension, so an endpoint that does not know it may reject the request: a 400 naming
+         * `stream_options` is retried once without it and remembered (`model/chat-completions.ts`).
+         * Measured: Ollama honours it and reports nothing without it, so without usage a local
+         * model's token counts come from the estimator alone.
          */
         streamUsage: z.boolean().optional(),
         capabilities: ModelCapabilitiesSchema.optional(),
@@ -297,7 +298,7 @@ export const ContextSchema = z
         workspace: z.string().min(1).default("./workspace"),
         /** Tier 0, slot 0. Cache-stable, read-only, before breakpoint A. */
         static: z.array(z.string().min(1)).default([]),
-        /** Tier 1, slot 3. Writable, *after* breakpoint A so a write leaves the cache intact. */
+        /** Tier 1, slot 4. Writable, *after* breakpoint A so a write leaves the cache intact. */
         volatile: z.array(z.string().min(1)).default([]),
         /** Tier 2, slot 9. After the history, before the current input. One or two rules. */
         reminder: z.string().min(1).optional(),
@@ -305,7 +306,7 @@ export const ContextSchema = z
         rules: RulesSchema.prefault({}),
         /** Capability-gated long-form identity, with `requires` and `onUnmet`. */
         soul: SoulSchema.optional(),
-        /** Runtime-generated line about automatic compaction. Phase 7; refused until then. */
+        /** Runtime-generated line about automatic compaction, rendered into slot 2. */
         compactionNotice: z.boolean().optional(),
         thresholds: ThresholdsSchema.prefault({}),
     })
@@ -433,7 +434,7 @@ export const SkillsSchema = z
 export const MemorySchema = z
     .object({
         /**
-         * Which retriever backs slot 7. Only `fts5` exists; an unknown name is refused at load with
+         * Which retriever backs slot 10. Only `fts5` exists; an unknown name is refused at load with
          * the known ones named, rather than silently retrieving nothing.
          *
          * A string rather than an enum because `MemoryRetriever` is a function-shaped seam and the
@@ -491,7 +492,7 @@ export const MemorySchema = z
          *
          * **Tool observations are never indexed, at any setting.** That is where untrusted text lives —
          * a fetched page, a provider result — and indexing it would make prompt injection *durable*:
-         * text a stranger wrote, retrieved into slot 7 in a later session, long after the write gate
+         * text a stranger wrote, retrieved into slot 10 in a later session, long after the write gate
          * that fenced it stopped applying. `ChatMessage.origin` is what makes the distinction reliable,
          * since under a text dialect an observation comes back as a `user` message and the role does
          * not say.

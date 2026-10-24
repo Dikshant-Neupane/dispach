@@ -43,10 +43,10 @@ job. The workspace command's authoring checks will tell you if a line counts.
 {{MEMORY_PROCEDURE}}
 
 <!-- ── Team ──────────────────────────────────────────────────────────────────────────
-Sub-agent responsibilities and handoff routing live here once delegation ships. This
-section stays commented out until then: comments are stripped before the model sees the
-file, and a visible instruction to "hand off to the research agent" on a runtime that
-cannot delegate yet produces confidently narrated handoffs that never happened.
+Sub-agent responsibilities and handoff routing, for an agent with a `team` block. This
+section stays commented out until the agent has one: comments are stripped before the
+model sees the file, and a visible instruction to "hand off to the research agent" on an
+agent with nobody to hand to produces confidently narrated handoffs that never happened.
 
 # Team
 

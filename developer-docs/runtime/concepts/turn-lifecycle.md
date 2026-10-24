@@ -21,7 +21,7 @@ Limits in the manifest bound steps, time, output, and context pressure. When con
 
 ## Completion
 
-A caller should handle successful completion, explicit stop, model or tool error, timeout, and step-limit exhaustion. Treat the stored turn resource as the final record. A stream is a live view that may begin late or reconnect after its buffer has lost early frames.
+A turn ends with one of these reasons: `final` (an answer), `stopped` (an explicit stop), `max_steps` (the step budget ran out), `no_progress` (the same call repeated without progress), `truncated` (the reply hit an output limit), `timeout`, or `error`. A model that declines to answer ends as `error` with the code `model_refused`. A caller should handle all of them. Treat the stored turn resource as the final record. A stream is a live view that may begin late or reconnect after its buffer has lost early frames.
 
 ## Delivery
 

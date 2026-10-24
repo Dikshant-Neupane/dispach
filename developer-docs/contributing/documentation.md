@@ -1,6 +1,6 @@
 # Writing documentation
 
-Public documentation lives in `developer-docs/` and is published through GitBook Git Sync. Internal design history and binding contracts stay in `docs/`.
+Public documentation lives in `developer-docs/` and is published by the Next.js and Fumadocs site in `site/`, which reads the Markdown in place and serves it at `/docs`. The site is deployed on Vercel. Internal design history and binding contracts stay in `docs/`.
 
 ## Choose the right home
 
@@ -10,11 +10,20 @@ Public documentation lives in `developer-docs/` and is published through GitBook
 - Update a binding specification in `docs/` when code changes the contract.
 - Link to an internal specification when readers need exact fields; do not copy the entire document into a guide.
 
-Each GitBook space has its own `README.md` and `SUMMARY.md`. Add every new page to that space's summary.
+Each section (`runtime`, `contributing`, `control-plane`, `reference`) has its own `README.md`, which is the section's index page, and `SUMMARY.md`, which is its sidebar: `- [Releasing](releasing.md)` is a page, a bare `- Title` is a group, and two spaces of indent nest one level. Add every new page to that section's summary. A page's title is its first `#` heading; no frontmatter is needed.
+
+`developer-docs/gitbook-docs.yaml` lists the sections and their directories. Despite its name it no longer configures a hosted service: `bun run docs:check` reads it to find each section, then checks that each has a `README.md` and `SUMMARY.md`, every page appears in its summary, and every local link and anchor resolves. The site reads the same `SUMMARY.md` files (`site/lib/tree.ts`) and fails its build if a summary names a page that did not load. A new section needs an entry in that file and in `site/lib/tree.ts` and `site/lib/source.ts`.
+
+Preview the site locally:
+
+```bash
+bun install --cwd site
+bun run --cwd site dev
+```
 
 ## API reference
 
-The server generates OpenAPI from the same router and Zod schemas used at runtime. Refresh the committed snapshot after an API change:
+The server generates OpenAPI from the same router and Zod schemas used at runtime. The site renders the HTTP API pages from the committed snapshot. Refresh it after an API change:
 
 ```bash
 bun run docs:generate
@@ -25,9 +34,6 @@ Do not edit `developer-docs/reference/openapi.json` by hand.
 
 ## Published branch
 
-The current GitBook site tracks `development`; it does not have separate Stable and Next variants.
-Pages may therefore describe pilot behavior, but must label it with the release line that provides
-it. Describe planned behavior only when it is clearly marked as planned.
-
-If a stable variant is added later, map it to `main` and review both branches independently before
-making it the default.
+The docs site documents the branch it is deployed from, with no separate Stable and Next versions.
+Pages may describe pre-release behavior, but must label it with the release line that provides it.
+Describe planned behavior only when it is clearly marked as planned.

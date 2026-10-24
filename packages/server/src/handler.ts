@@ -2168,9 +2168,9 @@ export function createHandler(options: HandlerOptions): ServerHandler {
      * read a final text that does not exist yet. It is terminal-or-not, `status !== "running"`, so
      * a new `TurnEndReason` cannot be silently misfiled as still-running.
      *
-     * The buffer is checked before the store, so the common case costs no query. The window between
-     * that check and `attach` is real and benign: eviction can land in it, and `streamTurn`'s own
-     * fallback frame covers it.
+     * The store is read first, because the turn's session decides whether a scoped key may follow it;
+     * that costs one query per attach. The window between the buffer check and `attach` is real and
+     * benign: eviction can land in it, and `streamTurn`'s own fallback frame covers it.
      */
     router.add(
         "GET",
@@ -2178,8 +2178,9 @@ export function createHandler(options: HandlerOptions): ServerHandler {
         (context) =>
             withAgent(runtime, context, async (agent) => {
                 const turnId = context.params.turnId ?? ""
+                const record = await agent.store.turns.get(turnId)
+                if (outsideTurn(context, record)) return notFound("turn", turnId)
                 if (runtime.streams.state(turnId) === undefined) {
-                    const record = await agent.store.turns.get(turnId)
                     if (record === undefined)
                         return notFound(
                             "turn",
@@ -2200,8 +2201,10 @@ export function createHandler(options: HandlerOptions): ServerHandler {
         "POST",
         "/v1/agents/:id/turns/:turnId/stop",
         (context) =>
-            withAgent(runtime, context, () => {
+            withAgent(runtime, context, async (agent) => {
                 const turnId = context.params.turnId ?? ""
+                if (outsideTurn(context, await agent.store.turns.get(turnId)))
+                    return notFound("turn", turnId)
                 const controller = running.get(turnId)
                 if (controller === undefined) {
                     return fail(
@@ -2248,7 +2251,9 @@ export function createHandler(options: HandlerOptions): ServerHandler {
         "/v1/agents/:id/approvals",
         (context) =>
             withAgent(runtime, context, async (agent) =>
-                json({ approvals: approvals.pending(agent.id) }),
+                json({
+                    approvals: visibleSessions(context.principal, approvals.pending(agent.id)),
+                }),
             ),
         { capability: "read" },
     )
@@ -2270,15 +2275,22 @@ export function createHandler(options: HandlerOptions): ServerHandler {
         "POST",
         "/v1/agents/:id/approvals/:approvalId",
         (context) =>
-            withAgent(runtime, context, async () => {
+            withAgent(runtime, context, async (agent) => {
                 const body = await readJson(context.request)
                 if (body.kind === "error") return fail(body.error, 400)
                 const parsed = parseBody(ApprovalBody, body.value)
                 if (!parsed.ok) return fail(parsed.error, 400)
                 const input = parsed.value
 
+                // The registry is per process, so an id is looked up among this agent's questions in
+                // this caller's sessions first: another agent's or another session's question answers
+                // exactly as one that was never asked.
                 const approvalId = context.params.approvalId ?? ""
-                if (!approvals.resolve(approvalId, input.granted)) {
+                const reachable = visibleSessions(context.principal, approvals.pending(agent.id))
+                if (
+                    !reachable.some((pending) => pending.approvalId === approvalId) ||
+                    !approvals.resolve(approvalId, input.granted)
+                ) {
                     return fail(
                         {
                             code: "approval_not_found",
@@ -3375,7 +3387,8 @@ export function createHandler(options: HandlerOptions): ServerHandler {
         (context) =>
             withAgent(runtime, context, async (agent) => {
                 const record = await agent.store.turns.get(context.params.turnId ?? "")
-                if (record === undefined) return notFound("turn", context.params.turnId ?? "")
+                if (record === undefined || !reachesSession(context.principal, record.sessionKey))
+                    return notFound("turn", context.params.turnId ?? "")
                 return json(record)
             }),
         { capability: "read" },
@@ -5061,6 +5074,21 @@ function outsideSession(context: RequestContext, sessionKey: string): Response |
     return reachesSession(context.principal, sessionKey)
         ? undefined
         : notFound("session", sessionKey)
+}
+
+/**
+ * Whether a turn is out of this caller's reach, for the routes addressed by turn id.
+ *
+ * A turn belongs to a session, so a key narrowed to some sessions reaches only their turns. A live
+ * turn can be streaming a moment before its row is written; for a scoped caller that turn is out of
+ * reach until the row says whose it is, which is the fail-closed direction.
+ */
+function outsideTurn(
+    context: RequestContext,
+    record: { readonly sessionKey: string } | undefined,
+): boolean {
+    if (record === undefined) return isScoped(context.principal)
+    return !reachesSession(context.principal, record.sessionKey)
 }
 
 /**

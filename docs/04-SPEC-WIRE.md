@@ -4,9 +4,9 @@ The HTTP surface exposed by `@dispach/server`. Deliberately boring: HTTP + JSON 
 control, SSE for streaming, WebSocket only where genuinely bidirectional. **`curl` must be
 sufficient to drive everything.**
 
-This is Dispach's *own* protocol. The OpenClaw-compatible surface VelaOps currently
-speaks is a separate adapter documented in `06-VELAOPS-INTEGRATION.md`, and it is not part
-of this spec.
+This is Dispach's *own* protocol, and the only one. There is no OpenClaw-compatible adapter:
+VelaOps calls `/v1` like any other client, and `06-VELAOPS-INTEGRATION.md` records why the
+adapter was deleted rather than built.
 
 ---
 
@@ -16,6 +16,11 @@ of this spec.
 - `Authorization: Bearer <token>`, from `server.tokenEnv`. Loopback binds may omit it;
   a non-loopback host without a token refuses to start.
 - All bodies JSON. All timestamps RFC 3339 UTC.
+- CORS: a browser origin the server answers to — a loopback origin, one listed in
+  `server.allowedOrigins`, or the request's own host on a public bind — gets
+  `Access-Control-Allow-Origin` echoing it exactly (never `*`, and no `Allow-Credentials`: the
+  credential is a bearer header, not a cookie). `OPTIONS` answers a real preflight: `204` with
+  `Allow` and the `Access-Control-*` headers. Any other origin is `403 origin_not_allowed`.
 - Errors:
 
 ```json
@@ -71,7 +76,7 @@ and WebSocket surfaces can return:
 | `sender_invalid` | 400 | `from` is malformed, or `from.kind` is not `user` or `agent`. Refused rather than defaulted — `kind` decides the trust boundary. |
 | `idempotency_key_invalid` | 400 | `Idempotency-Key` is empty, over 255 characters, or not printable ASCII. |
 | `idempotency_key_reused` | 409 | The key belongs to a turn whose text or session differed. Nothing ran. |
-| `phase_invalid` | 400 | The phase is not declared in the manifest. |
+| `phase_invalid` | 400 | `phase` is missing or not a non-empty string (`null` included). The route does not check the name against the manifest's declared phases. |
 | `recall_invalid` | 400 | `recall` on a session is not a boolean. |
 | `approval_decision_required` | 400 | `POST /approvals/:id` with no boolean `granted`. No default in either direction. |
 | `key_label_required` | 400 | `POST /v1/keys` with no string `label`. Required rather than defaulted — it is the only thing distinguishing two credentials. |
@@ -79,6 +84,9 @@ and WebSocket surfaces can return:
 | `claim_spent` | 401 | The boot claim was recognised and has already been exchanged. A claim from an earlier boot is `unauthorized` instead — this process has never seen it. |
 | `web_asset_missing` | 500 | The routes serving the browser surface and the table backing them diverged. A broken build, not a missing file. |
 | `schedule_invalid` | 400 | The schedule failed validation — a bad cron expression, or a field the schema refuses. |
+| `schedule_delivery_channel_unknown` | 400 | A schedule's `deliver.channel` is not a channel id on this agent. A target names a channel's id, not its type. |
+| `schedule_role_unknown` | 400 | A schedule's `role` is not declared under `model:`. |
+| `schedule_missing_delivery` | — | A manifest schedule with no `deliver`. A load finding, carried in `details[]` of `manifest_validation_failed`; over the API a body with no `deliver` is `schedule_invalid`. |
 | `schedule_tool_unknown` | 400 | A schedule's `tools.allow` names nothing this agent has. A schedule can only narrow the agent's own tools. |
 | `unknown_event_type` | 400 | `?types=` named an event that does not exist. Carries the nearest real name. |
 | `agent_turn_in_flight` | 409 | A stop was asked for while a turn is running. It names the count; retry when the turn ends. A reload no longer answers this: it waits (`reload_pending`). |
@@ -157,10 +165,10 @@ and WebSocket surfaces can return:
 | `key_scope_invalid` | 400 | `scope` is not an object. |
 | `key_scope_agents_invalid` | 400 | `scope.agents` is not a list of ids. |
 | `key_scope_sessions_invalid` | 400 | `scope.sessions` is not a string prefix. |
-| `key_scope_can_invalid` | 400 | `scope.can` names something that is not one of the four capabilities. |
+| `key_scope_can_invalid` | 400 | `scope.can` names something that is not one of the five capabilities (`read`, `chat`, `write`, `admin`, `peer`). |
 | `key_scope_expires_invalid` | 400 | `scope.expiresIn` is not a positive whole number of seconds. |
 | `key_scope_participant_invalid` | 400 | `scope.participant` is not a non-empty id. |
-| `sender_not_bound_participant` | 403 | A key bound to a participant sent `from` naming someone else, or claiming `kind: "agent"` — or a room message whose `authorId` is someone else. Refused rather than corrected, so the caller never believes a turn was attributed as they asked when it was not. Omit `from` (or `authorId`) and it is filled in. |
+| `sender_not_bound_participant` | 403 | **Experimental in 0.2.0.** A key bound to a participant sent `from` naming someone else, or claiming `kind: "agent"` — or a room message whose `authorId` is someone else. Refused rather than corrected, so the caller never believes a turn was attributed as they asked when it was not. Omit `from` (or `authorId`) and it is filled in. |
 | `participant_id_invalid` | 400 | A participant id that is empty. |
 | `participant_id_reserved` | 400 | Registering an `agent:` id. Agents are participants already. |
 | `participant_role_invalid` | 400 | A role other than `admin` or `member`. |
@@ -239,7 +247,9 @@ so it is refused with a hint naming the reason. `OPTIONS` on those paths does no
 **Experimental in 0.2.0**: participants, conversations (rooms and DMs), presence and stand-in
 actions (`/v1/participants`, `/v1/conversations`, `/v1/actions`), team memory and projects
 (`/v1/memory/*`, `/v1/projects`), export and import, the assignee routes, plugin-mounted routes and
-the `peer` capability. They are complete and tested, have no TUI or web screens yet, and may change
+the `peer` capability, participant-bound keys (`scope.participant`), `limits.maxHops`, personal
+tools (`tool_personal`), per-message model roles (`POST /messages {role}`), media and its events,
+and the Slack and Teams channels, threading included. Each is marked where it appears. They are complete and tested, have no TUI or web screens yet, and may change
 within 0.2.x. Everything else here is stable.
 
 ### Health and readiness
@@ -271,7 +281,10 @@ the socket — in each case before a turn id is issued, so nothing is recorded.
 visible on the agent resource. This distinction is deliberate: a channel that cannot
 connect must not make the process look dead to an orchestrator.
 
-Each entry of `channels[]` is `{ id, type, status, detail?, input? }`. `status` is one of
+Each entry of `channels[]` is `{ id, type, enabled, status?, detail?, input?, credentialEnv?,
+credentialSet? }` — `credentialEnv` names the variable holding the channel's token and `credentialSet`
+says whether it has a value, never the value. A disabled channel is never constructed, so it has no
+`status`. `status` is one of
 `starting | connected | disconnected | error | needs_input`, and **a consumer must tolerate a
 sixth**: the set can grow inside `v: 1` while a field's type cannot.
 
@@ -308,6 +321,7 @@ GET /v1/agents/:id       → the above plus dialect, window, tool count, skills 
 POST /v1/agents/:id/stop   { reason? } → 200 { id, status: "disabled", disabledAt, reason? }
 DELETE /v1/agents/:id?confirm=<id> → 200 { id, removed: true, dir, sessions, messages, … }   (admin; deletes for good)
 POST /v1/agents/:id/start           → 200 { id, status: "loaded", adopted[] }
+                                    | 200 { id, status: "loaded", disabledAt?, reason? } when already hosted
 POST /v1/agents/:id/tools/refresh { providers? } → 200 | 202 { id, providers: [{ provider, ok, fetched, error? }],
                                   added[], removed[], changed[], reload: "none" | "loaded" | "pending" }   (admin, since 0.2.0-pilot.5)
 POST /v1/agents/:id/reload        → 200 { id, status: "loaded", adopted[] }
@@ -603,8 +617,10 @@ turn is running, and `404` only when the id is neither hosted nor recorded. `sta
 `501 start_not_supported` on a server built without a manifest lookup — an embedder over its own
 agent store. The container has the lookup and `start` works there.
 
-**A stopped agent is listed and its resource is `404`**, and the asymmetry is deliberate: the
-listing answers "what exists" and the resource answers "what is running". The row is thin because a
+**A stopped agent is listed, and its resource answers that thin row**, while every route that acts
+on it answers `404`: the listing and the resource say what exists, the acting routes what is running.
+An agent on disk that is neither hosted nor stopped answers `{ id, status: "not_running" }`, or
+`status: "failed"` with the `error` that stopped it loading. The row is thin because a
 stopped agent is not loaded — there is no manifest in memory to report a model or channels from, and
 loading one to fill the row in would make a listing depend on credentials being present.
 
@@ -660,7 +676,7 @@ a reply: chunking, retries and the dedupe key are the outbox's. `to` is the chan
 
 - The text joins the history of the conversation an inbound message from `to` resolves to
   (`{channel}:{to}`) as an assistant message, so a reply to it reads as a reply to something the
-  agent said. A threaded reply (Slack, Teams) carries a thread segment and lands in its own session.
+  agent said. A threaded reply (Slack, Teams; **experimental in 0.2.0**) carries a thread segment and lands in its own session.
 - `key` is required. A repeated key answers `202` with `duplicate: true` and is neither sent nor
   recorded again.
 - `admin`: it speaks as the agent to any recipient with nothing in between.
@@ -686,6 +702,8 @@ Returns `202` with `{ turnId, sessionKey }` immediately, then streams SSE if `st
 true. **The turn is not bound to this connection.** Disconnecting does not cancel it.
 
 #### `role` — run this turn on another model role (since 0.2.0-pilot.7)
+
+**Experimental in 0.2.0**, and may change within 0.2.x.
 
 ```json
 { "text": "summarise this thread", "role": "fast" }
@@ -799,7 +817,7 @@ content is saved on explicit stop only, never on disconnect.
 
 ```
 GET  /v1/agents/:id/approvals              → { approvals: [...] }, oldest first
-POST /v1/agents/:id/approvals/:approvalId  → { granted: true | false }
+POST /v1/agents/:id/approvals/:approvalId  { granted: true | false } → { approvalId, granted }
 ```
 
 A call the policy says to `ask` about, or a mutating call under `tools.untrusted.onMutate:
@@ -930,7 +948,7 @@ POST /v1/keys  { "label": "web · user_8812",
 | `agents` | every agent | An id naming no agent is **reported at mint**, never silently matched against nothing. |
 | `sessions` | every session | A prefix; a trailing `*` is accepted and ignored. Not a namespace — `team_4` also matches `team_42:x`. |
 | `can` | all of them | `read`, `chat`, `write`, `admin`, and `peer` — the last reaches only a plugin route that declares it (an A2A endpoint) and no first-party route, so a remote agent's key cannot start a trusted turn. An **empty array** is honoured as written: a key that may do nothing is a coherent thing to mint. |
-| `participant` | any sender | The one participant this key speaks for. Every turn it starts, on `POST /messages` or the socket, has `from` set to it; a `from` naming anyone else is `403 sender_not_bound_participant`. It becomes the turn's **acting participant**, which every tool receives (below). |
+| `participant` | any sender | **Experimental in 0.2.0.** The one participant this key speaks for. Every turn it starts, on `POST /messages` or the socket, has `from` set to it; a `from` naming anyone else is `403 sender_not_bound_participant`. It becomes the turn's **acting participant**, which every tool receives (below). |
 | `expiresIn` | never expires | Seconds. Reported back as an absolute `expiresAt`. Enforced in the same query that hides a revoked key, so the two are indistinguishable. |
 
 **This is not an identity system.** No users, teams, orgs or roles — `06-VELAOPS-INTEGRATION.md`
@@ -938,7 +956,7 @@ refuses them in four places and Better Auth stays authoritative for the consumer
 scope supplies *isolation*; `from` on `POST /messages` supplies *attribution*. That pair is the whole
 contribution, and it is enough to build a collaborative app on.
 
-**The acting participant.** Who a turn acts for, handed to every tool as
+**The acting participant** (experimental in 0.2.0, with `scope.participant`). Who a turn acts for, handed to every tool as
 `ToolContext.actingParticipant` so an embedder's tool can authorise the person as well as the agent
 (member ∩ agent). Stamped by the runtime from the surface, never from model output:
 
@@ -955,10 +973,15 @@ refusal, which is `403 capability_required`: that discloses nothing about what e
 what this credential may do — and a `404` there would tell somebody holding a read-only key that the
 agent they are plainly reading has vanished.
 
-Listings **filter** rather than refuse — `GET /v1/agents`, `GET /v1/agents/:id/sessions` and the
-`/v1/events` firehose — because a listing is how a client discovers what it can reach. The firehose
+Listings **filter** rather than refuse — `GET /v1/agents`, `GET /v1/agents/:id/sessions`,
+`GET /v1/agents/:id/approvals` and the `/v1/events` firehose — because a listing is how a client discovers what it can reach. The firehose
 is the one that matters most: without a scope check there, a key narrowed to one agent could open
 `/v1/events` with **no parameter at all** and read every other agent's turns, prompts and tool calls.
+
+A `sessions` prefix binds the routes that take a turn id as well: `GET …/turns/:turnId`, its
+`/stream` and `POST …/turns/:turnId/stop` answer `404 turn_not_found` for a turn whose session is
+outside the prefix, exactly as for a turn that never ran, and `GET …/approvals` lists only the
+approvals of sessions inside it.
 
 ### The capability each route requires
 
@@ -1161,16 +1184,18 @@ POST   /v1/agents/:id/schedules/:sid/run     → fire now, out of band
 }
 ```
 
-Validation is at write time, not fire time. Missing delivery target:
+Validation is at write time, not fire time. A delivery to a channel the agent does not declare:
 
 ```json
 { "error": {
-  "code": "schedule_missing_delivery",
-  "message": "Schedule 'morning-brief' has no delivery target.",
-  "hint": "Set deliver to { channel, to }, or the literal \"none\" to return results only via the event stream.",
-  "field": "deliver"
+  "code": "schedule_delivery_channel_unknown",
+  "message": "Schedule \"morning-brief\" delivers to \"tg\", which is not a channel id on this agent. The agent declares no channels.",
+  "hint": "A delivery target names a channel's id, not its type. Use deliver: \"none\" to return results through the event stream instead.",
+  "field": "deliver.channel"
 }}
 ```
+
+A body with no `deliver` at all is `schedule_invalid` (`field: "deliver"`).
 
 Listing includes disabled schedules by default. `?enabled=true` filters.
 
@@ -1197,10 +1222,12 @@ which a schedule (`role:`) or a message (`role`) then runs on. `model.main` (sin
 replaced whole the same way, so a provider switch (transport, endpoint, key variable, capabilities) is
 one validated write and one reload; its fields keep their own rows too, and `GET` reports the whole
 role, `baseUrl` and the `apiKeyEnv` variable name included (never a key's value). Person-only, like
-every model setting: an agent choosing its own model is its owner's money. `PATCH /vars` accepts only
-a variable the saved manifest already reads, so a switch to a new key variable is three calls: PATCH
+every model setting: an agent choosing its own model is its owner's money. `PUT /secrets` accepts only
+a variable the saved manifest already reads, so a switch to a new key variable is two calls: PATCH
 `model.main` (written; the reload is refused for the unset variable and reported as `applied: false`),
-then `PATCH /vars` with the key, then `POST /reload`. A key variable the manifest already names can be
+then `PUT /v1/agents/:id/secrets` with the key, which writes it and reloads the agent. (`PATCH /vars`
+is not the route: it re-renders a template's variables and refuses a secret with `template_var_secret`.)
+A key variable the manifest already names can be
 set first and the switch is one call.
 
 A `changes[]` batch naming paths this surface does not set is refused once, naming every one with
@@ -1289,9 +1316,9 @@ Removing a block's last key removes the block too, so `limits.noProgress.sameToo
 whose `noProgress` holds nothing else leaves no empty `noProgress:`, which would not load.
 
 An agent's settings are fixed for its instance's lifetime, so the change is applied by replacing the
-agent. `dispose` refuses while a turn is in flight — the file is written by then, so the reply says
-`"applied": false` with the reason under `pending`, and the edit takes effect at the next start.
-Reporting 409 as though nothing had happened would leave a written manifest described as unwritten.
+agent. While a turn is in flight the file is written and the replace waits, as `reload` does (above):
+the reply says `"applied": false` with `pending.code: "reload_pending"`, and the edit is in force
+once the running turns finish, announced by `agent.reloaded`. Reporting 409 as though nothing had happened would leave a written manifest described as unwritten.
 
 `delegation.offer` also reloads every hosted agent whose `delegation.to` names this one (or is
 `"*"`), because a roster renders at load. Each is reported under `peers`, as
@@ -1337,8 +1364,9 @@ governs event *types*.
 POST /v1/channels/:channelId/webhook/:agentId
 ```
 
-Signature verification is the channel plugin's responsibility. Core enforces a body-size
-cap and rate limit before the plugin sees anything.
+Signature verification is the channel plugin's responsibility. Core caps the JSON body at 1 MB and
+routes by agent and channel id before the plugin sees anything; an unknown agent and an unknown
+channel both answer `404`, so probing cannot enumerate the runtime. There is no rate limit.
 
 ### Runtime event stream
 
@@ -1397,10 +1425,10 @@ stream still ends on its own turn's `turn.end`, so read `turnId` before treating
 
 | Type | When | Key `data` |
 | --- | --- | --- |
-| `runtime.ready` | boot complete | `bootMs`, `phases: {step: ms}` |
+| `runtime.ready` | boot complete | `bootMs` (inside `Runtime.create`), `processMs` (since process start), `phases: {step: ms}`, `agents` |
 | `store.ready` | store open, migrations done | `location`, `driver`, `from`, `to`, `applied[]`, `reaped[]` |
 | `runtime.stopping` | shutdown begins | `reason` |
-| `runtime.released` | a lease this process held is given back | `agentId`, `kind` |
+| `runtime.released` | a tool provider let go of something outside this process (backgrounded `exec` children), at shutdown or when one agent is disposed; only when it released something | `provider`, `released[]` |
 | `plugin.loaded` | per plugin | `name`, `version`, `setupMs`, `permissions` |
 | `plugin.slow` | setup over budget | `name`, `setupMs` |
 | `agent.loaded` | per agent | `tools`, `skills`, `schedules` (the manifest's **declared** count — this fires before reconciliation), `model` |
@@ -1441,10 +1469,10 @@ stream still ends on its own turn's `turn.end`, so read `turnId` before treating
 | `schedule.skipped` | occurrences passed with nothing running | `scheduleId`, `kind`, `reason`, `missed`, `missedAtLeast` |
 | `schedule.deferred` | a fire arrived mid-run | `scheduleId`, `kind` |
 | `schedule.error` | unreadable schedule, or the turn it started failed | `scheduleId`, `code`, `message`, `hint` |
-| `media.result` | a media call finished | `callId` (a ledger key, like `model.result`'s, and on its usage row), `kind` (`transcription` \| `image` \| `speech`), `provider`, `model`, `latencyMs`, `images?`, `audioSeconds?` (when the provider or the channel reported a duration), `characters?` (a speech call's characters spoken, pilot.15), `sender?` (Phase 26j) |
+| `media.result` | a media call finished (**experimental in 0.2.0**) | `callId` (a ledger key, like `model.result`'s, and on its usage row), `kind` (`transcription` \| `image` \| `speech`), `provider`, `model`, `latencyMs`, `images?`, `audioSeconds?` (when the provider or the channel reported a duration), `characters?` (a speech call's characters spoken, pilot.15), `sender?` (Phase 26j) |
 | `tool.usage` | a tool reported what one call spent at a third party | `slug`, `callId`, `provider` (`tavily`, `firecrawl`, …), `operation?` (`search`, `scrape`, `crawl`, `map`), `unit` (`credits` \| `requests`), `units`, `participant?` (the acting participant, whom it is billed to). Zero or more per call (pilot.9) |
 | `conversation.message` | a message in a room or DM | `conversationId`, `messageId`, `authorId`, `origin` (`human` \| `agent`, stamped by the runtime), `text`, `mentions`, `hop`, `turnId?` (an agent's reply). A stand-in's messages carry `onBehalfOf` in the log. An agent's carries its `agentId` in the envelope; a human's carries none (Phase 27) |
-| `conversation.skipped` | a message addressed an agent that did not answer | `conversationId`, `messageId`, `reason` (`hop_limit` \| `refused` \| `failed`), `detail`, `hop`, `ceiling` (the agent's `limits.maxHops`) |
+| `conversation.skipped` | a message addressed an agent that did not answer (**experimental in 0.2.0**, as is the `limits.maxHops` ceiling) | `conversationId`, `messageId`, `reason` (`hop_limit` \| `refused` \| `failed`), `detail`, `hop`, `ceiling` (the agent's `limits.maxHops`) |
 | `agent.assigned` | an admin recorded who an agent works for | `participantId`, `assignedBy?` |
 | `action.deferred` | a stand-in queued a mutating call for its absent owner; nothing ran (Phase 28) | `actionId`, `conversationId`, `ownerId`, `requestedBy`, `slug` |
 | `action.decided` | the owner answered it | `actionId`, `conversationId`, `status` (`done` \| `failed` \| `denied`) |
@@ -1550,7 +1578,7 @@ Refusals are reported rather than dropped silently: an allowlist that quietly di
 indistinguishable from a channel that is not receiving at all. `sender` is the handle where the
 provider exposes one and the peer id otherwise — never the message body.
 
-**The owner's apps are the owner's** (pilot.15). A tool marked `personal` (every Composio tool, an
+**The owner's apps are the owner's** (pilot.15; **experimental in 0.2.0**). A tool marked `personal` (every Composio tool, an
 MCP server declared `personal: true`) is offered only to a turn acting for the agent's assigned owner.
 A call naming one from anyone else's turn is refused with `tool_personal`, and `tool.gated` carries
 `reason: personal`. Someone else's turn means another member asking, a delegation from their agent, a
@@ -1608,9 +1636,20 @@ streaming plus mid-turn interrupts:
 GET /v1/ws?agentId=&token=&chunks=
 ```
 
-Client frames: `{ type: "message" | "stop" | "subscribe" | "ping" }`.
+Client frames:
+
+| Frame | Fields | Answer |
+| --- | --- | --- |
+| `message` | `text`, `sessionKey?` (default `api:default`) | `ws.accepted { turnId }`. Runs on the socket's current agent; the frame carries no `agentId` and no `from` (a participant-bound key supplies one). |
+| `stop` | `turnId` | `ws.stopping { turnId, found }` |
+| `subscribe` | `agentId`, `chunks?` | `ws.subscribed { agentId, chunks }` |
+| `ping` | — | `pong` |
+
 Server frames: the same event objects as SSE, plus the control frames `ws.open`, `ws.subscribed`,
-`ws.accepted`, `ws.stopping` and `ws.error`.
+`ws.accepted`, `ws.stopping`, `pong` and `ws.error`. `ws.error` has two shapes, so read both: most
+carry the code at the top level (`{ type, code, message?, hint? }` — a refused admission spreads the
+whole `{ code, message, hint }` there), while a `subscribe` naming an agent outside the key's scope
+nests it as `{ type, error: { code, message, hint } }`.
 
 `chunks` is **per socket**, not per server: one client asking for tokens must not start sending
 them to every other connected client. It is set on the handshake and reported back on `ws.open`,

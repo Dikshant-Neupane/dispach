@@ -13,7 +13,7 @@ curl --fail \
   -H "Authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
-  -d '{"text":"What can you do?"}' \
+  -d '{"text":"What can you do?","chunks":true}' \
   http://localhost:7420/v1/agents/milo/messages | jq
 ```
 
@@ -39,7 +39,7 @@ curl --no-buffer --fail \
 
 The first stream frame describes replay state. A reconnect can receive buffered events, report that the oldest events were truncated, or tell the caller that the recorded turn is no longer observable from this process. Fetch the stored turn for the authoritative final text.
 
-Passing `chunks=true` adds per-token model events. Leave it off for clients that only need progress and lifecycle events.
+Passing `chunks=true` adds per-token model events. The server records those only from the moment a reader asks for them, so `"chunks": true` in the message body above records them from the first token and the stream replays the reply from its start. Leave both off for clients that only need progress and lifecycle events.
 
 ## Stop explicitly
 

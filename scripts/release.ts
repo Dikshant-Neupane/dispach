@@ -128,14 +128,16 @@ writeFileSync(VERSION_TS, versionTs.replace(`VERSION = "${pkg.version}"`, `VERSI
 
 // The lockfile records workspace versions.
 run("bun", ["install"])
+// The published API reference carries the version, so it is regenerated here or `docs:check` fails in CI.
+run("bun", ["run", "docs:generate"])
 
 process.stdout.write(`\n  ${pkg.version} → ${version}\n`)
 process.stdout.write(
-    "    packages/cli/package.json\n    packages/core/src/version.ts\n    CHANGELOG.md\n    bun.lock\n",
+    "    packages/cli/package.json\n    packages/core/src/version.ts\n    CHANGELOG.md\n    bun.lock\n    developer-docs/reference/openapi.json\n",
 )
 
 if (!argv.includes("--no-gate")) {
-    for (const step of ["build", "test", "typecheck", "lint", "verify:package"]) {
+    for (const step of ["build", "test", "typecheck", "lint", "docs:check", "verify:package"]) {
         process.stdout.write(`\n  bun run ${step}\n`)
         const result = Bun.spawnSync(["bun", "run", step], {
             cwd: ROOT,

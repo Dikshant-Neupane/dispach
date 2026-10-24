@@ -50,17 +50,26 @@ dispach/
 │   ├── server/                  @dispach/server
 │   ├── client/                  @dispach/client             typed client for /v1
 │   ├── web/                     @dispach/web                the browser UI, served by the API
+│   ├── channel-a2a/             @dispach/channel-a2a        agent-to-agent, JSON-RPC
+│   ├── channel-slack/           @dispach/channel-slack      Socket Mode
+│   ├── channel-teams/           @dispach/channel-teams      Bot Framework, webhook-only
 │   ├── channel-telegram/        @dispach/channel-telegram
+│   ├── channel-whatsapp/        @dispach/channel-whatsapp
 │   ├── tools-composio/          @dispach/tools-composio
+│   ├── tools-mcp/               @dispach/tools-mcp          remote MCP servers, Streamable HTTP
 │   ├── tools-system/            @dispach/tools-system       shell + files
-│   └── tools-web/               @dispach/tools-web          search + fetch
+│   ├── tools-web/               @dispach/tools-web          search + fetch
+│   ├── model-bedrock/           @dispach/model-bedrock      the bedrock-converse transport
+│   ├── media-aws/               @dispach/media-aws          Amazon Transcribe, Nova Canvas
+│   └── control/                 @dispach/control            the control plane — FSL-1.1-ALv2, not bundled
 ├── examples/
 │   ├── minimal/                 # smallest thing that runs: one model, no tools
 │   ├── reference/               # every agent.yaml field; future phases commented with their phase
 │   ├── workspace-template/      # the tiered workspace files, to copy
 │   ├── shell-agent/             # an agent with a real shell, for the container
 │   ├── team/                    # a supervisor and two members, from one manifest
-│   └── telegram-assistant/      # a worked workspace
+│   ├── telegram-assistant/      # a worked workspace
+│   └── kubernetes/              # silo.yaml: the image on a Kubernetes cluster
 ├── docker/
 │   ├── Dockerfile
 │   └── entrypoint.sh
@@ -69,16 +78,16 @@ dispach/
     └── rename-brand.ts
 ```
 
-Nine workspace packages, **one published name**. `packages/cli` publishes as `dispach` with the
-command at `bin` and the client at `dispach/client`; the other eight are `"private": true` and are
-bundled into that tarball, so there is one thing to install, version and trust. Their manifests stay
-at `0.1.0` on purpose — only `packages/cli/package.json` is versioned (`bun run release`), so only the published version means
-anything.
+Seventeen workspace packages, **one published name**. `packages/cli` publishes as `dispach` with the
+command at `bin`, the client at `dispach/client` and the event types at `dispach/wire`; every other
+package is `"private": true`, and all of them but `control` are bundled into that tarball, so there is
+one thing to install, version and trust. Only `packages/cli/package.json` is versioned
+(`bun run release`), so only the published version means anything. `packages/control` is the
+exception in kind as well as in licence: FSL-1.1-ALv2 rather than Apache-2.0, private, never bundled,
+importing nothing from the runtime and imported by nothing (`check:deps`).
 
-Two things this tree used to get wrong, both the same shape as the phantom rows doc 04 carried:
-`tools-mcp/` was listed and **has never existed on any branch** (decision 4.7 keeps MCP as one
-provider among several — planned, never written), and `web/` was missing while being served by the
-API on the same origin.
+`tools-mcp/` is a tool provider like any other: decision 4.7 keeps MCP one provider among several,
+never the substrate (14.22).
 
 ### Dependency rule
 
@@ -99,13 +108,15 @@ packages/core/src/
 │   ├── load.ts              # read + resolve refs + env expansion
 │   └── validate.ts          # cross-field validation, loud failures
 ├── runtime/
-│   ├── runtime.ts           # hosts N agents in one process
-│   ├── agent.ts             # a single agent instance
-│   └── lifecycle.ts         # boot sequence, readiness, shutdown
+│   ├── runtime.ts           # hosts N agents in one process; boot, readiness, shutdown
+│   └── agent.ts             # a single agent instance
 ├── loop/
 │   ├── turn.ts              # one inbound message → final reply
 │   ├── step.ts              # one model call + tool executions
-│   └── phases.ts            # phase-scoped tool visibility
+│   ├── phases.ts            # phase-scoped tool visibility
+│   ├── silence.ts           # empty reply / promise / claim detection, the one-time nudge
+│   ├── turn-end.ts          # what a turn's ending says, and whether it is a failure
+│   └── sender.ts            # who sent the input, and the trust that follows
 ├── context/
 │   ├── assemble.ts          # ordered, budgeted block assembly
 │   ├── budget.ts            # token accounting + pressure signal
@@ -118,7 +129,10 @@ packages/core/src/
 │   └── rules.ts             # imperative count vs reliability target
 ├── model/
 │   ├── provider.ts          # ModelProvider interface
-│   ├── chat-completions.ts  # the one transport (fetch + SSE)
+│   ├── transport.ts         # ModelTransport: what model.<role>.api selects
+│   ├── chat-completions.ts  # the built-in transport (fetch + SSE)
+│   ├── sse.ts               # SSE parsing
+│   ├── fallback.ts          # a role's fallback chain
 │   ├── capabilities.ts      # shipped registry + override merge
 │   ├── prompt-style.ts      # render authored markdown per capability
 │   └── roles.ts             # main / selector / compactor resolution
@@ -129,8 +143,8 @@ packages/core/src/
 │   ├── sanitise.ts          # terminal escapes out, before model or terminal
 │   ├── dialect/
 │   │   ├── dialect.ts       # ToolDialect interface
-│   │   ├── nlt.ts           # default
-│   │   └── native.ts        # opt-in
+│   │   ├── nlt.ts           # schema default
+│   │   └── native.ts        # what init writes where the registry knows native calls
 │   ├── coerce.ts            # text → schema, with repair
 │   └── execute.ts           # parallelism, timeouts, error surfaces
 ├── skills/
@@ -139,14 +153,16 @@ packages/core/src/
 │   ├── load.ts              # body + script registration
 │   └── scripts.ts           # subprocess execution (the Python surface)
 ├── memory/
-│   ├── retriever.ts         # Retriever interface
+│   ├── retriever.ts         # MemoryRetriever type
 │   ├── fts5.ts              # the shipped implementation
-│   └── writer.ts            # memory_write tool → dated markdown
+│   ├── writer.ts            # memory_write: append, evict to monthly archives
+│   ├── forget.ts            # memory_forget's file half
+│   └── scopes.ts            # which corpora a turn reads (Phase 29)
 ├── store/
 │   ├── store.ts             # Store interface
 │   └── sqlite/
 │       ├── driver.ts        # bun:sqlite | node:sqlite adapter
-│       └── migrations/      # numbered SQL, PRAGMA user_version
+│       └── migrations.ts    # numbered SQL, PRAGMA user_version
 ├── schedule/
 │   ├── scheduler.ts         # single timer, nearest-due
 │   └── kinds.ts             # cron | every | at
@@ -156,10 +172,10 @@ packages/core/src/
 │   ├── outbox.ts            # idempotent delivery + retry + ordering
 │   └── split.ts             # chunking: graphemes, boundaries, code fences
 ├── plugins/
-│   ├── plugin.ts            # Plugin + PluginContext
+│   ├── plugin.ts            # Plugin + PluginContext + Permission (advisory in v1)
 │   ├── loader.ts            # boot-time resolution, version gate
 │   ├── middleware.ts        # composition
-│   └── permissions.ts       # declarative vocabulary (advisory in v1)
+│   └── builtin.ts           # retryMiddleware, approvalMiddleware
 ├── team/
 │   ├── handoff.ts           # typed envelope + artifact validation
 │   └── supervisor.ts
@@ -182,8 +198,8 @@ packages/core/src/
 | **Step** | One model call plus the tool executions it triggered. |
 | **Phase** | A named state carrying a tool allowlist. Default is a single phase. |
 | **Skill** | An agentskills.io folder: SKILL.md plus optional scripts and resources. |
-| **Plugin** | A module registering channels, providers, stores, skill sources, or middleware. |
-| **Artifact** | Any large blob (tool output, file) stored outside context, referenced by pointer. |
+| **Plugin** | A module registering channels, tool providers, model transports, media providers, routes, or middleware. |
+| **Artifact** | A large tool output displaced from context into the store's `artifacts` table, referenced by an `artifact_read` pointer. |
 
 ---
 
@@ -198,25 +214,36 @@ inbound event
   │
   ├─ ASSEMBLE CONTEXT ────────────────────── wrapContext middleware
   │
-  ├─ STEP LOOP (until final, or maxSteps)
+  ├─ STEP LOOP (until final, maxSteps, or noProgress)
   │    ├─ model call ────────────────────── wrapModelCall middleware
   │    ├─ dialect.parse(output)
-  │    │     ├─ no intents  → final answer, exit loop
+  │    │     ├─ no intents  → final answer, exit loop — unless it is silent:
+  │    │     │                 empty after a tool result, a promise with no call, or a
+  │    │     │                 claim with nothing mutating run → one framed nudge, once
   │    │     └─ intents     → continue
   │    ├─ validate + coerce intents against schemas
   │    │     └─ on failure  → one repair step with exact field errors
   │    ├─ execute tools ─────────────────── wrapToolCall middleware
   │    │     (parallel for readOnly, serial otherwise)
   │    ├─ append observations
+  │    ├─ noProgress check → identical calls / one tool too often ends the turn
   │    └─ compaction check → ladder if over threshold
   │
   ├─ deliver via outbox                     (idempotent)
-  ├─ persist messages + tool_calls
+  ├─ persist messages (tool calls are columns on them)
   └─ turn.end
 ```
 
 The whole turn is wrapped by `wrapTurn`. Everything is cancellable via `AbortSignal`;
 cancellation is a first-class state, not an exception.
+
+**Two guards end a turn that is not working.** `loop/silence.ts` (decision 14.123) catches a step
+that would end the turn without doing what it needs — nothing visible after a tool result, a
+"let me…" with no call, or "I've saved it" when nothing mutating ran — and answers it once with a
+framed note (`tool.repair`), then gives up honestly. `limits.noProgress` ends the turn as
+`no_progress`: `identicalCalls` (default 3) identical consecutive calls, or, when set, `sameTool`
+calls to one tool whatever the arguments. `maxSteps` (default 40) is the runaway stop, not the loop
+guard.
 
 **Generation is detached from the client connection.** The turn runs to completion whether
 or not anyone is listening. Clients attach and reattach to `GET /v1/agents/:id/turns/:turnId/stream`.
@@ -233,24 +260,37 @@ and prompt caching is the largest available cost lever.
 slot  content                                    pinned  cache          phase
 ────  ─────────────────────────────────────────  ──────  ─────────────  ─────
  0    system: workspace `static` tier              yes     ┐
- 1    tool dialect preamble + tool catalogue       yes     │ breakpoint A
- 2    this agent's own configuration               yes     ┘                4
- 3    user: examples, under `examplesIn: user`     yes     byte-stable
- 4    workspace `volatile` tier                    yes
+ 1    tool dialect preamble + tool catalogue       yes     │
+ 2    this agent's own configuration               yes     │                4
+ 3    user: examples, under `examplesIn: user`     yes     ┘ breakpoint A
+ 4    user: workspace `volatile` tier              yes
  5    active skill body (0 or 1)                   no      ─ breakpoint B  5
  6    activated knowledge entries                  no
  7    rolling digest (compaction output)           no                      7
  8    recent message window                        no
- 9    workspace `reminder` tier                    yes
-10    retrieved memory passages (k)                no                      6
+ 9    user: workspace `reminder` tier              yes
+10    user: retrieved memory passages (k)          no                      6
 11    the embedder's note about this message       yes     this turn only  0.2.0
 12    current input + current task line            yes
 13    last error, if any                           yes
+ +    the current turn's own trace (calls and observations so far)
 ```
+
+Breakpoint A is marked on the last static slot present — slot 3 when there are examples
+(`messagesOf` in `assemble.ts`). Slots 4, 9 and 10 are **user** messages, each ending in a static
+closing line (`VOLATILE_END`, `REMINDER_END`, `MEMORY_END` in `blocks.ts`) saying the person's
+message follows separately: Claude through OpenRouter merges consecutive user messages, which put the
+request inside a block saying the person did not write it (decisions 14.118, 14.120). Static text,
+so the prefix stays byte-stable.
+
+The current turn's trace goes **after** the input (`traceAfterInput`, on for every model since
+0.2.0 unless a role's capabilities say `false`; `loop/turn.ts`). Behind the input the person's
+request read as unanswered and finished calls were re-issued, Claude's signed thinking is bound to
+everything before it, and a cached prefix is reused only when each step appends.
 
 **Slot number equals prompt position.** The two are kept equal so this table can be read in
 order; inserting a slot means renumbering, which is cheap because every reference in the tree
-is by name (`SLOT.input`, never `10`). Slots for the workspace tiers, and later for examples and
+is by name (`SLOT.input`, never `12`). Slots for the workspace tiers, and later for examples and
 knowledge, were inserted with no logic or test churn at all.
 
 Slot 3 sits *before* the volatile tier deliberately: extracted examples are byte-stable for the
@@ -287,9 +327,10 @@ changing content ahead of the breakpoint invalidates the cached prefix on every 
 rises with no error anywhere. Slot 9 sits *after* the history because rule adherence decays
 across a conversation and attention is stronger at both ends of the context than the middle, so
 a rule stated once in slot 0 of a thirty-turn session is effectively in the middle of it.
-Retrieved memory sits in slot 10, after the reminder and immediately before the current input:
-evidence next to the question. Measured on llama3.2:3b, the same correct passage in the old
-slot 7 (ahead of history) was ignored; adjacent to the question it was used.
+Retrieved memory sits in slot 10, after the reminder and just before the current input (only the
+embedder's one-turn note sits between): evidence next to the question. Observed on llama3.2:3b
+during development — not a committed eval — the same correct passage in the old slot 7 (ahead of
+history) was ignored; adjacent to the question it was used.
 
 Slot 11 is `POST /messages {runtimeNote}`: what the embedding application knows about this one
 message — the active project, today's date in the person's zone. It is framed as not written by the
@@ -302,33 +343,40 @@ the person's words and the model quoted it back as theirs.
 call as the calibration anchor, with a local estimator between calls. The estimator is
 allowed to be approximate; the anchor corrects drift each turn.
 
-Configured as fractions of the model's window:
+The compaction thresholds are fractions of the **prompt budget** — `window` minus
+`reserveOutput` — not of the whole window:
 
 ```yaml
 context:
   window: 32768          # or inferred from capabilities
   reserveOutput: 4096
-  observationMaxTokens: 2000
-  thresholds: { trim: 0.60, snip: 0.70, micro: 0.80, collapse: 0.88, reset: 0.95 }
+  observationMaxTokens: 2000   # absent: sized from the window
+  thresholds: { snip: 0.60, micro: 0.70, collapse: 0.80, reset: 0.88, trim: 0.95 }
 ```
 
 ---
 
 ## Compaction ladder
 
-Progressive, five stages, each strictly more aggressive. Never a single lossy summarise-at-95%.
+Progressive, five stages, ordered by **information destroyed** rather than bytes freed
+(`STAGE_ORDER` in `context/compaction/stages.ts`). Never a single lossy summarise-at-95%. Every stage
+emits `context.pressure` first; only stages whose threshold is crossed may run, and each aims one rung
+down.
 
 | Stage | Trigger | Action | Loss |
 | --- | --- | --- | --- |
-| **S0 observe** | every step | record usage, emit `context.pressure` | none |
-| **S1 trim** | 0.60 | any single observation over `observationMaxTokens` → head+tail excerpt, full body written to `.dispach/artifacts/<id>`, replaced by a pointer the agent can re-read | recoverable |
-| **S2 snip** | 0.70 | drop superseded observations — same `tool + argsHash`, keep only the latest | low |
-| **S3 micro** | 0.80 | summarise the oldest N turn-pairs into a digest delta using the `compactor` model | moderate |
-| **S4 collapse** | 0.88 | replace all but the last K turns with the digest plus pinned blocks | high |
-| **S5 reset** | 0.95 | pinned blocks plus digest only; emit `context.reset` at warn level | severe |
+| **snip** | 0.60 | an observation over `observationMaxTokens` → head + tail; the full body is stored as an artifact row with an `artifact_read` pointer | recoverable |
+| **micro** | 0.70 | an observation body → an `artifact_read` pointer alone | recoverable |
+| **collapse** | 0.80 | all but the newest turns → a digest, by the `compactor` model with a mechanical fallback | moderate |
+| **reset** | 0.88 | everything outside the protected tail → a digest; pinned blocks and the person's messages survive; emits `context.reset` | high |
+| **trim** | 0.95 | drop working detail the digests declined to summarise, keeping the person's messages | severe |
 
-Every stage emits `compaction.stage` with before/after token counts. If S5 fires more than
-once per session, that's a manifest misconfiguration and the event says so.
+`trim` is last although it frees the most: with it earlier the digest stages could never fire,
+because a digest plus the preserved requests is never smaller than the requests alone. No stage drops
+what the person said, and none touches the current turn's trace (the protected tail).
+
+Every stage emits `compaction.stage` with before/after token counts. If `reset` fires more than
+once per session, that's a manifest misconfiguration and `context.reset`'s `warning` says so.
 
 ---
 
@@ -448,7 +496,9 @@ Three properties make it correct rather than approximate:
 Trailing whitespace is held rather than emitted, because `parse` trims the finished reply and a stream
 cannot un-emit. What is still held at the end was trailing after all, and is dropped.
 
-**NLT** is the default. The catalogue renders as prose, not JSON schema:
+**NLT** is the schema default — a manifest that omits `dialect` gets it. `init` writes `native`
+instead wherever the capability registry knows the model calls tools natively (decision 14.125). The
+NLT catalogue renders as prose, not JSON schema:
 
 ```
 ### send_email
@@ -501,7 +551,8 @@ A step is **all-or-nothing**. If any block in it cannot be used, none of them ru
 model to rewrite the whole step, and a mutating call that had already succeeded would then happen a
 second time. There is no idempotency key available at this layer to make the alternative safe.
 
-**native** uses the provider's `tools` parameter and `tool_calls` response. Opt-in only.
+**native** uses the provider's `tools` parameter and `tool_calls` response. Chosen in config, never
+auto-detected at runtime — `init` writes it, as above, and changing the model changes nothing.
 Note that Anthropic's compat endpoint ignores `strict`, so schema conformance is not
 guaranteed there even in native mode — the coercion layer runs regardless.
 
@@ -563,8 +614,12 @@ interface ModelProvider {
 }
 ```
 
-One implementation: `chat-completions.ts`. Hand-rolled `fetch`, manual SSE parsing, no SDK,
-no gateway.
+A `ModelTransport` (`model/transport.ts`) is what `model.<role>.api` selects: a factory from a
+role's configuration to a `ModelProvider`. Core registers `chat-completions` — hand-rolled `fetch`,
+manual SSE parsing (`sse.ts`), no SDK, no gateway — and `packages/model-bedrock` supplies
+`bedrock-converse`, whose AWS SDK loads on the first call rather than at boot. `model/fallback.ts`
+wraps a role's `fallbacks` into one provider that moves on only before the first chunk and only for a
+failure that is the endpoint's.
 
 ### Capabilities
 
@@ -575,16 +630,20 @@ interface ModelCapabilities {
   nativeTools: boolean
   strictSchema: boolean
   thinking: "none" | "anthropic" | "openai" | "deepseek"
-  promptCache: "none" | "anthropic" | "openai"
+  promptCache: "none" | "anthropic" | "openai" | "bedrock"
   parallelToolCalls: boolean
   contextWindow: number
   maxOutput: number
+  vision?: boolean            // whether images are sent with a turn
+  traceAfterInput?: boolean   // false puts the turn's trace back before the input
+  promptStyle: PromptStyle    // derived from the model id, never stored on a registry row
 }
 ```
 
-Capabilities affect **only** thinking-block replay and cache-breakpoint placement. They
-never change the tool dialect — that is config, so behaviour cannot drift when the model
-changes.
+Capabilities decide thinking replay, cache markers, the window the budget is computed from, whether
+images are read, where the trace sits, and how authored markdown is rendered (`promptStyle`). They
+never change the tool dialect at runtime — that is config, so behaviour cannot drift when the model
+changes; `nativeTools` only informs what `init` writes.
 
 Thinking-block handling matters, and it is not uniform. With `thinking: "anthropic"` the blocks
 must be replayed alongside tool results or multi-step reasoning silently degrades. With
@@ -610,18 +669,32 @@ production configuration and typically the largest cost win available.
 ## Storage
 
 ```ts
-interface Store {
-  sessions: SessionStore     // Phase 2
-  messages: MessageStore     // Phase 2
-  turns: TurnStore           // Phase 2
-  kv: KVStore                // Phase 2
-  toolCalls: ToolCallStore   // Phase 3
-  artifacts: ArtifactStore   // Phase 7
-  schedules: ScheduleStore   // Phase 8
+interface Store {               // store/store.ts, trimmed
+  sessions: SessionStore
+  messages: MessageStore         // tool calls are columns here (tool_calls, tool_call_id)
+  turns: TurnStore
+  outbox: OutboxStore
+  leases: LeaseStore
+  agentState: AgentStateStore    // the durable per-agent on/off switch
+  conversations: ConversationStore   // participants, rooms, DMs (Phase 27); server-wide
+  kv: KVStore
+  artifacts: ArtifactStore
+  memory: MemoryStore
+  schedules: ScheduleStore
+  handoffs: HandoffStore
+  usage: UsageStore              // every model call's tokens
+  webhooks: WebhookStore         // server-wide
+  operatorKeys: OperatorKeyStore // server-wide; not per-agent
   location: string
+  agentFootprint(agentId): Promise<AgentFootprint>
+  snapshot(path): Promise<void>
+  purgeAgent(agentId): Promise<AgentFootprint>
+  agentIds(): Promise<readonly string[]>
   close(): Promise<void>
 }
 ```
+
+There is no tool-call store: a call and its id ride on the assistant message that made it.
 
 Sub-stores land with their subsystems rather than as stubs. An empty implementation is
 indistinguishable from a working one at the type level, which is exactly how a later phase
@@ -632,13 +705,15 @@ promises and pays an allocation per call; that buys the ability to add the defer
 driver as a new file rather than as a rewrite of every call site.
 
 Default driver is SQLite. `sqlite/driver.ts` picks `bun:sqlite` or `node:sqlite` — the only
-runtime-conditional code in the tree. Migrations are numbered, inline, and gated on
+runtime-conditional code in the tree. Migrations are numbered, inline in `sqlite/migrations.ts`, and gated on
 `PRAGMA user_version`; each runs in its own transaction that also bumps the counter, so a
 crash leaves the schema at the last fully-applied version rather than halfway through one.
 
-The two bindings differ in six ways that all produce the same class of bug — green under one
-runner, wrong under the other. The adapter normalises all six rather than passing them
-through, and `PRAGMA foreign_keys` is the one that matters most: **off** by default in
+The two bindings differ in seven ways (the table in `driver.ts`) that all produce the same class of
+bug — green under one runner, wrong under the other. The adapter normalises six rather than passing
+them through; the seventh, a bound string **truncated at a NUL** under `node:sqlite`, is documented
+rather than normalised, which is why anything used as a key must be printable ASCII.
+`PRAGMA foreign_keys` is the one that matters most: **off** by default in
 `bun:sqlite` and **on** in `node:sqlite`, so `ON DELETE CASCADE` would silently do nothing
 under Bun. The same test suite runs under `bun test` and `node --test` because that is the
 only thing that actually demonstrates the adapter works.
@@ -651,8 +726,9 @@ a manifest field — one process hosts N agents from N manifests but has exactly
 
 **Canonicality split:**
 
-- **Files**: manifest, context markdown, skills, memory markdown, artifacts
-- **SQLite**: sessions, messages, turns, tool_calls, schedules, phase state, kv, outbox
+- **Files**: manifest, context markdown, skills, memory markdown
+- **SQLite**: sessions, messages (tool calls included), turns, artifacts, schedules, phase state, kv,
+  outbox, the memory index and shared-scope notes
 
 **Turn durability.** The turn row is written `running` *before* the first model call, so a
 turn is durable from the moment it starts rather than the moment it finishes — which is what
@@ -671,18 +747,22 @@ persists the partial content, because someone decided to stop it.
 ## Memory
 
 ```ts
-interface Retriever {
-  search(query: string, opts: { k: number; filters?: Filters }): Promise<Passage[]>
-  index(doc: MemoryDoc): Promise<void>
-}
+// memory/retriever.ts — ranking only, best first; never filters by threshold or counts tokens
+type MemoryRetriever = (input: RetrieveInput) => Promise<readonly RetrievedPassage[]>
+// RetrieveInput: { input, now, exclude?, limit }
 ```
 
 Shipped implementation is SQLite FTS5 over memory markdown plus message history, ranked by
-BM25 with a recency boost. The index is maintained incrementally on write and rebuilt when
-directory mtime disagrees with the cache.
+BM25 with a recency boost. FTS5 supplies candidates; the score is computed in `rank/bm25.ts`.
+Staleness is per file: `syncFiles` skips a source whose mtime **and** size **and** tokeniser version
+all match (`memory/fts5.ts`), and `memory rebuild` covers the edit that preserves both.
 
-The agent writes memory through a built-in `memory_write` tool that appends to
-`memory/YYYY-MM-DD.md`. The agent is the author; the harness is the librarian.
+The agent writes memory through a built-in `memory_write` tool that appends to the volatile tier's
+write target — `MEMORY.md` in a generated workspace, the file declaring `eviction: oldest`. Past its
+budget the oldest entries move to monthly archives, `memory/YYYY-MM.md` (`memory/writer.ts`).
+`memory_forget` is the other direction: a query lists matching notes, only ids delete, and past
+conversations are redacted too (decisions 14.110, 14.112; `08-MEMORY.md`). The agent is the author;
+the harness is the librarian.
 
 **Scopes (Phase 29).** An agent's own corpus is its *private* scope. Shared scopes — `space`,
 `owner:<participant>`, `project:<id>` — are rows in `memory_notes`, indexed under their own corpus key
@@ -736,17 +816,14 @@ widen what the agent may run (decision 11.45).
 One supervisor, typed handoffs, no free-form chat.
 
 ```ts
-interface HandoffRequest {
-  to: string
-  task: string
-  inputs: Record<string, unknown>
-  expect: JSONSchema
-  budget: { maxSteps: number; maxTokens: number }
-}
+// the supervisor's handoff tool, team/supervisor.ts
+handoff({ member: string /* enum of member ids */, task: string /* the ONLY channel */ })
 ```
 
-The sub-agent runs in an isolated session with its own context budget and phase set, and
-returns an artifact validated against `expect`. **The parent sees the artifact, never the
+`task` is everything the member gets: no history, no follow-up questions, no other argument. The
+sub-agent runs in an isolated session with its own context budget and phase set, and returns an
+artifact through a `submit_artifact` tool whose parameters are the member's declared artifact schema
+(absent: `{summary}`), validated by `coerceArgs` with the loop's one repair. **The parent sees the artifact, never the
 sub-agent's transcript** — context isolation is the entire point and is why subagents cost
 substantially fewer tokens than the equivalent in-context skill in multi-domain work.
 
@@ -792,7 +869,7 @@ other members' agents through the same `handoff` tool a team uses, resolved amon
 
 ## CLI
 
-Eleven commands and three renderers. One module per command, and the interesting logic in each
+Twenty-eight commands (`COMMANDS` in `lib/commands.ts`) and three renderers. One module per command, and the interesting logic in each
 lives in a pure module beside it rather than in the command.
 
 ```
@@ -813,7 +890,9 @@ packages/cli/src/
     providers.ts      which tool providers and channels this binary can supply
     launchd.ts        plist rendering and launchctl parsing (pure)
     daemon-plan.ts    preflight findings and status verdicts (pure)
-    service.ts        the service-manager seam — the only subprocess in the package
+    service.ts        the service-manager seam
+    spawn.ts          the only module that imports node:child_process
+    scroll.ts         the chat transcript's row buffer and the window over it
     init-flow.ts wizard.ts select.ts session-commands.ts templates.ts
     const.ts types.ts schema.ts wrap.ts
   transcript.ts     pure AnyEvent → TranscriptState reducer
@@ -838,19 +917,21 @@ one-shot `--input` is always plain, so a scripted turn does not depend on whethe
 watching. `--plain` at a terminal produces exactly what a pipe produces, which is why the terminal
 restore fires only when the rich path has actually dirtied the terminal.
 
-**Ink loads lazily.** Importing `react` + `ink` costs ~65 ms under Bun and ~170-210 ms under Node,
-against ~70 ms for all of `validate --json`. The renderer sits behind a dynamic `import()` reached
+**Ink loads lazily.** Importing `react` + `ink` was measured by hand at ~65 ms under Bun and
+~170-210 ms under Node, against ~70 ms for all of `validate --json` (decision 11.10; no committed
+eval reproduces it). The renderer sits behind a dynamic `import()` reached
 only on the rich path, the build keeps it in a separate chunk, and a structural test fails if a
 static import appears on a shared path. Verified by deleting `ink` from `node_modules`: every
 non-rich command still exits 0.
 
-**`<Static>` is load-bearing.** Ink erases and redraws its whole *dynamic* tree every frame, so a
-transcript in that tree would be redrawn on every streamed token — flicker, CPU, and destroyed
-scrollback on a long session. Finished items live in `<Static>`, written once and never touched
-again; only the in-flight reply is dynamic, and it is capped in terminal *rows* (not lines, since one
-long paragraph is many rows). Two consequences: transcript items must be append-only and immutable,
-because mutating one changes something the renderer will never look at again, and their keys come
-from a counter in the reducer rather than from an array index.
+**The chat transcript is a row buffer with a window, not `<Static>`.** Ink erases and redraws its
+whole *dynamic* tree every frame. `<Static>` escapes that by writing a node once — but it appends to
+the scrollback, and the full-screen session's alternate buffer is discarded on leave, so the two
+cannot both hold. The conversation is therefore a buffer of rows the CLI owns with a window over it
+(`lib/scroll.ts`; `components/App.tsx`), back in the redrawn tree, bounded by
+`MAX_TRANSCRIPT_ITEMS`. Rows are wrapped by the CLI itself (`wrapText`) so the frame's height is
+known before anything is drawn. `<Static>` is still right for the wizard and the picker, which do not
+take the screen.
 
 **The interesting logic is pure.** `transcript.ts`, `keymap.ts`, `editor.ts` and `lib/wrap.ts` import
 no renderer, no clock and no `process`, so "what does the reader see when a turn errors mid-stream"
@@ -867,16 +948,20 @@ would silently undo it.
 ## Boot sequence and budget
 
 **Target: process start → `runtime.ready` in under 1000 ms.** CI fails a PR above 1200 ms.
-Measured for one agent, three plugins, twenty skills, on 2 vCPU.
+`bun run bench:boot` boots `examples/minimal` — one agent, no plugins, no skills — and the committed
+measurement is `evals/boot/results.json`: on an Apple M4 Pro under Bun, a process-start-to-ready
+median of about 65 ms over seven runs, of which `Runtime.create` is about 21 ms, split across the
+phases `store`, `manifest`, `agents`, `tools`, `plugins`, `channels` and `teams` (the file has the
+figures and the commit they were taken at). A heavier manifest is not what that file measures.
 
 ```
-1. parse argv / read env                            ~0ms
-2. read + validate manifest (zod)                   <10ms
-3. open SQLite, run pending migrations              <20ms
-4. import plugins, run setup()                      <200ms budget, warned per plugin
-5. load skill index from cache (mtime check)        <10ms
-6. load tool schemas from cache                     <10ms
-7. register channels (construct only, no connect)   <5ms
+1. parse argv / read env
+2. read + validate manifest (zod)
+3. open SQLite, run pending migrations
+4. import plugins, run setup()                      200 ms budget, warned per plugin
+5. load skill index from cache (mtime check)
+6. load tool schemas from cache
+7. register channels (construct only, no connect)
 8. emit runtime.ready ────────────────────────────── READY
 9. (async) channels connect, status via events
 10.(async) tool schema refresh, skill index rebuild
@@ -892,8 +977,8 @@ Measured for one agent, three plugins, twenty skills, on 2 vCPU.
   past 200 ms.
 - Channel connection failure does not block readiness. It is reported as `agent.channel.error`.
 
-`scripts/bench-boot.ts` runs in CI and prints the breakdown per step, so a regression names
-its own cause.
+`scripts/bench-boot.ts` runs in CI and prints the breakdown per phase (`runtime.boot.phases`), so a
+regression names its own cause.
 
 ---
 

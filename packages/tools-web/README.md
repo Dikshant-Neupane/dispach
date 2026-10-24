@@ -1,6 +1,7 @@
 # @dispach/tools-web
 
-Two read-only tools: `web_search` and `web_fetch`.
+Read-only tools: `web_search` and `web_fetch`, plus `web_crawl` and `web_map` when Firecrawl is
+configured (experimental in 0.2.0 — see *Backends*).
 
 The fetching is a GET. The interesting part of this package is `address.ts` and `guard.ts`, which
 decide what the agent is allowed to point a GET at.
@@ -9,7 +10,7 @@ decide what the agent is allowed to point a GET at.
 tools:
   providers:
     web:
-      backend: tavily              # tavily | brave | exa
+      backend: tavily              # tavily | brave | exa | firecrawl
       apiKeyEnv: TAVILY_API_KEY    # the variable's name, never the key
       maxBytes: 2000000            # optional; stop reading a page here
   pinned:
@@ -99,7 +100,7 @@ visible in the observation; the second is not.
 
 ## Backends
 
-One signature, three implementations, and the model must not be able to tell which is configured — a
+One signature, four implementations, and the model must not be able to tell which is configured — a
 catalogue that renders differently per backend makes `web_search` a different tool on different
 machines. Everything backend-specific stops in `backends.ts`.
 
@@ -108,3 +109,10 @@ machines. Everything backend-specific stops in `backends.ts`.
 | `tavily` | `TAVILY_API_KEY` | default. `include_answer` is deliberately off: a second model's summary of pages nobody checked, arriving as though it were a result. |
 | `brave` | `BRAVE_API_KEY` | |
 | `exa` | `EXA_API_KEY` | 400-character excerpts. Fetching the page is `web_fetch`'s job, where it is checked and capped. |
+| `firecrawl` | `FIRECRAWL_API_KEY` | Experimental in 0.2.0. |
+
+`tools.providers.web.firecrawl: {}` (its own `apiKeyEnv`, default `FIRECRAWL_API_KEY`) goes further
+than the search backend: `web_fetch` reads the page through Firecrawl's scrape — same spec, same
+observation, JavaScript pages back as markdown — and two tools only it can back are added,
+`web_crawl` (a site's pages) and `web_map` (a site's addresses). Experimental in 0.2.0, like the
+backend; requests go to `api.firecrawl.dev` unless `firecrawl.baseUrl` names a relay.

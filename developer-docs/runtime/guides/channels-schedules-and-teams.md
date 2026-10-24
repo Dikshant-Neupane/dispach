@@ -4,12 +4,12 @@ Channels and schedules are inbound transports into the same turn lifecycle used 
 
 ## Channels
 
-Telegram is a first-party channel package. Other channels can ship as plugins. Channel connections start after runtime readiness so an unavailable network cannot block local boot.
+Telegram, WhatsApp, Slack, Microsoft Teams, and A2A are first-party channel packages bundled with the binary; Slack, Teams, and A2A are experimental in 0.2.0. Other channels can ship as plugins. Channel connections start after runtime readiness so an unavailable network cannot block local boot.
 
 Use `allowFrom` to restrict inbound senders. It has no effect on outbound permission: a bot still needs a valid destination and provider permission to deliver there.
 
 ```bash
-dispach config allow milo @ada
+dispach config allow milo @ada_lovelace
 dispach channels list milo
 ```
 

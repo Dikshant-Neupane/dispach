@@ -146,6 +146,14 @@ export interface ApprovalRequest {
      * approver itself cannot do without.
      */
     readonly agentId: string
+    /**
+     * Which conversation is asking, for the same reason `agentId` is here.
+     *
+     * An approver answers a question about a call, and it still has to know whose conversation the
+     * call belongs to once a credential can be narrowed to some of them: without it, a key scoped to
+     * `team_42:` listed and answered the questions of every session on the agent.
+     */
+    readonly sessionKey: string
     readonly slug: string
     readonly callId: string
     /**
@@ -426,6 +434,7 @@ async function decideAndRun(
         const request: ApprovalRequest = {
             approvalId,
             agentId: input.context.agentId,
+            sessionKey: input.context.sessionKey,
             ...call,
             ...(match === undefined ? {} : { match: stripControl(match) }),
             mutating: spec.mutating,
@@ -438,9 +447,8 @@ async function decideAndRun(
         // the session, the firehose, or an audit log would see the turn simply stop.
         //
         // The event carries the full `eventContext` — agent, session and turn. The request carries
-        // the agent alone: that is the one part an approver cannot work without once a process hosts
-        // several agents, and the session and turn stay off it because an approver answers a
-        // *question about a call*, not about a conversation.
+        // the agent and the session, the two an approver cannot work without once a process hosts
+        // several agents and a key can be narrowed to some of their sessions. The turn stays off it.
         input.bus.emit(
             "approval.requested",
             {

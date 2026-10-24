@@ -12,6 +12,8 @@ Choose the narrowest public extension point that owns the behavior.
 
 ## Plugin contract
 
+Writing a plugin in 0.2.0 needs a repository checkout: the plugin types (`Plugin`, `PluginContext`, and the rest) live in `@dispach/core`, a private workspace package that is not on npm, and the published `dispach` package exports only `dispach/client` and `dispach/wire`.
+
 A plugin exports metadata, an optional Zod config schema, and `setup(ctx)`. Setup registers factories and middleware; it must not perform network I/O. Connections start after runtime readiness.
 
 Plugins are trusted in-process code. Permission metadata is advisory in version 1, so authors should declare it accurately and operators should review the implementation.

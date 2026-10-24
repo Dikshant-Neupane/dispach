@@ -21,9 +21,12 @@ channel | HTTP API | schedule
 | `packages/server` | HTTP, SSE, WebSocket, auth, and OpenAPI |
 | `packages/client` | Typed API client and stream handling |
 | `packages/cli` | Commands and terminal interface |
-| `packages/channel-*` | First-party channel transports |
-| `packages/tools-*` | Optional tool providers |
-| `packages/control` | Separate container lifecycle control plane |
+| `packages/web` | Browser UI served on the same origin as the API |
+| `packages/channel-*` | First-party channel transports: Telegram, WhatsApp, Slack, Teams, and A2A |
+| `packages/tools-*` | Optional tool providers: system (shell and files), web, Composio, and MCP |
+| `packages/model-*` | Model transports beyond chat completions, such as Bedrock Converse |
+| `packages/media-*` | Media providers beyond the built-in OpenAI one, such as AWS |
+| `packages/control` | Separate container lifecycle control plane, licensed FSL-1.1-ALv2 rather than Apache-2.0, and not part of the npm package or image |
 
 Core imports no sibling packages. This keeps the embedder-facing harness usable without the CLI, server, or provider implementations.
 

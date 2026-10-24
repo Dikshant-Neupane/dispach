@@ -28,18 +28,22 @@ adherence, or persona drift.
 | Tier | Slot | Position | Cache | Editable | Default budget |
 | --- | --- | --- | --- | --- | --- |
 | `static` | 0 | system prefix, first | before breakpoint A | no | 2,000 |
-| `volatile` | 3 | system prefix, after the tool catalogue | after breakpoint A | yes | 3,500 |
-| `reminder` | 9 | after history, before the current input | never | no | 500 |
+| `volatile` | 4 | a framed user-role message, after the examples slot | after breakpoint A | yes | 3,500 |
+| `reminder` | 9 | a framed user-role message, after history, before the current input | never | no | 500 |
 
-Two more slots carry workspace-derived content without being tiers of their own: slot 2 holds
+Two more slots carry workspace-derived content without being tiers of their own: slot 3 holds
 example blocks extracted under `examplesIn: user` (byte-stable, so it extends the cacheable
-prefix — its tokens still count against the file that authored them), and slot 5 holds activated
+prefix — its tokens still count against the file that authored them), and slot 6 holds activated
 `knowledge/` entries (retrieved per turn, never pinned, budgeted by `knowledge.budget` rather
 than by any tier).
 
 Slot numbers are the ones in `01-ARCHITECTURE.md` and in `SLOT`
-(`packages/core/src/context/blocks.ts`), where slot number equals prompt position. `static`
-and the tool catalogue together form the cached prefix; `volatile` opens the uncached region.
+(`packages/core/src/context/blocks.ts`), where slot number equals prompt position. Slots 0–3 —
+`static`, the tool catalogue, the configuration block and the extracted examples — form the cached
+prefix, with breakpoint A at its last message; `volatile` opens the uncached region. Only the
+byte-stable slots 0–2 are system messages: the volatile tier and the reminder are user messages,
+each framed to say where it ends, because some providers reuse none of a leading run of system
+messages once any byte in it changes (decisions 14.118 and 14.120).
 
 Total hard cap 6,000 tokens. Exceeding it **fails the load** and names the file. No silent
 truncation — that failure mode produces an agent running on partial instructions with no
@@ -51,10 +55,12 @@ matters; the budget can only stop the first kind of mistake. Everything inside i
 every turn of every session, so a workspace comfortably under budget is not thereby right-sized.
 
 Budgets are measured with the runtime's own estimator (`estimateTokens`, 3.8 chars/token plus a
-newline penalty), which is deliberately biased **high** — roughly 10% above a real BPE count on
-English prose. A file that measures 554 here is nearer 480 at the endpoint. The bias is the safe
-direction for window arithmetic, where under-counting overflows; treat it as slack when setting a
-per-file `budget:`.
+newline penalty). It was long described as biased high, and that was never measured: on prose it is
+close, and on observation-heavy prompts — JSON and shell output — it runs **16–20% low**
+(`evals/budget/`). The divisor is deliberately not retuned; for window arithmetic
+`context/budget.ts` corrects the estimate from the endpoint's reported `prompt_tokens`. Workspace
+budgets are checked at load, before any call, so they use the uncorrected estimate; leave a per-file
+`budget:` some slack rather than sizing it to the measured figure.
 
 Tier 3 content (`knowledge/`, `skills/`) is not pinned and has no share of this budget.
 
@@ -155,7 +161,7 @@ list items are eligible to move.
 | File | Tier | Editable | Budget | Purpose |
 | --- | --- | --- | --- | --- |
 | `SOUL.md` | static | none | 1,400 | Long-form identity — *who the agent is*; ships only past the `context.soul` gate |
-| `AGENTS.md` | static | none | 800 | Operations — *what it does and how*: responsibilities, workflow, memory procedure; the team section stays an HTML comment until delegation ships |
+| `AGENTS.md` | static | none | 800 | Operations — *what it does and how*: responsibilities, workflow, memory procedure; the team section is an HTML comment to fill in when the agent has a `team` |
 | `SOUL.compact.md` | static | none | 800 | The hand-derived kernel `onUnmet: distill` ships to small models |
 | `POLICY.md` | static | none | 600 | Soft boundaries and uncertainty behaviour |
 | `USER.md` | volatile | append | 1,500 | User model — person-authored; `memory_write` does not land here |
@@ -274,16 +280,17 @@ walks the ranking taking up to `maxActive` entries while the running total fits 
 stopping at the first that does not fit rather than skipping past it, so a worse-ranked entry can
 never displace a better-ranked one purely by being short.
 
-Activated entries enter slot 5, **not pinned**: knowledge is selected fresh per turn (once per
+Activated entries enter slot 6, **not pinned**: knowledge is selected fresh per turn (once per
 turn, not per step — two steps of one turn must not argue from different reference material), is
 never written back, and compaction may drop it. It has no share of the workspace budgets because
 it is not paid for on turns that do not mention it. An entry larger than the whole activation
 budget fails the load by name — it would sit in the catalogue and silently never be selected.
 
 The selector is a seam (`KnowledgeSelector`, ranking only — the caller applies `maxActive` and the
-budget, so a selector cannot quietly widen either). Phase 6 may attach a scored retriever behind
-it and **must not** build a second index; prove the lexical gate insufficient first, which is the
-same bar memory's FTS5 sets for embeddings.
+budget, so a selector cannot quietly widen either). Knowledge still uses the keyword selector
+(`keywordSelector`); Phase 6's scored retrieval shipped for memory and was not attached here. A
+scored retriever attached later goes behind this seam and **must not** build a second index; prove
+the lexical gate insufficient first, which is the same bar memory's FTS5 sets for embeddings.
 
 ---
 
@@ -305,11 +312,12 @@ model:
 
 Shipped defaults:
 
-| Model class | delimiters | intensity | examplesIn |
-| --- | --- | --- | --- |
-| `claude-*` | `xml` | `neutral` | `system` |
-| `gpt-*`, `o*` | `markdown` | `neutral` | `user` |
-| `<14B` open-weight | `plain` | `emphatic` | `system` |
+| Model class | delimiters | intensity | examplesIn | skillsIn |
+| --- | --- | --- | --- | --- |
+| `claude-*` | `xml` | `neutral` | `system` | `system` |
+| `gpt-*`, `o*` | `markdown` | `neutral` | `user` | `user` |
+| `<14B` open-weight | `plain` | `emphatic` | `system` | `system` |
+| anything else | `markdown` | `neutral` | `system` | `system` |
 
 **`delimiters`.** Anthropic recommends XML tags for separating instruction types, because
 Claude was trained on them. Controlled cross-model work finds no reliable markdown
@@ -366,7 +374,7 @@ interpretations, 65 points of measured difference. See decision 4.19.
 prompt; OpenAI's guidance puts tone and role in the system message and task-specific detail and
 examples in user messages. The mechanism is built — under `examplesIn: user`, static-tier
 `<example>` blocks leave the authored file through `extractExamples` (a move, never a rewrite:
-tags intact, prose byte-identical, fence-aware) and travel as a user message in slot 2, *before*
+tags intact, prose byte-identical, fence-aware) and travel as a user message in slot 3, *before*
 the volatile tier, because they are byte-stable and prefix caching is contiguous. Their tokens
 still count against the file that authored them — moving examples must not make a file look
 cheaper. The defaults were put to measurement in `evals/prompt-style/` and the probe **saturated**:
@@ -374,8 +382,8 @@ cheaper. The defaults were put to measurement in `evals/prompt-style/` and the p
 frontier model, across 240 observations with no empties. So each vendor's default stands, with the
 measured floor that neither placement costs anything on a well-authored example set — three to
 five clear, delimited examples, which is exactly what the authoring rules require. (Phase 3's eval
-compared *dialects* and says nothing about this.) `skillsIn` is carried but consumed nowhere until
-skills exist in Phase 5.
+compared *dialects* and says nothing about this.) `skillsIn` decides the role the active skill
+block (slot 5) is sent as — a system message or a user message.
 
 ---
 
@@ -453,8 +461,8 @@ tokens and buys no reliable compliance.
 ## Authoring rules the validator enforces
 
 1. **Style matches target output.** Files for chat-channel agents must be prose; the
-   validator warns on bullet density above a threshold in the identity file when every bound
-   channel has `markdown: none | basic`. Models imitate form as readily as content, so a
+   validator warns when more than 40% of a static file's lines are list items, whatever the
+   channels (see Validation for why it is not gated). Models imitate form as readily as content, so a
    bulleted file produces a bulleted agent regardless of what the file says. A line reading
    "keep formatting light" inside a bulleted file is fighting itself, and the file wins.
 2. **Rules carry reasons.** A rule without a rationale clause is a warning. Explanation

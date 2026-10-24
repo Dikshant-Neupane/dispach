@@ -16,8 +16,10 @@ model:
         options: { region: eu-west-1 }
 ```
 
-The CLI and the container image supply this transport to every agent, so no `plugins:` entry is
-needed. An embedder calling the runtime directly passes `bedrockTransport()` in
+The published `dispach` package (the CLI) and the container image bundle this transport and supply
+it to every agent, so `api: bedrock-converse` in `agent.yaml` is all that is needed — no `plugins:`
+entry. An embedder calling the runtime directly, from a repository checkout (this is a workspace
+package and is not published on its own), passes `bedrockTransport()` in
 `RuntimeOptions.modelTransports`.
 
 ## Credentials

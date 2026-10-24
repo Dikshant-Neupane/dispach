@@ -9,11 +9,14 @@ The monorepo separates the harness, its transports, and optional providers.
 | `packages/client` | Typed remote client and stream state machine |
 | `packages/cli` | Published `dispach` package, commands, and terminal UI |
 | `packages/channel-*` | First-party channel transports |
-| `packages/tools-*` | System, web, and external tool providers |
+| `packages/tools-*` | System, web, Composio, and MCP tool providers |
+| `packages/model-*` | Model transports beyond chat completions (Bedrock Converse) |
+| `packages/media-*` | Media providers beyond the built-in OpenAI one (AWS) |
 | `packages/web` | Browser application served by the server |
 | `packages/control` | FSL-licensed, HTTP-only silo control plane |
 | `docs` | Binding decisions, architecture, specifications, plan, and QA |
-| `developer-docs` | Public GitBook source for users and contributors |
+| `developer-docs` | Public documentation source for users and contributors |
+| `site` | Next.js and Fumadocs site that publishes `developer-docs/` at `/docs` |
 | `examples` | Runnable manifests and workspaces |
 | `evals` | Fixtures, tasks, and committed evidence for performance claims |
 | `scripts` | Builds, checks, benchmarks, evaluations, and release automation |

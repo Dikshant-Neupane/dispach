@@ -11,13 +11,13 @@ two disagree, the spec is right and this file is stale.
 > account of a surface nobody checks. `openapi.json` is neither — its paths come from the router
 > table and its bodies from the request schemas, and `spec.test.ts` fails when a registered route
 > has no summary or a summary has no route. What has **not** changed is that response shapes are
-> `@dispach/client`'s job: the document carries statuses and the error shape, and the types carry
+> `dispach/client`'s job: the document carries statuses and the error shape, and the types carry
 > the rest. See decision 11.218.
 >
 > **Why there is no *typedoc* reference.** Phase 11 listed "API docs generated from types" as a
 > deliverable, and this answers it deliberately without a generator. A typedoc build is a
 > dependency with its own release cadence producing a third description of a surface that already
-> has two — the spec, which is now machine-checked, and `@dispach/client`, whose types *are* the
+> has two — the spec, which is now machine-checked, and `dispach/client`, whose types *are* the
 > reference and are checked by `tsc`. A generated third copy would drift from both and look the
 > most authoritative. Decision 11.10's dependency discipline, applied one package over.
 
@@ -45,9 +45,11 @@ a fresh clone came up hosting a sample nobody asked for. It does not any more, a
 old text got a `404` on every request. The API, the page at `/` and the reference at `/docs` exist
 *before* there is anything to talk to, which is what makes provisioning through them possible.
 
-Four routes need no token: `GET /v1/health`, `GET /v1/ready`, `GET /docs` and
-`GET /v1/openapi.json` (plus the browser UI's own assets). A probe cannot hold a credential, and
-the moment a reference is most useful is before you have one.
+Five routes need no token: `GET /v1/health`, `GET /v1/ready`, `GET /docs`,
+`GET /v1/openapi.json` (plus the browser UI's own assets) and
+`POST /v1/channels/:channelId/webhook/:agentId`. A probe cannot hold a credential, the moment a
+reference is most useful is before you have one, and a channel provider calling a webhook does not
+carry our token — the channel plugin verifies its signature instead.
 
 So make an agent. Either inside the container, or over the wire:
 
@@ -114,9 +116,9 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:7420/v1/templates
 # {"templates":[{"name":"support","vars":[{"name":"store","required":true,"secret":false}, …]}]}
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"template":"support","name":"Acme Store","vars":{"store":"Acme","apiKey":"sk-…"}}' \
+  -d '{"template":"support","name":"Acme Store","vars":{"store":"Acme"}}' \
   localhost:7420/v1/agents
-# → 201 {"id":"acme-store", …, "adopted":["acme-store"]}
+# → 201 {"id":"acme-store", …, "adopted":[], "error":{…}}   written; not running until its key arrives
 ```
 
 A value is substituted as text in the workspace files and as a quoted string in YAML, so a store
@@ -124,7 +126,8 @@ called `x", tools: {…}` stays a store name and never becomes configuration. A 
 leaves nothing on disk: the agent is validated with the same check `init` runs before it appears
 under its id.
 
-A key can arrive later. `GET /secrets` names the variables the agent's manifest reads, without
+A secret var can be passed in `vars` at create time, and the agent starts at once. Or the key can
+arrive later, as here. `GET /secrets` names the variables the agent's manifest reads, without
 their values. `PUT /secrets` writes them and applies them, reloading a hosted agent or adopting one
 that was waiting for its key:
 
@@ -226,9 +229,9 @@ Measured costs are in `evals/tenancy/`.
 ## 2. Ask it something
 
 ```bash
-curl -s -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"text":"what can you do?"}' $A/messages
-# {"turnId":"t_mu2fc3nwjz6r7kfi","sessionKey":"api:default"}
+TURN=$(curl -s -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"text":"what can you do?"}' $A/messages | jq -r .turnId)
+# the response: {"turnId":"t_mu2fc3nwjz6r7kfi","sessionKey":"api:default"}
 ```
 
 `202`, immediately. **The turn is not bound to that connection** — it is already running, and
@@ -505,7 +508,7 @@ neither surface can offer a field the other does not. Three things about the sha
 ```bash
 curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"path":"limits.maxSteps","value":"12"}' $A/config
-# {"path":"limits.maxSteps","before":40,"after":12,"reflowed":false,"applied":true}
+# {"path":"limits.maxSteps","before":40,"after":12,"reflowed":false,"changed":true,"reloaded":true,"applied":true}
 ```
 
 **`value` is text**, exactly as it is typed at a terminal — a bare word, a number, `true`, a list as
@@ -513,9 +516,10 @@ curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H 'content-type: application
 because two would eventually disagree about whether `["a", "b"]` is a list of two strings.
 
 **Read `applied`, do not assume it.** The file is written before the agent is replaced, and the
-replace is refused while a turn is in flight, so a successful write can legitimately come back
-`"applied": false` with the reason under `pending` — the edit then takes effect at the next start.
-Returning a `409` there and implying nothing had happened would leave a written manifest described
+replace waits while a turn is in flight, so a successful write can legitimately come back
+`"applied": false` with `pending.code: "reload_pending"` — the edit is then in force once the running
+turns finish, which `agent.reloaded` announces. `changed: false` means the value was already in the
+file, and nothing was reloaded (`reloaded: false`). Returning a `409` there and implying nothing had happened would leave a written manifest described
 as unwritten. `reflowed: true` means the source editor could not place the path and the document was
 re-serialised: correct, and its comments have moved, which is worth a look at the diff.
 
@@ -545,17 +549,20 @@ a write here would be undone — which the route answered `200` to until 0.1.1. 
 Everything above, typed, with the sharp edges handled:
 
 ```ts
-import { createClient, DispachError } from "@dispach/client"
+import { createClient, DispachError } from "dispach/client"
 
 const client = createClient({ baseUrl: "http://localhost:7420", token: process.env.DISPACH_API_TOKEN })
 const agent = client.agent("milo")
 
-const turn = await agent.send("what can you do?")
+const turn = await agent.send("what can you do?", { chunks: true })
 for await (const token of turn.tokens()) process.stdout.write(token)
 ```
 
-`tokens()` excludes the model's reasoning from the reply and **refuses a truncated replay** rather
-than returning a fragment that looks complete. `stream()` yields the full union when you need it.
+**Pass `chunks: true` on `send`.** The server records tokens only once a reader asks for them, so
+without it the start of a reply streamed before `tokens()` attaches is not in the replay, and nothing
+says so. `tokens()` excludes the model's reasoning from the reply and throws `replay_truncated` when
+the server reports the buffer dropped its oldest events — it cannot see tokens that were never
+recorded. `stream()` yields the full union when you need it.
 
 ```ts
 const turn = await agent.send("the nightly build failed", {
@@ -596,6 +603,6 @@ Worth knowing before you design around it, because each of these is a decision r
 | **No OpenAI-compatible surface.** | `/v1` is its own protocol. Nothing here answers `/v1/chat/completions`. |
 | **A second container is for isolation, not capacity.** | One process hosts N agents (decision 8.5), and the image's bare `serve` hosts **every enabled agent in the sandbox** — so `dispach init` inside the container is enough and no second container is needed to add one. What a second container buys is isolation: a shared process means one agent's runaway `exec` starves the others. It needs its own port *and its own home volume*, since two sharing one would share a `store.db` whose rows are keyed by agent id. This row used to say the image runs one agent, which was true of an earlier `CMD`. |
 | **No approval history.** | A pending approval lives in the serving process's memory, because the thing it resolves is a suspended turn *in that process*. A row surviving a restart would describe a question nobody is still waiting on. |
-| **No live *mutation*** — but reload and config edits work. | An agent's configuration is fixed for the lifetime of its **instance**: the catalogue resolves once and the cached prefix depends on that. So a change produces a **new instance** rather than a mutated one. `POST /reload` re-reads the manifest and answers `{id, status, adopted}`; `PATCH /v1/agents/:id/config` writes one field and then does the same replace. Both answer `409` while a turn is in flight, because tearing one down would close its store under a turn recorded as running — and the config route reports the write and whether it is in force *separately*, so an edit made during a turn is saved and applied at the next start rather than reported as a failure. |
-| **No CORS.** | The web UI is same-origin. A default `*` would be catastrophic on a loopback bind, where the spec permits omitting the token entirely. |
-| **WebSocket is secondary, and Bun-only.** | Everything achievable over HTTP + SSE stays there. `/v1/ws` answers `501` under Node, which has no upgrade path without a dependency. |
+| **No live *mutation*** — but reload and config edits work. | An agent's configuration is fixed for the lifetime of its **instance**: the catalogue resolves once and the cached prefix depends on that. So a change produces a **new instance** rather than a mutated one. `POST /reload` re-reads the manifest and answers `{id, status, adopted}`; `PATCH /v1/agents/:id/config` writes one field and then does the same replace. Neither tears down a running turn: during one, `reload` answers `202 {status: "pending", running, holdAfterMs}` and the config route `applied: false` with `pending.code: "reload_pending"`, and the swap happens when the running turns finish, announced by `agent.reloaded`. The config route reports the write and whether it is in force *separately*, so an edit made during a turn is saved rather than reported as a failure. |
+| **No wildcard CORS.** | The web UI is same-origin. An origin listed in `server.allowedOrigins` (or a loopback one) gets `Access-Control-Allow-Origin` echoing it, and `OPTIONS` answers a real preflight; any other is `403 origin_not_allowed`. A default `*` would be catastrophic on a loopback bind, where the spec permits omitting the token entirely. |
+| **WebSocket is secondary.** | Everything achievable over HTTP + SSE stays there. `/v1/ws` is served under Node and Bun alike since 0.1.3; it answered `501` under Node before that. |
