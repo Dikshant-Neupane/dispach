@@ -29,6 +29,8 @@ const DEFAULT_TIMEOUT_MS = 15_000
 export interface SearchOptions {
     readonly backend: BackendId
     readonly apiKeyEnv: string
+    /** The API's address before the path. The backend's own when absent. */
+    readonly baseUrl?: string
     readonly env: Readonly<Record<string, string | undefined>>
     readonly fetch: FetchLike
 }
@@ -83,7 +85,12 @@ function searchHandler(options: SearchOptions): ToolHandler {
         if (apiKey === "") throw webSearchKeyMissing(chosen.id, options.apiKeyEnv)
 
         const maxResults = clampResults(args.maxResults)
-        const { url, init } = chosen.request(query, maxResults, apiKey)
+        const { url, init } = chosen.request(
+            query,
+            maxResults,
+            apiKey,
+            options.baseUrl ?? chosen.defaultBase,
+        )
 
         const controller = new AbortController()
         const abort = () => {
@@ -100,6 +107,12 @@ function searchHandler(options: SearchOptions): ToolHandler {
             if (!response.ok) await readError(chosen.id, response)
 
             const payload: unknown = await response.json()
+            context.meter?.({
+                provider: chosen.id,
+                operation: "search",
+                unit: chosen.unit,
+                units: chosen.units?.(payload) ?? 1,
+            })
             return render(query, chosen.read(payload).slice(0, maxResults))
         } finally {
             clearTimeout(timer)

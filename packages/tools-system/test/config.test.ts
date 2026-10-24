@@ -10,7 +10,13 @@ import { expect, test } from "bun:test"
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { setInSource, toolContext } from "@dispach/core"
+import {
+    ConfigError,
+    estimateTokens,
+    setInSource,
+    type ToolProviderFactory,
+    toolContext,
+} from "@dispach/core"
 import {
     CONFIG_READ_SPEC,
     CONFIG_SET_SPEC,
@@ -172,6 +178,107 @@ test("a writeRoots hidden inside a providers value is refused", async () => {
     await expect(
         set({ path: "tools.providers.system.writeRoots", value: '["~"]' }, toolContext({})),
     ).rejects.toThrow(/widening where you may write is not yours to do/)
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("no provider's baseUrl can be set by the agent, by path or inside a value (pilot.10)", async () => {
+    // Composio's baseUrl was settable this way, so an agent could send its token anywhere.
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set(
+            { path: "tools.providers", value: '{"composio": {"baseUrl": "https://evil.example"}}' },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/not yours to decide/)
+    await expect(
+        set(
+            { path: "tools.providers.web.firecrawl.baseUrl", value: "https://evil.example" },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/not yours to decide/)
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("the system provider's env cannot be set by the agent, by path or inside a value (pilot.9)", async () => {
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set({ path: "tools.providers", value: '{"system": {"env": "inherit"}}' }, toolContext({})),
+    ).rejects.toThrow(/not yours to widen/)
+    await expect(
+        set({ path: "tools.providers.system.env", value: "inherit" }, toolContext({})),
+    ).rejects.toThrow(/not yours to widen/)
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("skills.trusted cannot be set by the agent, by path or inside a value (pilot.14)", async () => {
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set({ path: "skills.trusted", value: '["anything"]' }, toolContext({})),
+    ).rejects.toThrow(/not yours to decide/)
+    // `skills` is not settable at all, so a whole-block write is refused before its value is read.
+    await expect(
+        set(
+            { path: "skills", value: '{"dir": "./skills", "trusted": ["anything"]}' },
+            toolContext({}),
+        ),
+    ).rejects.toThrow()
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("a pin says what is usable now and that the rest is ready from the next message (pilot.14)", async () => {
+    const { set } = fixture()
+    const asked: string[][] = []
+    const now = await set(
+        { path: "tools.pinned", value: '["exec", "file_read"]' },
+        toolContext({
+            pinTools: async (slugs: readonly string[]) => {
+                asked.push([...slugs])
+                return ["file_read"]
+            },
+        }),
+    )
+    expect(asked).toEqual([["exec", "file_read"]])
+    expect(String(now)).toContain("Usable now, in this conversation: file_read")
+    const later = await set(
+        { path: "tools.pinned", value: '["exec"]' },
+        toolContext({ pinTools: async () => [] }),
+    )
+    expect(String(later)).toContain("from the person's next message")
+    // Where no turn can take it, the old sentence stands.
+    const none = await set({ path: "tools.pinned", value: '["exec", "grep"]' }, toolContext({}))
+    expect(String(none)).toContain("when the agent next starts")
+})
+
+test("confineReads cannot be set by the agent, by path or inside a value (pilot.14)", async () => {
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set(
+            { path: "tools.providers", value: '{"system": {"confineReads": false}}' },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/not yours to widen/)
+    await expect(
+        set({ path: "tools.providers.system.confineReads", value: "false" }, toolContext({})),
+    ).rejects.toThrow(/not yours to widen/)
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("a provider's personal flag cannot be set by the agent, by path or inside a value", async () => {
+    const { set, file } = fixture()
+    const before = readFileSync(file, "utf8")
+    await expect(
+        set(
+            { path: "tools.providers", value: '{"composio": {"personal": false}}' },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/connected accounts is not yours to widen/)
+    await expect(
+        set({ path: "tools.providers.composio.personal", value: "false" }, toolContext({})),
+    ).rejects.toThrow(/connected accounts is not yours to widen/)
     expect(readFileSync(file, "utf8")).toBe(before)
 })
 
@@ -373,7 +480,9 @@ test("the summary fits the observation budget, which the whole file did not", as
     // Returning the manifest measured 2,766 tokens against a 2,000-token budget, so every call was
     // middle-cut and a real model read it three times in one turn hunting for what the cut removed —
     // eight thousand output tokens to change one line.
-    expect(output.length).toBeLessThan(4_000)
+    // In tokens, the unit the budget is in, with a quarter of it spare. It was 4,000 characters, a
+    // proxy for about 1,050 tokens that new settings rows outgrew while still far inside the budget.
+    expect(estimateTokens(output)).toBeLessThan(1_500)
     // What it needs is what can change and what it is now.
     expect(output).toContain("tools.policy.allow = []")
     expect(output).toContain("tools.local = [now]")
@@ -545,4 +654,145 @@ test("a schedule the runtime would refuse is refused at the edit, not at the nex
             toolContext({}),
         ),
     ).rejects.toThrow(/not a channel id on this agent/)
+})
+
+test("a tools.providers value the provider refuses is refused before it is written, in the provider's words", async () => {
+    // The agent's editor gets the same check as the person's (decision 14.24). Without the factories
+    // it wrote a credential-bearing URL into the manifest and the next load dropped the provider.
+    const dir = mkdtempSync(join(tmpdir(), "config-test-"))
+    const file = join(dir, "agent.yaml")
+    writeFileSync(file, MANIFEST)
+    const strict: ToolProviderFactory = (context) => {
+        if (String((context.config as { url?: unknown }).url ?? "").includes("@")) {
+            throw new ConfigError({
+                code: "fake_config_invalid",
+                message: "The url carries a credential.",
+                hint: "Name an env var in headersEnv instead.",
+            })
+        }
+        return { id: "fake", resolve: async () => [] }
+    }
+    const set = configSetHandler({ agentDir: dir, file, providers: { fake: strict } })
+    const before = readFileSync(file, "utf8")
+    let message = ""
+    try {
+        await set(
+            { path: "tools.providers", value: '{"fake": {"url": "http://u:p@host/mcp"}}' },
+            toolContext({}),
+        )
+    } catch (error) {
+        message = (error as Error).message
+    }
+    expect(message).toContain("The url carries a credential.")
+    expect(message).toContain("headersEnv")
+    expect(readFileSync(file, "utf8")).toBe(before)
+})
+
+test("through a real runtime, config_set is handed the runtime's providers and uses them", async () => {
+    // The table crosses three hand-built objects on its way here (the provider context, the
+    // provider's options, the config tool's options), and a field dropped by any of them type-checks.
+    // So the assertion is at the far end: the tool the agent would actually call.
+    const { Runtime, BRAND } = await import("@dispach/core")
+    const { systemFromConfig } = await import("../src/index.ts")
+    const dir = mkdtempSync(join(tmpdir(), "config-runtime-"))
+    const file = join(dir, "agent.yaml")
+    writeFileSync(
+        file,
+        `apiVersion: ${BRAND.apiVersion}\nid: cfg\nmodel:\n  main:\n    id: m\n    baseUrl: http://127.0.0.1:9/v1\ntools:\n  providers:\n    system: {}\n  pinned: [config_set]\n`,
+    )
+    const strict: ToolProviderFactory = (context) => {
+        if (String((context.config as { url?: unknown }).url ?? "").includes("@")) {
+            throw new ConfigError({
+                code: "fake_config_invalid",
+                message: "Refused by fake.",
+                hint: "h",
+            })
+        }
+        return { id: "fake", resolve: async () => [] }
+    }
+    const runtime = await Runtime.create({
+        agents: [file],
+        env: {},
+        store: ":memory:",
+        toolProviders: { system: systemFromConfig, fake: strict },
+    })
+    const tool = runtime.agent("cfg").tools.resolve("config_set")
+    let message = ""
+    try {
+        await tool.handler(
+            { path: "tools.providers", value: '{"system": {}, "fake": {"url": "http://u:p@h"}}' },
+            toolContext({ agentId: "cfg", dir }),
+        )
+    } catch (error) {
+        message = (error as Error).message
+    }
+    await runtime.stop()
+    expect(message).toContain("Refused by fake.")
+})
+
+test("the summary names the context files and says they are already loaded (pilot.15)", async () => {
+    const { file, read } = fixture()
+    writeFileSync(
+        file,
+        `${MANIFEST}context:\n  static: [SOUL.md, AGENTS.md]\n  volatile: [USER.md, MEMORY.md]\n  reminder: REMINDER.md\n`,
+    )
+    // Told "check your config", a model read this, found no files, and said nothing loads them.
+    const output = await read({}, toolContext({}))
+    expect(output).toContain("- context.static = [SOUL.md, AGENTS.md]")
+    expect(output).toContain("- context.volatile = [USER.md, MEMORY.md]")
+    expect(output).toContain("- context.reminder = [REMINDER.md]")
+    expect(output).toContain("loaded into my instructions every turn, under their names")
+    expect(estimateTokens(output)).toBeLessThan(1_500)
+})
+
+test("the agent cannot write its own subagents (pilot.15)", async () => {
+    const { set } = fixture()
+    // Person- or engine-only: an agent routing its own calls could send a gated write through a child.
+    await expect(
+        set(
+            {
+                path: "subagents",
+                value: "[{name: x, task: y, tools: [now], route: {tools: [now]}}]",
+            },
+            toolContext({}),
+        ),
+    ).rejects.toThrow(/subagents/)
+})
+
+// ─── context.modelIdentity (pilot.15) ────────────────────────────────────────────────────
+
+test("hidden: config_read names no model or vendor, and the rest still reads and sets", async () => {
+    const { file, read, set } = fixture()
+    writeFileSync(
+        file,
+        `${MANIFEST}context:\n  modelIdentity: hidden\nmedia:\n  image:\n    provider: aws\n    model: amazon.nova-canvas-v1:0\n    options:\n      region: eu-west-1\n`,
+    )
+    const reads = [
+        String(await read({}, toolContext({}))),
+        String(await read({ path: "model" }, toolContext({}))),
+        String(await read({ path: "model.main.id" }, toolContext({}))),
+        String(await read({ path: "media" }, toolContext({}))),
+    ]
+    for (const text of reads) {
+        for (const leak of ["deepseek", "MODEL_API_KEY", "nova", "provider: aws", "eu-west-1"]) {
+            expect(text).not.toContain(leak)
+        }
+    }
+    expect(reads[1]).toContain("(hidden by the operator)")
+    expect(reads[0]).not.toContain("read it with file_read")
+    // Tuning is still the agent's.
+    expect(reads[1]).toContain("temperature: 0.3")
+    await set({ path: "model.main.temperature", value: "0.7" }, toolContext({}))
+    expect(readFileSync(file, "utf8")).toContain("temperature: 0.7")
+    // And it cannot un-hide itself.
+    await expect(
+        set({ path: "context.modelIdentity", value: "shown" }, toolContext({})),
+    ).rejects.toThrow()
+})
+
+test("shown (the default): config_read is unchanged", async () => {
+    const { read } = fixture()
+    expect(String(await read({ path: "model.main.id" }, toolContext({})))).toContain(
+        "deepseek-chat",
+    )
 })

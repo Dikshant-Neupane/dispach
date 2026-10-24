@@ -16,7 +16,7 @@
  */
 
 import { basename, dirname, join, resolve } from "node:path"
-import { BRAND, HarnessError, VERSION } from "@dispach/core"
+import { BRAND, HarnessError, isHarnessError, VERSION } from "@dispach/core"
 import { installRefs } from "#browse"
 import { announce } from "#lib/bootstrap"
 import { EXIT_FAILURE, EXIT_OK } from "#lib/const"
@@ -38,6 +38,7 @@ import {
 import { findAndInstallSkill } from "#lib/init-skills"
 import { type PairOutcome, pairLater, pairWhatsApp } from "#lib/init-whatsapp"
 import { negotiateKeyboard } from "#lib/keyboard"
+import { measuredWindow } from "#lib/measure-window"
 import { resolveModeFromProcess } from "#lib/output"
 import { checkAgentLoads, complete, FLAG_FOR, fillDefaults, writeAgentFiles } from "#lib/provision"
 import { agentsDir, outsideSandboxNote } from "#lib/sandbox"
@@ -106,7 +107,22 @@ async function runInit(options: InitOptions): Promise<InitResult> {
         )
     }
 
-    const answers = complete(partial, defaults)
+    // Asked once, here, and never at boot: the endpoint's own window beats the registry's guess by
+    // model id (decision 14.124). Unknown is fine; the registry stays in charge.
+    const completed = complete(partial, defaults)
+    const keyForProbe =
+        completed.apiKey ??
+        (completed.apiKeyEnv === undefined ? undefined : process.env[completed.apiKeyEnv])
+    // Only when someone is at the keyboard or asked for it: `init --yes` and a pipe reach no network.
+    const window =
+        interactive || options.measureWindow === true
+            ? await measuredWindow(completed.baseUrl, completed.model, {
+                  ...(keyForProbe === undefined || keyForProbe === ""
+                      ? {}
+                      : { apiKey: keyForProbe }),
+              })
+            : undefined
+    const answers = completed
     const targetDir = resolve(process.cwd(), answers.dir)
 
     // Said before anything is written, not after: the cost of an out-of-sandbox agent is paid by
@@ -116,7 +132,7 @@ async function runInit(options: InitOptions): Promise<InitResult> {
     const note = outsideSandboxNote(targetDir)
     if (note !== undefined) process.stderr.write(`${note}\n`)
     const manifestPath = join(targetDir, "agent.yaml")
-    const files = planFiles(answers)
+    const files = planFiles(answers, window)
 
     // Per-target checks rather than "directory not empty": a fresh `git init`'d directory must
     // work, and the refusal names every collision at once rather than one per run.
@@ -147,7 +163,7 @@ async function runInit(options: InitOptions): Promise<InitResult> {
         // The files stay on disk — they are inspectable evidence — but the exit is a failure and
         // the loader's own report is printed verbatim. A generated agent that cannot load is this
         // command's bug, and hiding it behind exit 0 would be rule 8's exact shape.
-        if (error instanceof HarnessError) {
+        if (isHarnessError(error)) {
             process.stderr.write(
                 `init wrote ${files.length} files to ${targetDir}, but the result does not load:\n${error.format()}\n`,
             )

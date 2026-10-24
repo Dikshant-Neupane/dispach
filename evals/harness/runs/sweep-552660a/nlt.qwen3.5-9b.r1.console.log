@@ -1,0 +1,26 @@
+pass  single-kv-set            r1  2 calls  365441 ms  $0.00144
+pass  single-read-answer       r1  2 calls  274660 ms  $0.00127
+pass  single-calculator        r1  2 calls  31849 ms  $0.00073  (1 429 retries)
+pass  single-now               r1  2 calls  74379 ms  $0.00082
+pass  single-send              r1  3 calls  39695 ms  $0.00109
+pass  chain-order-notify       r1  3 calls  586033 ms  $0.00217
+pass  chain-file-to-kv         r1  4 calls  64890 ms  $0.00161
+pass  chain-sum-to-file        r1  3 calls  49609 ms  $0.00115
+pass  chain-kv-to-send         r1  3 calls  120879 ms  $0.00121
+pass  chain-edit-json          r1  3 calls  58478 ms  $0.00114
+pass  recall-fact              r1  4 calls  48337 ms  $0.00146
+FAIL  recall-preference        r1  3 calls  32231 ms  $0.00110  — Lee not told about the deploy
+pass  recall-correction        r1  4 calls  321900 ms  $0.00213
+pass  abstain-chitchat         r1  1 calls  161206 ms  $0.00066
+pass  abstain-knowledge        r1  1 calls  8522 ms  $0.00034
+pass  abstain-draft-only       r1  1 calls  107849 ms  $0.00063
+pass  abstain-cannot           r1  1 calls  35272 ms  $0.00041
+pass  recover-retry            r1  3 calls  21720 ms  $0.00109
+FAIL  recover-persist          r1  3 calls  228595 ms  $0.00167  — file never written
+pass  recover-bad-expression   r1  2 calls  56380 ms  $0.00081
+pass  recover-missing-file     r1  3 calls  480551 ms  $0.00187
+pass  recover-unknown-order    r1  4 calls  21582 ms  $0.00074
+pass  long-log-needle          r1  15 calls  365199 ms  $0.03333
+FAIL  long-count-orders        r1  10 calls  115761 ms  $0.01532  — count is not 58
+pass  long-handbook            r1  11 calls  84175 ms  $0.01167
+dispach-nlt · qwen3.5-9b: 22/25 passed → evals/harness/runs/sweep-552660a/nlt.qwen3.5-9b.r1.jsonl

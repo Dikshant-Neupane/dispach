@@ -13,7 +13,8 @@
  * voice, so the `workspace` command keeps warning until a person writes real exchanges.
  */
 
-import { BRAND, whenNotToUseKey } from "@dispach/core"
+import { BRAND, matchCapabilities, whenNotToUseKey } from "@dispach/core"
+import type { MeasuredWindow } from "#lib/measure-window"
 import { fillTemplate, SKILL_TEMPLATE, WORKSPACE_TEMPLATES } from "#lib/templates"
 
 /**
@@ -27,6 +28,12 @@ export const INIT_LOCAL_TOOLS: readonly { readonly slug: string; readonly note: 
     {
         slug: "memory_write",
         note: "mutating: serialises, holds a reserved write slot, never retried",
+    },
+    {
+        slug: "memory_forget",
+        // Kept out of the generated `policy.allow` on purpose: a delete the person asked for happens in
+        // a clean turn, and one prompted by a page or a file the agent just read is refused.
+        note: "mutating: lists by query, deletes only the ids it listed",
     },
     {
         slug: "artifact_read",
@@ -1667,10 +1674,34 @@ export interface GeneratedFile {
  * it does and how* — responsibilities, workflow, the memory procedure, and eventually the
  * team routing. They coexist; what must not exist is a second *identity* document.
  */
-export function planFiles(answers: InitAnswers): readonly GeneratedFile[] {
+/**
+ * The generated dialect (decision 14.125): native where the capability registry says the model calls
+ * tools natively, NLT otherwise. Measured on fourteen models, native tied or beat NLT on thirteen and NLT
+ * fell to 37-62% on five, by announcing a call and not making it. Written as a literal, so an existing
+ * agent keeps the dialect it has and none changes when its model does.
+ */
+function dialectLines(model: string): readonly string[] {
+    return matchCapabilities(model).capabilities.nativeTools
+        ? [
+              `  # native: the model's own function calling. nlt (calls written as text) is the opt-in for`,
+              `  # a model without it; the harness benchmark in evals/harness/ has both, per model.`,
+              `  dialect: native`,
+          ]
+        : [
+              `  # nlt: calls written as text, because the capability registry does not know this model to`,
+              `  # call tools natively. If it does, \`dialect: native\` was ahead on 13 of 14 measured models.`,
+              `  dialect: nlt`,
+          ]
+}
+
+/**
+ * Every file `init` writes. `window` is the endpoint's published window when `init` could ask it
+ * (decision 14.124), passed beside the answers because every answer is also a flag and this is not.
+ */
+export function planFiles(answers: InitAnswers, window?: MeasuredWindow): readonly GeneratedFile[] {
     const substitutions = substitutionsFor(answers)
     return [
-        { relPath: "agent.yaml", contents: manifestFor(answers) },
+        { relPath: "agent.yaml", contents: manifestFor(answers, window) },
         ...(
             [
                 "SOUL.md",
@@ -1740,7 +1771,10 @@ function substitutionsFor(answers: InitAnswers): Record<string, string> {
     // warmly and saved nothing, and the recall the person then saw came from session
     // history — which evaporates on a fresh session. The tool catalogue's whenToUse alone
     // did not move a frontier model to save; the identity file is what sets behaviour.
-    const ruleConfirm = `I confirm before anything that sends, spends, schedules, or deletes, because I'm wired into live systems and mistakes there are expensive.`
+    // Conditional on the ask, because an unconditional "confirm before anything that sends" made an
+    // explicit "message Sam" end on a question: 11 to 21 of 125 runs per benchmark arm
+    // (evals/harness/runs/baseline-aae8fe4). Deleting still always confirms; it cannot be undone.
+    const ruleConfirm = `I confirm before I send, spend or schedule anything ${user} didn't ask for in so many words, and before I delete anything at all, because I'm wired into live systems and mistakes there are expensive.`
     const ruleHonesty = `When I don't know something I say so and offer to go find out, rather than producing something plausible and letting ${user} discover the difference later.`
     const ruleMemory = `When ${user} tells me something worth keeping — a fact about them, a preference, a decision — I save it with memory_write in the same turn, because the conversation is not memory and a new session starts without it.`
 
@@ -1812,8 +1846,10 @@ function substitutionsFor(answers: InitAnswers): Record<string, string> {
             `note and what ${user} just said disagree, the person wins and I correct the note.`,
 
         BOUNDARIES:
-            `If something involves a person other than ${user}, I ask what they want shared ` +
-            `before including it — ${user} knows the relationship and I don't.`,
+            // Conditional on what was asked, as the confirm rule became in 14.117: unconditional, it
+            // made Gemini 4 Argon ask what to share when told exactly what to send (7 of 10 chain runs).
+            `If something involves a person other than ${user} and ${user} hasn't said what to ` +
+            `share, I ask before including it — ${user} knows the relationship and I don't.`,
         UNCERTAINTY_BEHAVIOUR:
             `When I can't reach a tool or a request is ambiguous, I say which part is unclear ` +
             `and ask, because guessing just moves the cost somewhere ${user} can't see it.`,
@@ -2081,7 +2117,7 @@ function hostZoneName(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
 
-function manifestFor(answers: InitAnswers): string {
+function manifestFor(answers: InitAnswers, window: MeasuredWindow | undefined): string {
     const slug = slugify(answers.name)
 
     const lines = [
@@ -2120,8 +2156,10 @@ function manifestFor(answers: InitAnswers): string {
         )
     }
     lines.push(
-        `    temperature: 0.3`,
-        `    # reasoningEffort: none   # none | minimal | low | medium | high — a reasoning model`,
+        // Commented, never live: GPT-6.x and the Claude 5.5 rows refuse a temperature, and an endpoint
+        // that enforces its parameters refuses the whole request — a fresh agent that cannot answer.
+        `    # temperature: 0.3        # some models refuse any temperature; leave unset for those`,
+        `    # reasoningEffort: none  # none | minimal | low | medium | high — a reasoning model`,
         `    #                         # bills its thinking to the output budget; verify per endpoint`,
         `    # topP: 0.95`,
         `    # maxTokens: 4096`,
@@ -2163,6 +2201,15 @@ function manifestFor(answers: InitAnswers): string {
         `  # This is NOT a cap on what the model may generate — nothing is sent as max_tokens unless`,
         `  # you set model.main.maxTokens. Generous because a reasoning model thinks here too.`,
         `  reserveOutput: 8192`,
+        ...(window === undefined
+            ? []
+            : [
+                  ``,
+                  `  # The window the endpoint published for ${answers.model} when this file was made, from`,
+                  `  # ${window.source}. A fact about the endpoint, not the model: change it if the`,
+                  `  # model is served somewhere else.`,
+                  `  window: ${window.tokens}`,
+              ]),
         ``,
         `  # Capability-gated identity: SOUL.md ships only to a model meeting \`requires\`; anything`,
         `  # else gets the hand-edited compact file. Edit SOUL.md first, then re-derive`,
@@ -2175,7 +2222,7 @@ function manifestFor(answers: InitAnswers): string {
         ``,
         `  # Defaults shown; uncomment to change. Budgets fail the load naming the file — never`,
         `  # silent truncation.`,
-        `  # observationMaxTokens: 2000`,
+        `  # observationMaxTokens: 2000   # not a default: absent means 5% of the window, 2,000 to 32,000`,
         `  # budgets: { static: 2000, volatile: 3500, reminder: 500, total: 6000 }`,
         `  # rules:`,
         `  #   perRuleSuccess: 0.90    # measure with \`bun run eval:rules\` in a checkout, do not guess`,
@@ -2185,7 +2232,7 @@ function manifestFor(answers: InitAnswers): string {
         rule("tools"),
         `tools:`,
         `  # Config only, never auto-detected: behaviour must not drift when the model changes.`,
-        `  dialect: nlt`,
+        ...dialectLines(answers.model),
         ``,
         `  # Built-in tools, resolved from memory. Never sent to a remote provider.`,
         `  local:`,
@@ -2351,7 +2398,10 @@ function envFor(answers: InitAnswers): string {
     // exactly what someone does by hand at this point.
     if (answers.serverToken !== undefined && answers.serverToken !== "") {
         lines.push("")
-        lines.push(`# The HTTP API's bearer token. Generated — replace it whenever you like.`)
+        lines.push(
+            `# The HTTP API's bearer token. Generated. In the sandbox every agent shares the host's,`,
+        )
+        lines.push(`# kept in agents/.api-token — change it there and restart the server.`)
         lines.push(`${BRAND.envPrefix}API_TOKEN=${answers.serverToken}`)
     }
     return `${lines.join("\n")}\n`

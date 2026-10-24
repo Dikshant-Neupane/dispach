@@ -1,0 +1,26 @@
+FAIL  single-kv-set            r3  1 calls  48687 ms  $0.00043  — locker_code not stored as 4417
+pass  single-read-answer       r3  2 calls  14072 ms  $0.00078
+pass  single-calculator        r3  3 calls  22337 ms  $0.00118
+pass  single-now               r3  2 calls  88842 ms  $0.00088
+pass  single-send              r3  3 calls  57813 ms  $0.00124
+pass  chain-order-notify       r3  4 calls  30411 ms  $0.00162
+pass  chain-file-to-kv         r3  3 calls  36283 ms  $0.00121
+FAIL  chain-sum-to-file        r3  1 calls  135009 ms  $0.00063  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r3  3 calls  40104 ms  $0.00120
+pass  chain-edit-json          r3  4 calls  75771 ms  $0.00202
+pass  recall-fact              r3  3 calls  54174 ms  $0.00120
+pass  recall-preference        r3  5 calls  56203 ms  $0.00201
+pass  recall-correction        r3  4 calls  43819 ms  $0.00159  (3 429 retries)
+pass  abstain-chitchat         r3  1 calls  16203 ms  $0.00039
+pass  abstain-knowledge        r3  1 calls  11570 ms  $0.00039
+pass  abstain-draft-only       r3  1 calls  41375 ms  $0.00042
+pass  abstain-cannot           r3  2 calls  57102 ms  $0.00043  (1 429 retries)
+FAIL  recover-retry            r3  2 calls  25987 ms  $0.00080  — never got past the failure
+FAIL  recover-persist          r3  1 calls  47517 ms  $0.00042  — file never written
+pass  recover-bad-expression   r3  2 calls  20599 ms  $0.00078
+pass  recover-missing-file     r3  3 calls  50691 ms  $0.00135
+pass  recover-unknown-order    r3  5 calls  173659 ms  $0.00222
+pass  long-log-needle          r3  3 calls  69534 ms  $0.00710
+FAIL  long-count-orders        r3  2 calls  21920 ms  $0.00227  — count is not 58
+pass  long-handbook            r3  4 calls  43483 ms  $0.00537
+dispach-native · qwen3.5-9b: 20/25 passed → evals/harness/runs/remeasure-be5bb30/native.qwen3.5-9b.r3.jsonl

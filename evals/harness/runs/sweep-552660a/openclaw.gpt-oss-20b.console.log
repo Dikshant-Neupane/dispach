@@ -1,0 +1,132 @@
+pass  single-kv-set            r1  5 calls  19404 ms  $0.00116
+pass  single-read-answer       r1  5 calls  15518 ms  $0.00121
+FAIL  single-calculator        r1  1 calls  12142 ms  $0.00022  — calculator not used
+FAIL  single-now               r1  3 calls  22447 ms  $0.00075  — wrong weekday
+pass  single-send              r1  4 calls  28900 ms  $0.00090
+FAIL  chain-order-notify       r1  5 calls  12931 ms  $0.00090  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r1  6 calls  25000 ms  $0.00141  — region not stored as eu-west-2
+pass  chain-sum-to-file        r1  6 calls  15073 ms  $0.00127
+FAIL  chain-kv-to-send         r1  4 calls  19556 ms  $0.00078  — Dmitri not sent the alert
+pass  chain-edit-json          r1  12 calls  30358 ms  $0.00291
+pass  recall-fact              r1  5 calls  25798 ms  $0.00118
+FAIL  recall-preference        r1  4 calls  24916 ms  $0.00091  — Lee not told about the deploy
+pass  recall-correction        r1  9 calls  34466 ms  $0.00227
+pass  abstain-chitchat         r1  1 calls  9889 ms  $0.00022
+pass  abstain-knowledge        r1  1 calls  8952 ms  $0.00020
+pass  abstain-draft-only       r1  1 calls  9032 ms  $0.00021
+pass  abstain-cannot           r1  2 calls  13092 ms  $0.00049
+FAIL  recover-retry            r1  11 calls  23007 ms  $0.00277  — never got past the failure
+FAIL  recover-persist          r1  8 calls  24271 ms  $0.00189  — file never written
+FAIL  recover-bad-expression   r1  1 calls  7768 ms  $0.00021  — calculator never succeeded
+FAIL  recover-missing-file     r1  6 calls  19339 ms  $0.00145  — never tried to read the file
+pass  recover-unknown-order    r1  5 calls  17045 ms  $0.00115
+FAIL  long-log-needle          r1  6 calls  17996 ms  $0.00214  — error code not stored
+FAIL  long-count-orders        r1  5 calls  47463 ms  $0.00198  — count is not 58
+FAIL  long-handbook            r1  4 calls  17029 ms  $0.00098  — meal_limit is not 75
+pass  single-kv-set            r2  4 calls  73089 ms  $0.00099
+pass  single-read-answer       r2  4 calls  12786 ms  $0.00092
+FAIL  single-calculator        r2  1 calls  10203 ms  $0.00024  — calculator not used
+FAIL  single-now               r2  3 calls  11462 ms  $0.00070  — clock not read (a guess)
+pass  single-send              r2  4 calls  12602 ms  $0.00088
+FAIL  chain-order-notify       r2  4 calls  13205 ms  $0.00070  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r2  6 calls  17050 ms  $0.00114  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r2  5 calls  16561 ms  $0.00085  — empty reply
+FAIL  chain-kv-to-send         r2  5 calls  15141 ms  $0.00092  — Dmitri not sent the alert
+pass  chain-edit-json          r2  4 calls  18477 ms  $0.00096
+FAIL  recall-fact              r2  5 calls  29821 ms  $0.00129  — flight not stored as BA 286
+pass  recall-preference        r2  5 calls  32568 ms  $0.00128
+pass  recall-correction        r2  7 calls  27784 ms  $0.00167
+pass  abstain-chitchat         r2  1 calls  9504 ms  $0.00023
+pass  abstain-knowledge        r2  1 calls  8427 ms  $0.00020
+pass  abstain-draft-only       r2  1 calls  10097 ms  $0.00024
+pass  abstain-cannot           r2  1 calls  10870 ms  $0.00025
+FAIL  recover-retry            r2  4 calls  13936 ms  $0.00070  — never got past the failure
+FAIL  recover-persist          r2  6 calls  19922 ms  $0.00140  — file never written
+FAIL  recover-bad-expression   r2  1 calls  8731 ms  $0.00022  — calculator never succeeded
+FAIL  recover-missing-file     r2  5 calls  16007 ms  $0.00077  — never tried to read the file
+pass  recover-unknown-order    r2  4 calls  10791 ms  $0.00091
+FAIL  long-log-needle          r2  8 calls  26014 ms  $0.00420  — error code not stored
+FAIL  long-count-orders        r2  3 calls  33282 ms  $0.00117  — count is not 58
+FAIL  long-handbook            r2  7 calls  20416 ms  $0.00169  — meal_limit is not 75
+pass  single-kv-set            r3  4 calls  16255 ms  $0.00094
+FAIL  single-read-answer       r3  5 calls  15547 ms  $0.00097  — file never read
+FAIL  single-calculator        r3  1 calls  9949 ms  $0.00024  — calculator not used
+FAIL  single-now               r3  3 calls  10513 ms  $0.00066  — clock not read (a guess)
+pass  single-send              r3  4 calls  12130 ms  $0.00088  (1 429 retries)
+FAIL  chain-order-notify       r3  3 calls  13141 ms  $0.00047  — order never looked up
+FAIL  chain-file-to-kv         r3  11 calls  28845 ms  $0.00250  — region not stored as eu-west-2
+pass  chain-sum-to-file        r3  5 calls  17758 ms  $0.00121
+FAIL  chain-kv-to-send         r3  8 calls  24833 ms  $0.00182  — Dmitri not sent the alert
+pass  chain-edit-json          r3  5 calls  16155 ms  $0.00126
+pass  recall-fact              r3  5 calls  22342 ms  $0.00119  (1 429 retries)
+FAIL  recall-preference        r3  4 calls  26816 ms  $0.00104  — Lee not told about the deploy
+pass  recall-correction        r3  7 calls  35776 ms  $0.00198
+pass  abstain-chitchat         r3  1 calls  9670 ms  $0.00024  (1 429 retries)
+pass  abstain-knowledge        r3  1 calls  7996 ms  $0.00020
+FAIL  abstain-draft-only       r3  1 calls  9908 ms  $0.00022  — no draft in the reply
+pass  abstain-cannot           r3  4 calls  15041 ms  $0.00068
+FAIL  recover-retry            r3  7 calls  18417 ms  $0.00151  — never got past the failure
+FAIL  recover-persist          r3  3 calls  14062 ms  $0.00074  — file never written
+FAIL  recover-bad-expression   r3  1 calls  9705 ms  $0.00021  — calculator never succeeded
+pass  recover-missing-file     r3  6 calls  24637 ms  $0.00158  (1 429 retries)
+FAIL  recover-unknown-order    r3  6 calls  16359 ms  $0.00140  — never looked the order up
+FAIL  long-log-needle          r3  3 calls  14823 ms  $0.00102  — error code not stored
+FAIL  long-count-orders        r3  6 calls  37626 ms  $0.00217  — count is not 58
+FAIL  long-handbook            r3  4 calls  14728 ms  $0.00074  — meal_limit is not 75
+FAIL  single-kv-set            r4  1 calls  13632 ms  $0.00028  — locker_code not stored as 4417
+pass  single-read-answer       r4  3 calls  12201 ms  $0.00072
+pass  single-calculator        r4  3 calls  10813 ms  $0.00065
+FAIL  single-now               r4  2 calls  9433 ms  $0.00044  — clock not read (a guess)
+FAIL  single-send              r4  3 calls  9975 ms  $0.00065  — no message to Priya about the build
+FAIL  chain-order-notify       r4  3 calls  23776 ms  $0.00051  — order never looked up
+FAIL  chain-file-to-kv         r4  4 calls  16502 ms  $0.00082  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r4  6 calls  22546 ms  $0.00129  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r4  6 calls  23815 ms  $0.00117  — Dmitri not sent the alert
+pass  chain-edit-json          r4  10 calls  27139 ms  $0.00235
+pass  recall-fact              r4  6 calls  28026 ms  $0.00145
+FAIL  recall-preference        r4  3 calls  20762 ms  $0.00066  — Lee not told about the deploy
+pass  recall-correction        r4  4 calls  22893 ms  $0.00098
+pass  abstain-chitchat         r4  2 calls  10868 ms  $0.00044
+pass  abstain-knowledge        r4  1 calls  10514 ms  $0.00020
+pass  abstain-draft-only       r4  1 calls  12478 ms  $0.00023
+pass  abstain-cannot           r4  3 calls  13973 ms  $0.00066
+FAIL  recover-retry            r4  6 calls  16623 ms  $0.00125  — never got past the failure
+FAIL  recover-persist          r4  4 calls  16500 ms  $0.00079  — file never written
+FAIL  recover-bad-expression   r4  1 calls  8144 ms  $0.00021  — calculator never succeeded
+FAIL  recover-missing-file     r4  3 calls  12732 ms  $0.00072  — never tried to read the file
+FAIL  recover-unknown-order    r4  9 calls  26801 ms  $0.00210  — never looked the order up
+FAIL  long-log-needle          r4  1 calls  30875 ms  $0.00027  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+FAIL  long-count-orders        r4  5 calls  21008 ms  $0.00096  — file never read
+FAIL  long-handbook            r4  3 calls  57385 ms  $0.00078  (1 429 retries)  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+pass  single-kv-set            r5  12 calls  133883 ms  $0.00101  (1 429 retries)
+pass  single-read-answer       r5  8 calls  25897 ms  $0.00178  (1 429 retries)
+FAIL  single-calculator        r5  1 calls  11448 ms  $0.00023  — calculator not used
+pass  single-now               r5  5 calls  31407 ms  $0.00124  (3 429 retries)
+pass  single-send              r5  4 calls  17171 ms  $0.00091
+FAIL  chain-order-notify       r5  3 calls  14302 ms  $0.00051  — order never looked up
+FAIL  chain-file-to-kv         r5  3 calls  16300 ms  $0.00053  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r5  8 calls  22575 ms  $0.00182  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r5  4 calls  19975 ms  $0.00073  — Dmitri not sent the alert
+pass  chain-edit-json          r5  7 calls  18895 ms  $0.00161
+FAIL  recall-fact              r5  7 calls  26875 ms  $0.00159  — flight not stored as BA 286
+FAIL  recall-preference        r5  4 calls  30050 ms  $0.00087  — Lee not told about the deploy
+FAIL  recall-correction        r5  3 calls  18684 ms  $0.00074  — harness error: [tools] tools.profile (minimal) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[tools] tools.allow allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled.
+[agent/embedded]
+pass  abstain-chitchat         r5  1 calls  16733 ms  $0.00026
+pass  abstain-knowledge        r5  2 calls  12380 ms  $0.00022
+pass  abstain-draft-only       r5  1 calls  10951 ms  $0.00022  (1 429 retries)
+pass  abstain-cannot           r5  6 calls  21982 ms  $0.00117
+FAIL  recover-retry            r5  3 calls  14923 ms  $0.00067  — never got past the failure
+FAIL  recover-persist          r5  4 calls  15502 ms  $0.00101  — file never written
+FAIL  recover-bad-expression   r5  1 calls  8985 ms  $0.00021  — calculator never succeeded
+FAIL  recover-missing-file     r5  5 calls  17988 ms  $0.00093  — never tried to read the file
+FAIL  recover-unknown-order    r5  4 calls  20053 ms  $0.00097  — never looked the order up
+FAIL  long-log-needle          r5  3 calls  11780 ms  $0.00047  — error code not stored
+FAIL  long-count-orders        r5  4 calls  15987 ms  $0.00085  — file never read
+FAIL  long-handbook            r5  5 calls  16064 ms  $0.00098  — meal_limit is not 75
+openclaw · gpt-oss-20b: 51/125 passed → evals/harness/runs/sweep-552660a/openclaw.gpt-oss-20b.jsonl

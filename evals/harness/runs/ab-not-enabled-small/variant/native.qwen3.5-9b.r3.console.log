@@ -1,0 +1,26 @@
+pass  single-kv-set            r3  3 calls  29466 ms  $0.00073
+pass  single-read-answer       r3  3 calls  11589 ms  $0.00072
+pass  single-calculator        r3  2 calls  14659 ms  $0.00072
+FAIL  single-now               r3  2 calls  9320 ms  $0.00071  — wrong weekday
+pass  single-send              r3  2 calls  17379 ms  $0.00072
+pass  chain-order-notify       r3  6 calls  27941 ms  $0.00111
+pass  chain-file-to-kv         r3  5 calls  25600 ms  $0.00111  (1 429 retries)
+pass  chain-sum-to-file        r3  7 calls  36940 ms  $0.00151
+pass  chain-kv-to-send         r3  3 calls  25454 ms  $0.00110  (1 429 retries)
+FAIL  chain-edit-json          r3  3 calls  66049 ms  $0.00118  (2 429 retries)  — darkMode not true
+pass  recall-fact              r3  5 calls  60254 ms  $0.00189
+FAIL  recall-preference        r3  3 calls  33414 ms  $0.00110  — Lee not told about the deploy
+pass  recall-correction        r3  6 calls  40360 ms  $0.00147  (1 429 retries)
+pass  abstain-chitchat         r3  2 calls  12575 ms  $0.00036
+pass  abstain-knowledge        r3  1 calls  8264 ms  $0.00036
+pass  abstain-draft-only       r3  1 calls  23519 ms  $0.00038
+pass  abstain-cannot           r3  1 calls  43068 ms  $0.00040
+FAIL  recover-retry            r3  2 calls  18796 ms  $0.00074  — never got past the failure
+FAIL  recover-persist          r3  3 calls  39460 ms  $0.00116  — file never written
+pass  recover-bad-expression   r3  2 calls  17557 ms  $0.00072  (2 429 retries)
+pass  recover-missing-file     r3  2 calls  23824 ms  $0.00074
+pass  recover-unknown-order    r3  2 calls  38847 ms  $0.00076
+FAIL  long-log-needle          r3  3 calls  84289 ms  $0.00230  — error code not stored
+FAIL  long-count-orders        r3  2 calls  67015 ms  $0.00120  (1 429 retries)  — count is not 58
+FAIL  long-handbook            r3  2 calls  43550 ms  $0.00098  — meal_limit is not 75
+dispach-native · qwen3.5-9b: 17/25 passed → evals/harness/runs/ab-not-enabled-small/variant/native.qwen3.5-9b.r3.jsonl

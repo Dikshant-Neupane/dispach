@@ -276,6 +276,13 @@ describe("planFiles", () => {
         ])
     })
 
+    // GPT-6.x refuses any temperature, and an endpoint enforcing its parameters refuses the request.
+    test("the manifest sets no temperature, so a model that refuses one can still answer", () => {
+        const manifest = planFiles(ANSWERS).find((f) => f.relPath === "agent.yaml")?.contents ?? ""
+        expect(manifest).toMatch(/^\s*# temperature:/m)
+        expect(manifest).not.toMatch(/^\s*temperature:/m)
+    })
+
     test("AGENTS.md is operations, fully filled, and adds nothing the rule counter sees", () => {
         const files = planFiles(ANSWERS)
         const ops = files.find((f) => f.relPath === "workspace/AGENTS.md")
@@ -321,9 +328,19 @@ describe("planFiles", () => {
         const files = planFiles(ANSWERS)
         const soul = files.find((f) => f.relPath === "workspace/SOUL.md")
         const reminder = files.find((f) => f.relPath === "workspace/REMINDER.md")
-        const confirm = "I confirm before anything that sends, spends, schedules, or deletes"
+        const confirm =
+            "I confirm before I send, spend or schedule anything Moeen didn't ask for in so many words"
         expect(soul?.contents).toContain(confirm)
         expect(reminder?.contents).toContain(confirm)
+    })
+
+    // An unconditional rule turned an explicit "message Sam" into a question, in every benchmark arm.
+    test("the confirm rule lets an explicit request through and still always confirms a delete", () => {
+        const reminder =
+            planFiles(ANSWERS).find((f) => f.relPath === "workspace/REMINDER.md")?.contents ?? ""
+        expect(reminder).not.toContain("I confirm before anything that sends")
+        expect(reminder).toContain("didn't ask for in so many words")
+        expect(reminder).toContain("before I delete anything at all")
     })
 
     test("the generated manifest is reference-style: live tools block, commented later phases", () => {

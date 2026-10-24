@@ -1,0 +1,126 @@
+FAIL  single-kv-set            r1  7 calls  28384 ms  $0.02808  — locker_code not stored as 4417
+pass  single-read-answer       r1  6 calls  23668 ms  $0.01274
+pass  single-calculator        r1  4 calls  20295 ms  $0.00628
+FAIL  single-now               r1  2 calls  13916 ms  $0.00394  — clock not read (a guess)
+pass  single-send              r1  4 calls  18244 ms  $0.00965
+pass  chain-order-notify       r1  5 calls  26575 ms  $0.01278
+pass  chain-file-to-kv         r1  6 calls  23382 ms  $0.01202
+pass  chain-sum-to-file        r1  8 calls  28290 ms  $0.01373
+pass  chain-kv-to-send         r1  6 calls  23718 ms  $0.01151
+pass  chain-edit-json          r1  10 calls  35399 ms  $0.01813
+pass  recall-fact              r1  5 calls  30594 ms  $0.00942
+pass  recall-preference        r1  9 calls  37857 ms  $0.01781
+pass  recall-correction        r1  7 calls  28770 ms  $0.01193
+pass  abstain-chitchat         r1  1 calls  9601 ms  $0.00137
+pass  abstain-knowledge        r1  1 calls  8444 ms  $0.00115
+pass  abstain-draft-only       r1  1 calls  9166 ms  $0.00144
+pass  abstain-cannot           r1  3 calls  20141 ms  $0.00725
+pass  recover-retry            r1  5 calls  20126 ms  $0.00848
+FAIL  recover-persist          r1  6 calls  22009 ms  $0.01056  — file never written
+pass  recover-bad-expression   r1  4 calls  16488 ms  $0.00634
+pass  recover-missing-file     r1  6 calls  22247 ms  $0.01052
+pass  recover-unknown-order    r1  5 calls  22427 ms  $0.01394
+FAIL  long-log-needle          r1  8 calls  29482 ms  $0.04056  — error code not stored
+FAIL  long-count-orders        r1  8 calls  35853 ms  $0.04097  — count is not 58
+FAIL  long-handbook            r1  10 calls  38876 ms  $0.03902  — meal_limit is not 75
+FAIL  single-kv-set            r2  10 calls  33030 ms  $0.01865  — locker_code not stored as 4417
+pass  single-read-answer       r2  5 calls  18630 ms  $0.00925
+pass  single-calculator        r2  4 calls  16896 ms  $0.00627
+FAIL  single-now               r2  3 calls  15032 ms  $0.00543  — clock not read (a guess)
+pass  single-send              r2  4 calls  16773 ms  $0.00735
+pass  chain-order-notify       r2  5 calls  23537 ms  $0.01387
+pass  chain-file-to-kv         r2  7 calls  23572 ms  $0.01236
+pass  chain-sum-to-file        r2  8 calls  26305 ms  $0.01360
+pass  chain-kv-to-send         r2  6 calls  22390 ms  $0.01147
+pass  chain-edit-json          r2  9 calls  30172 ms  $0.01621
+pass  recall-fact              r2  8 calls  35682 ms  $0.01583
+pass  recall-preference        r2  10 calls  40594 ms  $0.02129
+pass  recall-correction        r2  6 calls  28500 ms  $0.01016
+pass  abstain-chitchat         r2  1 calls  9520 ms  $0.00138
+pass  abstain-knowledge        r2  1 calls  8347 ms  $0.00115
+pass  abstain-draft-only       r2  1 calls  11967 ms  $0.00198
+pass  abstain-cannot           r2  3 calls  19618 ms  $0.00703
+pass  recover-retry            r2  5 calls  19373 ms  $0.00854
+FAIL  recover-persist          r2  6 calls  21060 ms  $0.01051  — file never written
+pass  recover-bad-expression   r2  4 calls  17268 ms  $0.00634
+pass  recover-missing-file     r2  7 calls  43265 ms  $0.01359
+pass  recover-unknown-order    r2  4 calls  22743 ms  $0.01192
+FAIL  long-log-needle          r2  9 calls  38232 ms  $0.06443  — error code not stored
+FAIL  long-count-orders        r2  6 calls  22285 ms  $0.03391  — count is not 58
+FAIL  long-handbook            r2  7 calls  28267 ms  $0.03128  — meal_limit is not 75
+FAIL  single-kv-set            r3  6 calls  21039 ms  $0.01113  — locker_code not stored as 4417
+pass  single-read-answer       r3  4 calls  31088 ms  $0.00720
+pass  single-calculator        r3  4 calls  19224 ms  $0.00628
+FAIL  single-now               r3  3 calls  17454 ms  $0.00543  — clock not read (a guess)
+pass  single-send              r3  4 calls  17406 ms  $0.00748
+pass  chain-order-notify       r3  5 calls  23862 ms  $0.01098
+pass  chain-file-to-kv         r3  6 calls  28664 ms  $0.01113
+pass  chain-sum-to-file        r3  8 calls  28424 ms  $0.01428
+pass  chain-kv-to-send         r3  6 calls  25404 ms  $0.01246
+pass  chain-edit-json          r3  9 calls  39881 ms  $0.01626
+pass  recall-fact              r3  7 calls  41725 ms  $0.01473
+pass  recall-preference        r3  12 calls  78424 ms  $0.02451
+pass  recall-correction        r3  6 calls  29359 ms  $0.01011
+pass  abstain-chitchat         r3  1 calls  10503 ms  $0.00137
+pass  abstain-knowledge        r3  1 calls  9412 ms  $0.00115
+pass  abstain-draft-only       r3  1 calls  8249 ms  $0.00146
+pass  abstain-cannot           r3  4 calls  24610 ms  $0.01136
+pass  recover-retry            r3  5 calls  23395 ms  $0.00856
+FAIL  recover-persist          r3  6 calls  24031 ms  $0.01058  — file never written
+pass  recover-bad-expression   r3  4 calls  16690 ms  $0.00626
+pass  recover-missing-file     r3  7 calls  27843 ms  $0.01361
+pass  recover-unknown-order    r3  5 calls  26594 ms  $0.01330
+FAIL  long-log-needle          r3  7 calls  40332 ms  $0.03909  — error code not stored
+FAIL  long-count-orders        r3  6 calls  30269 ms  $0.03603  — count is not 58
+FAIL  long-handbook            r3  8 calls  37653 ms  $0.03588  — meal_limit is not 75
+FAIL  single-kv-set            r4  10 calls  33297 ms  $0.01862  — locker_code not stored as 4417
+pass  single-read-answer       r4  4 calls  19764 ms  $0.00725
+pass  single-calculator        r4  5 calls  20896 ms  $0.00781
+FAIL  single-now               r4  2 calls  13497 ms  $0.00394  — clock not read (a guess)
+pass  single-send              r4  4 calls  22489 ms  $0.00729
+pass  chain-order-notify       r4  5 calls  21650 ms  $0.01377
+pass  chain-file-to-kv         r4  7 calls  32649 ms  $0.01234
+pass  chain-sum-to-file        r4  8 calls  31403 ms  $0.01348
+pass  chain-kv-to-send         r4  6 calls  27205 ms  $0.01186
+pass  chain-edit-json          r4  9 calls  32270 ms  $0.01612
+pass  recall-fact              r4  7 calls  39397 ms  $0.01363
+pass  recall-preference        r4  13 calls  54562 ms  $0.03096
+pass  recall-correction        r4  6 calls  31004 ms  $0.01008
+pass  abstain-chitchat         r4  1 calls  11801 ms  $0.00137
+pass  abstain-knowledge        r4  1 calls  9890 ms  $0.00117
+pass  abstain-draft-only       r4  1 calls  9328 ms  $0.00147
+pass  abstain-cannot           r4  3 calls  18631 ms  $0.00736
+pass  recover-retry            r4  5 calls  21067 ms  $0.00922
+FAIL  recover-persist          r4  6 calls  26827 ms  $0.01110  — file never written
+pass  recover-bad-expression   r4  4 calls  25811 ms  $0.00626
+pass  recover-missing-file     r4  7 calls  33611 ms  $0.01364
+pass  recover-unknown-order    r4  4 calls  34351 ms  $0.01282
+FAIL  long-log-needle          r4  8 calls  42165 ms  $0.04070  — error code not stored
+FAIL  long-count-orders        r4  7 calls  29464 ms  $0.03575  — count is not 58
+FAIL  long-handbook            r4  10 calls  38797 ms  $0.03734  — meal_limit is not 75
+FAIL  single-kv-set            r5  8 calls  34348 ms  $0.01574  — locker_code not stored as 4417
+pass  single-read-answer       r5  4 calls  17984 ms  $0.00731
+pass  single-calculator        r5  4 calls  19305 ms  $0.00626
+FAIL  single-now               r5  2 calls  13466 ms  $0.00394  — clock not read (a guess)
+pass  single-send              r5  4 calls  16518 ms  $0.00730
+pass  chain-order-notify       r5  5 calls  28035 ms  $0.01251
+pass  chain-file-to-kv         r5  5 calls  45583 ms  $0.01164
+pass  chain-sum-to-file        r5  8 calls  58040 ms  $0.01357
+pass  chain-kv-to-send         r5  6 calls  26029 ms  $0.01156
+pass  chain-edit-json          r5  9 calls  51112 ms  $0.01677
+pass  recall-fact              r5  8 calls  37954 ms  $0.01514
+pass  recall-preference        r5  12 calls  60042 ms  $0.02896
+pass  recall-correction        r5  7 calls  58284 ms  $0.01255
+pass  abstain-chitchat         r5  1 calls  13402 ms  $0.00137
+pass  abstain-knowledge        r5  1 calls  9700 ms  $0.00117
+pass  abstain-draft-only       r5  1 calls  9210 ms  $0.00142
+pass  abstain-cannot           r5  3 calls  23185 ms  $0.00616
+pass  recover-retry            r5  5 calls  22492 ms  $0.00855
+FAIL  recover-persist          r5  6 calls  29980 ms  $0.01085  — file never written
+pass  recover-bad-expression   r5  4 calls  18905 ms  $0.00634
+pass  recover-missing-file     r5  6 calls  24564 ms  $0.01085
+pass  recover-unknown-order    r5  4 calls  26190 ms  $0.01204
+FAIL  long-log-needle          r5  8 calls  43310 ms  $0.06240  — error code not stored
+FAIL  long-count-orders        r5  6 calls  29198 ms  $0.03511  — count is not 58
+FAIL  long-handbook            r5  8 calls  35184 ms  $0.03512  — meal_limit is not 75
+openclaw · gpt-6.1-sol: 95/125 passed → evals/harness/runs/h2h-cachefix/openclaw.gpt-6.1-sol.jsonl

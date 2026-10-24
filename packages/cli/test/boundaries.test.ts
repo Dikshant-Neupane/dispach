@@ -743,6 +743,29 @@ describe("hard rule 3 — the brand lives in one file", () => {
         expect(offenders).toEqual([])
     })
 
+    test("no web source file spells the product name either", () => {
+        // The check above reads `packages/cli/src` only, and the browser UI grew three storage keys
+        // and a wordmark before anything looked. The client's own exported names are its public API
+        // and are exempt here by derivation; the other packages are a backlog item (docs/05-PLAN.md).
+        const web = resolve(SRC, "..", "..", "web", "src")
+        const offenders = sourceFiles(web)
+            .concat(
+                readdirSync(web)
+                    .filter((name) => name.endsWith(".css"))
+                    .map((name) => join(web, name)),
+            )
+            .filter((path) =>
+                readFileSync(path, "utf8")
+                    .replaceAll(BRAND.packageScope, "")
+                    .replaceAll(`${BRAND.name}Client`, "")
+                    .replaceAll(`${BRAND.name}Error`, "")
+                    .toLowerCase()
+                    .includes(BRAND.slug),
+            )
+            .map((path) => relative(web, path))
+        expect(offenders).toEqual([])
+    })
+
     /**
      * The root config files a rename has to carry with it, guarded by their **consequence** rather
      * than by the rename script's own classification.
@@ -962,7 +985,18 @@ describe("first-party packages use only the public core API", () => {
      * public surface is still caught.
      */
     const PACKAGES = resolve(import.meta.dirname, "..", "..")
-    const FIRST_PARTY = ["channel-telegram", "tools-composio", "tools-system", "tools-web"]
+    const FIRST_PARTY = [
+        "channel-teams",
+        "channel-a2a",
+        "channel-slack",
+        "media-aws",
+        "channel-telegram",
+        "model-bedrock",
+        "tools-composio",
+        "tools-mcp",
+        "tools-system",
+        "tools-web",
+    ]
 
     const EXTERNAL = FIRST_PARTY.flatMap((name) => {
         const dir = join(PACKAGES, name, "src")
@@ -1040,6 +1074,37 @@ describe("every command a hint names exists", () => {
                 if (!names.has(verb)) offenders.push(`${file.path}: ${verb}`)
             }
         }
+        expect(offenders).toEqual([])
+    })
+})
+
+describe("every runtime the CLI builds gets the same model transports", () => {
+    test("a file passing TOOL_PROVIDERS also passes MODEL_TRANSPORTS and MEDIA_PROVIDERS", () => {
+        // A command that built a runtime without the transports would refuse, as an unknown `api`,
+        // a Bedrock agent every other command accepts — the check-only-one-surface-performs shape.
+        const offenders = FILES.filter(
+            (file) =>
+                /\btoolProviders: TOOL_PROVIDERS\b/.test(file.text) &&
+                (!/\bmodelTransports: MODEL_TRANSPORTS\b/.test(file.text) ||
+                    !/\bmediaProviders: MEDIA_PROVIDERS\b/.test(file.text)),
+        ).map((file) => file.path)
+        expect(offenders).toEqual([])
+        expect(
+            FILES.filter((file) => /\btoolProviders: TOOL_PROVIDERS\b/.test(file.text)).length,
+        ).toBeGreaterThan(5)
+    })
+})
+
+describe("a typed error keeps its code and hint across packages", () => {
+    // `instanceof HarnessError` asks which copy of core built the error, and the image holds two:
+    // the CLI's source and the dist its bundled siblings carry. Found by a container that refused
+    // a public bind without a token — `server_public_without_token`, whose hint names the token —
+    // and printed `server_bind_failed` saying every port in the range was taken. The server has
+    // the same rule in its own boundaries test; `isHarnessError` reads a mark both copies share.
+    test("no source file tests `instanceof HarnessError`", () => {
+        const offenders = FILES.filter((file) => /instanceof HarnessError\b/.test(file.text)).map(
+            (file) => file.path,
+        )
         expect(offenders).toEqual([])
     })
 })

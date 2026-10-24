@@ -29,6 +29,7 @@
  */
 
 import type { ProvisionedAgentLike, ProvisionOfferLike, ProvisionStepLike } from "@dispach/client"
+import { DEFAULT_BRAND } from "@dispach/core/wire"
 import type React from "react"
 import { type Answers, blankSecrets, missingAnswers, visibleSteps } from "./lib/provision-form.ts"
 
@@ -45,8 +46,9 @@ function refusal(offer: ProvisionOfferLike): React.ReactElement | undefined {
         return (
             <p className="empty">
                 This server has no provisioner, so it cannot create an agent — the case for an
-                embedder mounting the API over its own agent store. Run <code>dispach init</code>{" "}
-                where the sandbox is, or mount an agent directory.
+                embedder mounting the API over its own agent store. Run{" "}
+                <code>{DEFAULT_BRAND.slug} init</code> where the sandbox is, or mount an agent
+                directory.
             </p>
         )
     }
@@ -229,9 +231,9 @@ export function Onboarding(props: {
             }}
         >
             <p className="sub">
-                The same questions <code>dispach init</code> asks, served from the same walk. What
-                you leave alone takes its default. The agent is adopted into this server as it is
-                created — there is no second command.
+                The same questions <code>{DEFAULT_BRAND.slug} init</code> asks, served from the same
+                walk. What you leave alone takes its default. The agent is adopted into this server
+                as it is created — there is no second command.
             </p>
             {visible.map((step) => (
                 <Field

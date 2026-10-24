@@ -17,6 +17,9 @@ export interface EventContext {
     readonly sessionKey?: string
     readonly turnId?: string
     readonly stepId?: string
+    /** Set on a subagent's events: the turn and session of the call that ran it. */
+    readonly parentTurnId?: string
+    readonly parentSessionKey?: string
 }
 
 export interface EventEnvelope<TType extends string = string, TData = unknown> {
@@ -28,6 +31,9 @@ export interface EventEnvelope<TType extends string = string, TData = unknown> {
     readonly sessionKey?: string
     readonly turnId?: string
     readonly stepId?: string
+    /** A subagent's events only: the parent turn that ran it, so a view can nest them. */
+    readonly parentTurnId?: string
+    readonly parentSessionKey?: string
     readonly type: TType
     readonly data: TData
 }
@@ -114,6 +120,21 @@ export interface EventDataMap {
      * later, `stopped` is 16.3's durable off switch.
      */
     "agent.disposed": { reason: "requested" | "replaced" | "stopped" }
+    /**
+     * A reload has finished (`Runtime.reload`) — at once when the agent was idle (`waitedMs: 0`), or
+     * after the running turns when it was not. `held` is how many new
+     * turns waited for it rather than running on the old configuration. `ok: false` means the new
+     * manifest did not load: `error` says why, and the old instance is still serving unless
+     * `disposed` says otherwise.
+     */
+    "agent.reloaded": {
+        ok: boolean
+        adopted: string[]
+        waitedMs: number
+        held: number
+        disposed: boolean
+        error?: ErrorDetail
+    }
     "agent.warning": ErrorDetail
     /**
      * One plugin registered, with what it cost and what it declared.
@@ -191,7 +212,17 @@ export interface EventDataMap {
      * say" — the artifact is all that reaches the supervisor's prompt, deliberately, so without
      * this a `no_artifact` would be unexplainable from the outside.
      */
-    "handoff.start": { member: string; task: string; sessionKey: string }
+    "handoff.start": {
+        member: string
+        task: string
+        sessionKey: string
+        /** `self` for a subagent, which is this agent; `member` for a team member. */
+        kind: "member" | "self"
+        /** A subagent's name. */
+        name?: string
+        /** The parent's tool call this delegation answers. */
+        callId?: string
+    }
     /**
      * How it ended. `outcome` rather than a boolean, and that is the same reasoning
      * `approval.resolved.by` carries: four outcomes collapse badly into `ok: false`.
@@ -204,6 +235,9 @@ export interface EventDataMap {
     "handoff.result": {
         member: string
         sessionKey: string
+        kind: "member" | "self"
+        name?: string
+        callId?: string
         outcome: "ok" | "no_artifact" | "budget" | "error"
         steps: number
         tokens: { prompt: number; output: number }
@@ -214,6 +248,8 @@ export interface EventDataMap {
         inputTokens: number
         trust: Trust
         from?: { id: string; kind: SenderKind }
+        /** `voice` when the input is a transcribed voice note (pilot.15); absent for typed text. */
+        inputKind?: "voice"
     }
     "context.assembled": { slots: ContextSlotReport[]; total: number }
     /**
@@ -283,12 +319,20 @@ export interface EventDataMap {
         role: "main" | "selector" | "compactor"
         model: string
         promptTokens: number
+        /** Always false: whether a call hits a cache is known only from its usage, on `model.result`. */
         cached: boolean
         attempt: number
+        /** This model call's id, the same one its `model.result` and usage row carry (not a tool call's). */
+        callId: string
     }
     /** Suppressed unless a subscriber opted in — this is per-token and high volume. */
     "model.chunk": { delta: string; kind: "text" | "reasoning" }
     "model.retry": { status: number; attempt: number; delayMs: number }
+    /**
+     * A call moved from a failing model to the next in its role's `fallbacks`, before any output.
+     * `reason` is the error code or status (`model_unreachable`, `HTTP 503`).
+     */
+    "model.fallback": { from: string; to: string; reason: string }
     "model.result": {
         outputTokens: number
         promptTokens: number
@@ -314,12 +358,70 @@ export interface EventDataMap {
          * Absent when nothing streamed: an error before the first chunk, or an empty reply.
          */
         firstTokenMs?: number
+        /**
+         * The model call's id — minted once, before retries and fallbacks, so one call is one id
+         * however many requests it took. The idempotency key a ledger debits on: a redelivered
+         * webhook carries the same one. Not a tool call's `callId`.
+         */
+        callId: string
+        /** The model that answered: the requested one, or the fallback that stood in for it. */
+        model: string
+        /** The manifest role that made the call: `main`, `compactor`, or a named one. */
+        role: string
+        /** Prompt tokens served from cache, when reported. Absent is "not reported", not zero. */
+        cachedPromptTokens?: number
+        /** Prompt tokens written to cache, when reported. */
+        cacheWriteTokens?: number
+        /** Who sent the turn this call belongs to, when it was not the operator. */
+        sender?: string
     }
     /**
      * A tool is about to run. `argsHash` rather than the arguments themselves: arguments carry
      * whatever the conversation carried, and an event stream is the wrong place to copy it to.
      */
-    "tool.call": { slug: string; callId: string; argsHash: string; mutating: boolean }
+    /**
+     * A billable media call: a voice note transcribed or an image generated.
+     *
+     * Its own event rather than a `model.result`, because every consumer of that one reads token
+     * figures and a media call has none; `callId` is the same kind of ledger key and the row lands in
+     * `model_calls` beside the token rows, so `/v1/usage` sums both.
+     */
+    "media.result": {
+        callId: string
+        kind: "transcription" | "image" | "speech"
+        provider: string
+        model: string
+        latencyMs: number
+        /** Present on an image call. */
+        images?: number
+        /** Present on a transcription whose duration the provider or the channel reported. */
+        audioSeconds?: number
+        /** Present on a speech call: characters spoken, what Polly and OpenAI bill (pilot.15). */
+        characters?: number
+        sender?: string
+    }
+    /**
+     * What one tool call spent at a third party (pilot.9), reported by the tool through
+     * `ToolContext.meter`: a web search's credit, a crawl's pages. Zero or more per call.
+     */
+    "tool.usage": {
+        slug: string
+        callId: string
+        provider: string
+        operation?: string
+        unit: string
+        units: number
+        /** The acting participant's id, when the turn acts for one: whom the spend is billed to. */
+        participant?: string
+    }
+    "tool.call": {
+        slug: string
+        callId: string
+        argsHash: string
+        mutating: boolean
+        /** Under `tools.eventDetail: redacted` only: the arguments, redacted. */
+        args?: Record<string, unknown>
+    }
     "tool.result": {
         slug: string
         callId: string
@@ -330,6 +432,10 @@ export interface EventDataMap {
         truncated: boolean
         /** Whether this output may contain text a stranger wrote. */
         trust: Trust
+        /** Under `tools.eventDetail: redacted` only: the first 2 KB of the output, redacted. */
+        output?: string
+        /** Set with `output`: whether the output was longer than what the event carries. */
+        outputTruncated?: boolean
     }
     /**
      * A call was blocked before it ran — by the trust gate, or by a `tools.policy` rule.
@@ -359,6 +465,16 @@ export interface EventDataMap {
      * `changed` is the field worth watching. A slug whose schema moved under a running agent is a
      * catalogue the model has already been told about in the current session's cached prefix.
      */
+    /**
+     * `POST …/tools/refresh` finished (pilot.5): what moved in the catalogue the agent serves, and
+     * whether that reloaded it. `reload: pending` means the change lands when the running turn ends.
+     */
+    "agent.tools.refreshed": {
+        added: string[]
+        removed: string[]
+        changed: string[]
+        reload: "none" | "loaded" | "pending"
+    }
     "tools.refreshed": {
         provider: string
         ok: boolean
@@ -519,11 +635,84 @@ export interface EventDataMap {
      * schedule in the process.
      */
     "schedule.error": { scheduleId: string; code: string; message: string; hint: string }
+    /** A message in a room or DM, a human's or an agent's (Phase 27). The room as the embedder shows it. */
+    "conversation.message": {
+        conversationId: string
+        messageId: string
+        authorId: string
+        origin: "human" | "agent"
+        text: string
+        mentions: string[]
+        hop: number
+        turnId?: string
+    }
+    /**
+     * An agent a message addressed did not answer it: the hop ceiling (`limits.maxHops`) was reached,
+     * the governor refused the turn, or the turn failed. `detail` is the sentence.
+     */
+    "conversation.skipped": {
+        conversationId: string
+        messageId: string
+        reason: "hop_limit" | "refused" | "failed"
+        detail: string
+        hop: number
+        ceiling: number
+    }
+    /**
+     * A stand-in wanted to make a mutating call and queued it for its absent owner instead (Phase 28).
+     * Nothing ran. `POST /v1/actions/:actionId` is how the owner answers.
+     */
+    "action.deferred": {
+        actionId: string
+        conversationId: string
+        ownerId: string
+        requestedBy: string
+        slug: string
+    }
+    /** The owner answered a queued action: `done` or `failed` once it ran, `denied` if they declined. */
+    "action.decided": {
+        actionId: string
+        conversationId: string
+        status: "done" | "failed" | "denied"
+    }
+    /** An admin recorded who an agent works for. */
+    "agent.assigned": { participantId: string; assignedBy?: string }
+    /**
+     * A turn recalled passages from someone's owner scope for somebody other than that person
+     * (Phase 29). The same record lands in the audit the owner can list.
+     */
+    "memory.read": {
+        scope: string
+        reader: string
+        sources: readonly string[]
+        requestedBy?: string
+        onBehalfOf?: string
+    }
+    /**
+     * The passages history and note recall put into this turn's prompt (pilot.13), best first. A
+     * conversation's source is `session:<key>`. Not emitted when nothing was recalled.
+     */
+    "memory.recalled": {
+        passages: readonly { source: string; score: number }[]
+    }
+    /**
+     * `memory_forget` deleted notes (pilot.15): how many, and from which memory; `messages` counts past
+     * conversation messages it redacted, when any. The notes themselves
+     * are not repeated here, so an audit trail of deletions does not become a copy of what was deleted.
+     */
+    "memory.forgotten": { scope: string; count: number; messages?: number }
     "turn.end": {
         reason: TurnEndReason
         steps: number
         tokens: { prompt: number; output: number }
         durationMs: number
+        /**
+         * The last step's prose alone, when any step wrote some (pilot.14). The reply joins every
+         * step's; this is what to show when only the final answer should appear.
+         */
+        finalText?: string
+        /** Files this turn produced for the reply, relative to the agent's directory. */
+        attachments?: readonly { path: string; mimeType: string }[]
     }
     error: ErrorDetail & { stack?: string }
 }
@@ -547,6 +736,7 @@ export const EVENT_TYPES = [
     "runtime.stopping",
     "agent.loaded",
     "agent.disposed",
+    "agent.reloaded",
     "agent.warning",
     "plugin.loaded",
     "plugin.slow",
@@ -564,12 +754,16 @@ export const EVENT_TYPES = [
     "model.call",
     "model.chunk",
     "model.retry",
+    "model.fallback",
     "model.result",
+    "media.result",
+    "tool.usage",
     "tool.call",
     "tool.result",
     "tool.gated",
     "tool.repair",
     "tools.refreshed",
+    "agent.tools.refreshed",
     "agent.channel.status",
     "agent.channel.error",
     "agent.channel.rejected",
@@ -583,6 +777,14 @@ export const EVENT_TYPES = [
     "schedule.skipped",
     "schedule.deferred",
     "schedule.error",
+    "conversation.message",
+    "conversation.skipped",
+    "action.deferred",
+    "action.decided",
+    "agent.assigned",
+    "memory.read",
+    "memory.recalled",
+    "memory.forgotten",
     "turn.end",
     "error",
 ] as const satisfies readonly EventType[]

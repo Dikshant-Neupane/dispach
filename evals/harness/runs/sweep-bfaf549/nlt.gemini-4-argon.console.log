@@ -1,0 +1,127 @@
+pass  single-kv-set            r1  2 calls  10929 ms  $0.01338
+pass  single-read-answer       r1  2 calls  9474 ms  $0.01363
+pass  single-calculator        r1  2 calls  10082 ms  $0.01215
+FAIL  single-now               r1  2 calls  7976 ms  $0.01184  — clock not read (a guess)
+pass  single-send              r1  2 calls  31639 ms  $0.01183
+FAIL  chain-order-notify       r1  2 calls  51778 ms  $0.01308  — Sam not told it is delayed
+pass  chain-file-to-kv         r1  3 calls  24109 ms  $0.01736
+pass  chain-sum-to-file        r1  5 calls  126053 ms  $0.02562
+pass  chain-kv-to-send         r1  3 calls  41555 ms  $0.01694
+pass  chain-edit-json          r1  3 calls  167414 ms  $0.02137
+pass  recall-fact              r1  4 calls  37930 ms  $0.02493
+pass  recall-preference        r1  4 calls  38392 ms  $0.02445
+pass  recall-correction        r1  4 calls  57666 ms  $0.02422
+pass  abstain-chitchat         r1  1 calls  5455 ms  $0.00728
+pass  abstain-knowledge        r1  1 calls  13334 ms  $0.00720
+pass  abstain-draft-only       r1  1 calls  4763 ms  $0.00767
+pass  abstain-cannot           r1  1 calls  8256 ms  $0.00849
+pass  recover-retry            r1  3 calls  19613 ms  $0.01792
+FAIL  recover-persist          r1  4 calls  15505 ms  $0.02371  — file never written
+pass  recover-bad-expression   r1  2 calls  12869 ms  $0.00896
+pass  recover-missing-file     r1  2 calls  11826 ms  $0.01317
+pass  recover-unknown-order    r1  2 calls  36323 ms  $0.01283
+pass  long-log-needle          r1  3 calls  48279 ms  $0.09058
+pass  long-count-orders        r1  2 calls  23196 ms  $0.04796
+pass  long-handbook            r1  3 calls  74207 ms  $0.04246
+pass  single-kv-set            r2  2 calls  40544 ms  $0.00981
+pass  single-read-answer       r2  2 calls  13294 ms  $0.00883
+pass  single-calculator        r2  2 calls  20058 ms  $0.00883
+FAIL  single-now               r2  2 calls  26158 ms  $0.01190  — clock not read (a guess)
+pass  single-send              r2  2 calls  8642 ms  $0.01183
+FAIL  chain-order-notify       r2  2 calls  17033 ms  $0.01281  — Sam not told it is delayed
+pass  chain-file-to-kv         r2  3 calls  59508 ms  $0.01417
+pass  chain-sum-to-file        r2  5 calls  114269 ms  $0.02490
+pass  chain-kv-to-send         r2  3 calls  14993 ms  $0.01392
+pass  chain-edit-json          r2  3 calls  34579 ms  $0.01842
+pass  recall-fact              r2  4 calls  37868 ms  $0.02183
+pass  recall-preference        r2  4 calls  83545 ms  $0.02152
+pass  recall-correction        r2  4 calls  64609 ms  $0.02409
+pass  abstain-chitchat         r2  1 calls  56688 ms  $0.00735
+pass  abstain-knowledge        r2  1 calls  7043 ms  $0.00720
+FAIL  abstain-draft-only       r2  1 calls  13401 ms  $0.00488  — no draft in the reply
+pass  abstain-cannot           r2  1 calls  16067 ms  $0.00836
+pass  recover-retry            r2  3 calls  20225 ms  $0.01705
+FAIL  recover-persist          r2  3 calls  38342 ms  $0.01824  — file never written
+pass  recover-bad-expression   r2  2 calls  10564 ms  $0.00890
+pass  recover-missing-file     r2  2 calls  23513 ms  $0.01031
+pass  recover-unknown-order    r2  2 calls  29357 ms  $0.01121
+pass  long-log-needle          r2  3 calls  65445 ms  $0.09275
+pass  long-count-orders        r2  2 calls  15614 ms  $0.02361
+pass  long-handbook            r2  3 calls  82060 ms  $0.02057
+pass  single-kv-set            r3  2 calls  15692 ms  $0.00974
+pass  single-read-answer       r3  2 calls  18337 ms  $0.01231
+pass  single-calculator        r3  2 calls  20701 ms  $0.01210
+FAIL  single-now               r3  2 calls  13053 ms  $0.01184  — clock not read (a guess)
+pass  single-send              r3  2 calls  10942 ms  $0.00877
+FAIL  chain-order-notify       r3  2 calls  28388 ms  $0.01286  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  18830 ms  $0.01423
+pass  chain-sum-to-file        r3  5 calls  79782 ms  $0.02485
+FAIL  chain-kv-to-send         r3  3 calls  48286 ms  $0.01621  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: text spans several lines but was not wrapped, so its line breaks and indentation could not be kept.
+  hint: Usually the catalogue rather than the model: check that the tool's field description
+pass  chain-edit-json          r3  3 calls  53638 ms  $0.01761
+pass  recall-fact              r3  4 calls  31512 ms  $0.02170
+pass  recall-preference        r3  4 calls  65056 ms  $0.02168
+pass  recall-correction        r3  4 calls  22387 ms  $0.02406
+pass  abstain-chitchat         r3  1 calls  4147 ms  $0.00437
+pass  abstain-knowledge        r3  1 calls  7633 ms  $0.00428
+pass  abstain-draft-only       r3  1 calls  6006 ms  $0.00790
+pass  abstain-cannot           r3  1 calls  43557 ms  $0.00551
+pass  recover-retry            r3  3 calls  49597 ms  $0.01808
+FAIL  recover-persist          r3  3 calls  25211 ms  $0.01774  — file never written
+pass  recover-bad-expression   r3  2 calls  65900 ms  $0.00987
+pass  recover-missing-file     r3  2 calls  20768 ms  $0.01031
+pass  recover-unknown-order    r3  2 calls  21237 ms  $0.01002
+pass  long-log-needle          r3  3 calls  65541 ms  $0.09131
+FAIL  long-count-orders        r3  2 calls  33383 ms  $0.03755  — count is not 58
+pass  long-handbook            r3  3 calls  78346 ms  $0.02051
+pass  single-kv-set            r4  2 calls  18952 ms  $0.01105
+pass  single-read-answer       r4  2 calls  26655 ms  $0.00899
+pass  single-calculator        r4  2 calls  10262 ms  $0.00883
+FAIL  single-now               r4  2 calls  60808 ms  $0.01182  — clock not read (a guess)
+pass  single-send              r4  2 calls  13499 ms  $0.00877
+FAIL  chain-order-notify       r4  2 calls  40571 ms  $0.01287  — Sam not told it is delayed
+pass  chain-file-to-kv         r4  3 calls  29248 ms  $0.01436
+pass  chain-sum-to-file        r4  5 calls  85347 ms  $0.02490
+pass  chain-kv-to-send         r4  3 calls  21993 ms  $0.01700
+pass  chain-edit-json          r4  3 calls  71459 ms  $0.01435
+pass  recall-fact              r4  4 calls  27091 ms  $0.02209
+pass  recall-preference        r4  4 calls  48503 ms  $0.02180
+pass  recall-correction        r4  4 calls  25525 ms  $0.02408
+pass  abstain-chitchat         r4  1 calls  19407 ms  $0.00441
+pass  abstain-knowledge        r4  1 calls  3941 ms  $0.00428
+pass  abstain-draft-only       r4  1 calls  12886 ms  $0.00480
+pass  abstain-cannot           r4  1 calls  20548 ms  $0.00567
+pass  recover-retry            r4  3 calls  13126 ms  $0.01735
+FAIL  recover-persist          r4  5 calls  169369 ms  $0.03471  — file never written
+pass  recover-bad-expression   r4  2 calls  31924 ms  $0.00892
+pass  recover-missing-file     r4  2 calls  8978 ms  $0.01028
+pass  recover-unknown-order    r4  2 calls  54142 ms  $0.01013
+pass  long-log-needle          r4  3 calls  77242 ms  $0.09284
+pass  long-count-orders        r4  2 calls  19097 ms  $0.04681
+pass  long-handbook            r4  3 calls  36638 ms  $0.04282
+pass  single-kv-set            r5  2 calls  16236 ms  $0.00966
+pass  single-read-answer       r5  2 calls  28128 ms  $0.01283
+pass  single-calculator        r5  2 calls  25798 ms  $0.01240
+FAIL  single-now               r5  2 calls  37772 ms  $0.01182  — clock not read (a guess)
+pass  single-send              r5  2 calls  9963 ms  $0.00877
+FAIL  chain-order-notify       r5  2 calls  19095 ms  $0.01279  — Sam not told it is delayed
+pass  chain-file-to-kv         r5  3 calls  17114 ms  $0.01414
+pass  chain-sum-to-file        r5  5 calls  84829 ms  $0.02521
+pass  chain-kv-to-send         r5  3 calls  20727 ms  $0.01390
+pass  chain-edit-json          r5  3 calls  111359 ms  $0.01893
+pass  recall-fact              r5  4 calls  22929 ms  $0.02189
+pass  recall-preference        r5  4 calls  22784 ms  $0.02168
+pass  recall-correction        r5  4 calls  53081 ms  $0.02406
+pass  abstain-chitchat         r5  1 calls  15670 ms  $0.00730
+pass  abstain-knowledge        r5  1 calls  5757 ms  $0.00720
+pass  abstain-draft-only       r5  1 calls  13792 ms  $0.00484
+pass  abstain-cannot           r5  1 calls  25345 ms  $0.01017
+pass  recover-retry            r5  3 calls  44028 ms  $0.01685
+FAIL  recover-persist          r5  3 calls  26745 ms  $0.02175  — file never written
+pass  recover-bad-expression   r5  2 calls  32668 ms  $0.00895
+pass  recover-missing-file     r5  2 calls  10753 ms  $0.00976
+pass  recover-unknown-order    r5  2 calls  41266 ms  $0.00976
+pass  long-log-needle          r5  3 calls  33008 ms  $0.09100
+pass  long-count-orders        r5  2 calls  31244 ms  $0.02424
+pass  long-handbook            r5  3 calls  44353 ms  $0.04359
+dispach-nlt · gemini-4-argon: 107/125 passed → evals/harness/runs/sweep-bfaf549/nlt.gemini-4-argon.jsonl

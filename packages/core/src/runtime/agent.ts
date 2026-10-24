@@ -13,10 +13,12 @@
  * to an in-memory SQLite database rather than to a different implementation.
  */
 
-import { statSync } from "node:fs"
-import { isAbsolute, resolve } from "node:path"
+import { randomBytes, randomUUID } from "node:crypto"
+import { mkdirSync, statSync, writeFileSync } from "node:fs"
+import { basename, isAbsolute, join, resolve } from "node:path"
+import type { InboundAudio } from "../channels/channel.ts"
 import { assembleContext, historyReport, slotReport } from "../context/assemble.ts"
-import { type Calibration, UNCALIBRATED } from "../context/budget.ts"
+import { type Calibration, observationBudget, UNCALIBRATED } from "../context/budget.ts"
 import { renderCompactionNotice } from "../context/compaction-notice.ts"
 import { renderConfigSummary } from "../context/config-summary.ts"
 import { estimateMessageTokens } from "../context/tokens.ts"
@@ -24,11 +26,16 @@ import {
     type ErrorDetail,
     envOverridden,
     type GovernorError,
+    type HarnessError,
     isHarnessError,
+    memoryForgetRefused,
     memoryNotConfigured,
+    modelNoVision,
     modelWindowFamily,
     modelWindowUnknown,
     phaseAllowUnmatched,
+    privateMemoryRefused,
+    scheduleToolUnknown,
     tokenBudgetExhausted,
     toolGatedAfterFirstUse,
     turnsAtCapacity,
@@ -36,31 +43,57 @@ import {
     workspaceReloadRefused,
 } from "../errors.ts"
 import type { EventBus } from "../events/bus.ts"
-import { newTurnId } from "../loop/ids.ts"
-import { entryPhase, isPhased, unmatchedAllows } from "../loop/phases.ts"
-import type { TurnSender } from "../loop/sender.ts"
+import { newCallId, newTurnId } from "../loop/ids.ts"
+import { entryPhase, isPhased, unmatchedAllows, unmatchedEntries } from "../loop/phases.ts"
+import {
+    type ActingParticipant,
+    frameSenderInput,
+    participantOf,
+    type TurnSender,
+    trustOfSender,
+} from "../loop/sender.ts"
 import { runStep, type StepUsage } from "../loop/step.ts"
 import { runTurn, type ToolRuntime, type TurnCompaction, type TurnResult } from "../loop/turn.ts"
 import type { EnvSource } from "../manifest/env.ts"
 import type { LoadedManifest } from "../manifest/load.ts"
 import { resolveProviders } from "../manifest/providers.ts"
-import type { AgentManifest } from "../manifest/schema.ts"
-import { scheduleDeliveryWarnings } from "../manifest/validate.ts"
+import type {
+    AgentManifest,
+    ModelRole,
+    SpeechConfig,
+    TranscriptionConfig,
+} from "../manifest/schema.ts"
+import { fallbackWarnings, scheduleDeliveryWarnings } from "../manifest/validate.ts"
+import { imageGenerateTool, MEDIA_DIR, type MediaUsage } from "../media/image-tool.ts"
+import {
+    MediaError,
+    type MediaProvider,
+    type MediaProviderFactory,
+    resolveMedia,
+    withDeadline,
+} from "../media/provider.ts"
+import { speakable, speechChunks } from "../media/speech.ts"
+import { forgetNotes, matchesQuery, memoryFiles, notesIn } from "../memory/forget.ts"
 import {
     enumerateFiles,
     enumerateSessions,
     fts5Retriever,
     type IndexReport,
     type MemoryRetriever,
+    type ReadPlan,
     type RetrievedPassage,
+    readPlan,
     retrieveWithContext,
+    scopeCorpus,
+    scopeOfSource,
     selectPassages,
     sessionSource,
     syncFiles,
+    syncNotes,
     syncSessions,
 } from "../memory/index.ts"
 import type { PromptStyle } from "../model/prompt-style.ts"
-import type { ChatMessage } from "../model/provider.ts"
+import type { ChatMessage, ImageInput } from "../model/provider.ts"
 import {
     type ResolvedRoles,
     type ResolveRolesOptions,
@@ -68,18 +101,29 @@ import {
     resolveRoles,
     windowReport,
 } from "../model/roles.ts"
+import type { MountedRoute } from "../plugins/loader.ts"
 import type { Middleware } from "../plugins/middleware.ts"
 import { loadSkills, type SkillCatalogue } from "../skills/index.ts"
 import { activateSkills } from "../skills/load.ts"
 import { renderScripts, skillScriptTools } from "../skills/tools.ts"
-import type { SessionSummary, Store, TurnRecord } from "../store/store.ts"
+import {
+    FORGOTTEN_MARKER,
+    type MessageReach,
+    type SessionSummary,
+    type Store,
+    type TurnRecord,
+} from "../store/store.ts"
+import { routedTool, type SubagentRunner } from "../team/subagents.ts"
+import { HANDOFF } from "../team/supervisor.ts"
 import { type DialectId, passThroughFilter, type StreamFilter } from "../tools/dialect/dialect.ts"
 import { nativeDialect, nativeWireTokens } from "../tools/dialect/native.ts"
 import { nltDialect } from "../tools/dialect/nlt.ts"
-import type { ApprovalRequest } from "../tools/execute.ts"
+import { eventDetail } from "../tools/event-detail.ts"
+import { type ApprovalRequest, type ExecuteInput, executeIntents } from "../tools/execute.ts"
+import { MEMORY_DIR } from "../tools/local.ts"
 import { onceOnlyTools } from "../tools/policy.ts"
 import { ToolRegistry } from "../tools/registry.ts"
-import type { ScriptRunner, Tool } from "../tools/types.ts"
+import type { ForgetRequest, ForgetResult, ScriptRunner, Tool, ToolSpec } from "../tools/types.ts"
 import { activateKnowledge, type KnowledgeBase, loadKnowledge } from "../workspace/knowledge.ts"
 import {
     loadWorkspace,
@@ -171,6 +215,11 @@ export interface AgentCreateOptions extends ResolveRolesOptions {
      */
     readonly scriptRunner?: ScriptRunner
     /**
+     * Asked when a turn pinned a tool through `config_set` (pilot.14). The runtime queues a reload,
+     * which waits for running turns, so the change is in force from the next message.
+     */
+    readonly onPinned?: () => void
+    /**
      * Plugin middleware for this agent, in registration order.
      *
      * Per agent rather than per runtime, for the same reason `setup` runs per agent: two agents in
@@ -178,6 +227,13 @@ export interface AgentCreateOptions extends ResolveRolesOptions {
      * process.
      */
     readonly middleware?: readonly Middleware[]
+    /** HTTP routes this agent's plugins declared (Phase 30). The server mounts them per agent. */
+    readonly pluginRoutes?: readonly MountedRoute[]
+    /**
+     * Media providers beyond the built-in `openai`, by the name `media.*.provider` selects: `aws`
+     * from the media-aws plugin. Same shape and reasoning as `transports`.
+     */
+    readonly mediaProviders?: ReadonlyMap<string, MediaProviderFactory>
     /**
      * Ask a person before a call the policy wants confirmed.
      *
@@ -208,6 +264,8 @@ export interface AgentSendOptions {
     readonly sessionKey?: string
     readonly signal?: AbortSignal
     readonly source?: string
+    /** What the input was before it was text: `voice`, a transcribed voice note (pilot.15). */
+    readonly inputKind?: "voice"
     /** Supply a turn id to hand a client its handle before the turn starts. */
     readonly turnId?: string
     /**
@@ -230,6 +288,12 @@ export interface AgentSendOptions {
      */
     readonly from?: TurnSender
     /**
+     * Who this turn acts for, when the surface knows better than `from` can say: a channel passes the
+     * peer it authenticated. Absent, it is derived from `from` (`participantOf`). In-process callers
+     * only; the HTTP surface sets `from`, after a bound key has had its say.
+     */
+    readonly participant?: ActingParticipant
+    /**
      * Tools for this turn only, beside whatever a skill activates.
      *
      * A handoff's return channel arrives this way: `submit_artifact`'s parameter schema is the
@@ -237,8 +301,49 @@ export interface AgentSendOptions {
      * travels with the delegation rather than being baked into the member.
      */
     readonly turnTools?: readonly Tool[]
+    /**
+     * Queue every mutating call instead of running it — a stand-in's turn (Phase 28). Checked before
+     * `policy.allow`; see `ExecuteInput.defer`.
+     */
+    readonly deferMutations?: ExecuteInput["defer"]
+    /** Runtime-authored text before the input, outside its fence. See `TurnInput.runtimeNote`. */
+    readonly runtimeNote?: string
+    /** The embedder's note about this message. See `TurnInput.turnNote`. Kept on the turn row. */
+    readonly turnNote?: string
+    /** Images sent with this message, already read (`readImages`). See `ChatMessage.images`. */
+    readonly images?: readonly ImageInput[]
+    /**
+     * A schedule's limits (pilot.5, #15). They only narrow: `toolsAllow` selects from this agent's
+     * catalogue with the phase grammar, and the numbers are capped by the manifest's `limits`.
+     */
+    readonly toolsAllow?: readonly string[]
+    readonly maxSteps?: number
+    readonly timeoutMs?: number
     /** A slot from `admit()`. Absent: `send` admits for itself, and throws the refusal. */
     readonly admission?: AdmittedTurn
+    /**
+     * This turn answers another member's agent (`delegation`, decision 14.80). It reads like a
+     * stand-in — this agent's owner's shared notes and the space, never private memory — unless the
+     * person it acts for is this agent's own owner. And it cannot delegate onward: `handoff` is left
+     * out of its catalogue, so a peer ask is one hop and `A ↔ B` cannot loop.
+     */
+    readonly peerAsk?: { readonly askedBy: string }
+}
+
+/** How much of a child's prompt budget its routed call's output may take; the rest is its task. */
+const CHILD_OBSERVATION_SHARE = 0.75
+
+/** A routed call's child is ended this long before the executor would abandon the call. */
+const SUBAGENT_DEADLINE_MARGIN_MS = 1000
+
+/** What only a subagent's turn carries. Private to this module: `send` never accepts it. */
+interface ChildTurn {
+    readonly child?: {
+        /** The usage rows' role, whichever model the child ran on. */
+        readonly usageRole: string
+        readonly taintedBy?: string
+        readonly parent: { readonly turnId: string; readonly sessionKey: string }
+    }
 }
 
 export interface AdmittedTurn {
@@ -250,6 +355,15 @@ export interface AdmittedTurn {
 }
 
 export type TurnAdmission = AdmittedTurn | { readonly ok: false; readonly error: GovernorError }
+
+/**
+ * An admission taken while a reload was holding new turns: a promise of the instance that will run
+ * the turn, instead of a slot on this one. Module-private, so nothing outside `Agent` can mint one.
+ *
+ * It does **not** count against the old instance — counting it would stop the old instance ever
+ * reaching idle, which is the moment the swap waits for, and the held turn would wait on itself.
+ */
+const DEFERRED = new WeakMap<AdmittedTurn, Promise<Agent>>()
 
 export interface AgentDescription {
     readonly id: string
@@ -356,6 +470,14 @@ export class Agent {
 
     #bus: EventBus
     #toolRuntime: ToolRuntime | undefined
+    /** `#toolRuntime` with routed slugs running their subagent. Built on first use; see `#routed`. */
+    #routedToolRuntime: ToolRuntime | undefined
+    /** A stand-in turn's deferral by turn id, so a subagent of that turn defers its writes too. */
+    readonly #defers = new Map<string, NonNullable<ExecuteInput["defer"]>>()
+    /** Each running turn's input, for a subagent of that turn to be told what its call is for. */
+    readonly #inputs = new Map<string, string>()
+    /** For a tool-less agent, the runtime a turn's own tools layer onto. See the constructor. */
+    #bareToolRuntime: ToolRuntime | undefined
     /**
      * Per-session compaction state, in memory for the process's lifetime.
      *
@@ -388,7 +510,21 @@ export class Agent {
     #phases = new Map<string, string>()
     /** Absent when the embedder supplied none; then a skill's scripts are never discovered. */
     readonly #scriptRunner: ScriptRunner | undefined
+    readonly #onPinned: (() => void) | undefined
     readonly #middleware: readonly Middleware[]
+    /**
+     * What this agent answers over HTTP beyond `/v1`'s own routes, from its plugins. Rebuilt with the
+     * agent, so a reload that changes the plugin config changes the routes with it.
+     */
+    readonly pluginRoutes: readonly MountedRoute[]
+    readonly #transcription:
+        | { readonly config: TranscriptionConfig; readonly provider: MediaProvider }
+        | undefined
+    readonly #speech:
+        | { readonly config: SpeechConfig; readonly provider: MediaProvider }
+        | undefined
+    /** Who sent each running turn, so a media call made inside it is billed like its tokens. */
+    readonly #senders = new Map<string, string>()
     /**
      * Slot 2, rendered **lazily and once**.
      *
@@ -426,8 +562,14 @@ export class Agent {
         knowledge: KnowledgeBase | undefined
         skills: SkillCatalogue | undefined
         scriptRunner: ScriptRunner | undefined
+        onPinned: (() => void) | undefined
         middleware: readonly Middleware[]
+        pluginRoutes: readonly MountedRoute[]
         approve: ((request: ApprovalRequest) => Promise<boolean>) | undefined
+        transcription:
+            | { readonly config: TranscriptionConfig; readonly provider: MediaProvider }
+            | undefined
+        speech: { readonly config: SpeechConfig; readonly provider: MediaProvider } | undefined
     }) {
         this.id = init.loaded.manifest.id
         this.manifest = init.loaded.manifest
@@ -440,14 +582,29 @@ export class Agent {
         this.roles = init.roles
         this.#workspace = init.workspace
         this.identity = init.workspace.static
-        this.warnings = init.warnings
+        // What a configured role's transport could not honour, once per role that was written down.
+        this.warnings = [
+            ...init.warnings,
+            ...[
+                init.roles.main,
+                init.roles.selector,
+                init.roles.compactor,
+                ...init.roles.custom.values(),
+            ]
+                .filter((role) => role.configuredAs === role.role || role.role === "main")
+                .flatMap((role) => role.warnings ?? []),
+        ]
         this.#bus = init.bus
         this.store = init.store
         this.tools = init.tools
         this.knowledge = init.knowledge
         this.skills = init.skills
         this.#scriptRunner = init.scriptRunner
+        this.#onPinned = init.onPinned
         this.#middleware = init.middleware
+        this.pluginRoutes = init.pluginRoutes
+        this.#transcription = init.transcription
+        this.#speech = init.speech
 
         const memory = init.loaded.manifest.memory
         if (memory === undefined) {
@@ -513,8 +670,35 @@ export class Agent {
         //
         // `requestTools` is built here too, and not only for symmetry: under native it is where a slug
         // the wire format cannot carry is refused, and "at load" is the only useful place to refuse it.
+        // Built once, from the environment this agent loaded with, so a secret's value is known
+        // wherever it might turn up in a call or a result.
+        const detail =
+            this.manifest.tools.eventDetail === "redacted"
+                ? eventDetail(init.loaded.env)
+                : undefined
         if (init.tools.size === 0) {
+            this.#checkScheduleAllows([])
             this.#toolRuntime = undefined
+            // No catalogue, so nothing in slot 1 — kept that way. But a turn can still bring its own
+            // tools (a handoff's `submit_artifact`), and with no runtime to layer them onto they were
+            // dropped: a member with no tools of its own could never return its artifact, and every
+            // delegation to one failed as "finished without returning an answer". Found by running a
+            // cross-member delegation in the image. This runtime is used only for such a turn.
+            this.#bareToolRuntime = {
+                registry: init.tools,
+                dialect,
+                dir: init.loaded.dir,
+                blocks: [],
+                wireTokens: 0,
+                observationMaxTokens: observationBudget(
+                    this.manifest.context.observationMaxTokens,
+                    this.window,
+                ),
+                untrustedOnMutate: this.manifest.tools.untrusted.onMutate,
+                policy: this.manifest.tools.policy,
+                ...(init.approve === undefined ? {} : { approve: init.approve }),
+                ...(detail === undefined ? {} : { eventDetail: detail }),
+            }
         } else {
             const specs = init.tools.specs()
             const requestTools = dialect.requestTools(specs)
@@ -530,8 +714,12 @@ export class Agent {
                 ...(this.#memory === undefined ? {} : { memoryDir: this.#memory.dir }),
                 ...(requestTools === undefined ? {} : { requestTools }),
                 wireTokens: requestTools === undefined ? 0 : nativeWireTokens(requestTools),
-                observationMaxTokens: this.manifest.context.observationMaxTokens,
+                observationMaxTokens: observationBudget(
+                    this.manifest.context.observationMaxTokens,
+                    this.window,
+                ),
                 untrustedOnMutate: this.manifest.tools.untrusted.onMutate,
+                ...(detail === undefined ? {} : { eventDetail: detail }),
                 // Resolved once, here, so every turn of this agent is decided by the same rules.
                 // The approver itself is supplied per run by whichever front end has a person
                 // attached — absent for a schedule or a pipe, which is exactly when
@@ -564,6 +752,7 @@ export class Agent {
                     specs.map((spec) => spec.slug),
                 )
             }
+            this.#checkScheduleAllows(specs)
         }
     }
 
@@ -661,7 +850,33 @@ export class Agent {
                 pattern: entry.window.pattern ?? "?",
             }))
 
-        return new Agent({
+        // Media, resolved at load like the model roles: an unknown provider or a missing key refuses
+        // the boot, rather than surfacing as a voice note nobody answers.
+        const media = resolveMedia(loaded.manifest, {
+            env: loaded.env,
+            ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+            ...(options.mediaProviders === undefined ? {} : { providers: options.mediaProviders }),
+        })
+        const transcription = media.transcription
+        const imageMedia = media.image
+        // The tool records through the agent, which does not exist yet; it runs only in a turn,
+        // long after `self` is assigned below.
+        let self: Agent | undefined
+        const baseTools = options.tools ?? ToolRegistry.empty()
+        const tools =
+            imageMedia === undefined
+                ? baseTools
+                : baseTools.withTools([
+                      imageGenerateTool({
+                          config: imageMedia.config,
+                          provider: imageMedia.provider,
+                          record: (usage) => {
+                              if (self !== undefined) self.#recordMedia(usage)
+                          },
+                      }),
+                  ])
+
+        const agent = new Agent({
             loaded,
             roles,
             workspace,
@@ -674,6 +889,7 @@ export class Agent {
                 // is a check the two disagree about, and this one is about a schedule that fires
                 // perfectly and reaches nobody — the surface where nothing else would say so.
                 ...scheduleDeliveryWarnings(loaded.manifest),
+                ...fallbackWarnings(loaded.manifest),
                 // Same function `validate` calls. A deliverability check only one of them performs
                 // is a check the two disagree about, and this one is about a schedule that fires
                 // perfectly and reaches nobody — the surface where nothing else would say so.
@@ -682,13 +898,373 @@ export class Agent {
             ],
             bus,
             store,
-            tools: options.tools ?? ToolRegistry.empty(),
+            tools,
             knowledge,
             skills,
             scriptRunner: options.scriptRunner,
+            onPinned: options.onPinned,
             middleware: options.middleware ?? [],
+            pluginRoutes: options.pluginRoutes ?? [],
             approve: options.approve,
+            transcription,
+            speech: media.speech,
         })
+        self = agent
+        return agent
+    }
+
+    /**
+     * A voice note, as text: downloaded and transcribed under one hard deadline.
+     *
+     * The deadline covers the download as well, because a hung fetch holds the conversation's queue
+     * exactly as a hung transcription does. Throws a `MediaError` with a hint the caller can put in
+     * front of the sender; never returns an empty string.
+     */
+    async transcribe(
+        audio: InboundAudio,
+        options: { readonly sessionKey: string; readonly signal?: AbortSignal },
+    ): Promise<string> {
+        const configured = this.#transcription
+        if (configured === undefined) {
+            throw new MediaError({
+                code: "media_transcription_unconfigured",
+                message: `${this.id} has no transcription configured, so it cannot listen to voice notes.`,
+                hint: "Add media.transcription to the manifest (provider openai or aws) — through config_set, the config command, the settings editor or PATCH /v1/agents/:id/config.",
+                field: "media.transcription",
+            })
+        }
+        const { config, provider } = configured
+        const tooLarge = (bytes: number) =>
+            new MediaError({
+                code: "media_audio_too_large",
+                message: `The voice note is ${Math.round(bytes / 1024)} KB, over the ${Math.round(config.maxBytes / 1024)} KB limit.`,
+                hint: "Raise media.transcription.maxBytes, or send a shorter note. Checked before downloading when the channel reports a size.",
+                field: "media.transcription.maxBytes",
+            })
+        if (audio.sizeBytes !== undefined && audio.sizeBytes > config.maxBytes) {
+            throw tooLarge(audio.sizeBytes)
+        }
+        const started = performance.now()
+        const transcript = await withDeadline(
+            config.timeoutMs,
+            "Transcribing the voice note",
+            async (signal) => {
+                const bytes = await audio.fetch(signal)
+                if (bytes.byteLength > config.maxBytes) throw tooLarge(bytes.byteLength)
+                return (provider.transcribe as NonNullable<MediaProvider["transcribe"]>).call(
+                    provider,
+                    {
+                        bytes,
+                        mimeType: audio.mimeType,
+                        ...(audio.durationS === undefined ? {} : { durationS: audio.durationS }),
+                    },
+                    signal,
+                )
+            },
+            options.signal,
+        )
+        const seconds = transcript.durationS ?? audio.durationS
+        this.#recordMedia({
+            kind: "transcription",
+            provider: config.provider,
+            model: config.model ?? config.provider,
+            latencyMs: Math.round(performance.now() - started),
+            ...(seconds === undefined ? {} : { audioSeconds: seconds }),
+            sessionKey: options.sessionKey,
+        })
+        const text = transcript.text.trim()
+        if (text === "") {
+            throw new MediaError({
+                code: "media_transcript_empty",
+                message: "The voice note transcribed to nothing.",
+                hint: "Usually silence or a very short clip. Nothing is wrong with the configuration.",
+            })
+        }
+        return text
+    }
+
+    /**
+     * Put text the agent was made to send (`POST /v1/agents/:id/deliveries`) into that conversation's
+     * history as its own, so a reply to it reads as a reply to something the agent said. Untainted:
+     * the operator wrote it, not a stranger.
+     */
+    async recordDelivered(text: string, options: { readonly sessionKey: string }): Promise<void> {
+        await this.store.sessions.ensure(this.id, options.sessionKey)
+        await this.store.messages.append(this.id, options.sessionKey, [
+            { role: "assistant", content: text },
+        ])
+    }
+
+    /**
+     * Put something said in a conversation into a session's history without answering it — how a
+     * room message reaches an agent it did not address, so that agent has read the room when it is
+     * next mentioned. Framed exactly as a turn's input would be, and tainted when untrusted, so the
+     * memory index refuses it just as it refuses a peer's turn input.
+     */
+    async observe(
+        input: string,
+        options: { readonly sessionKey: string; readonly from: TurnSender },
+    ): Promise<void> {
+        await this.store.sessions.ensure(this.id, options.sessionKey)
+        await this.store.messages.append(this.id, options.sessionKey, [
+            {
+                role: "user",
+                content: frameSenderInput(input, options.from),
+                ...(trustOfSender(options.from) === "untrusted" ? { tainted: true } : {}),
+            },
+        ])
+    }
+
+    /**
+     * Run one tool call a person has approved outside any turn — a stand-in's queued action, once
+     * its owner says yes (Phase 28). Through the executor, so coercion, events, the observation cap
+     * and the policy's `deny` rules all still apply; the approval is the one already given.
+     */
+    async runApproved(
+        call: { readonly slug: string; readonly args: Readonly<Record<string, unknown>> },
+        options: { readonly sessionKey: string; readonly participant: ActingParticipant },
+    ): Promise<{ readonly ok: boolean; readonly output: string }> {
+        const turnId = newTurnId()
+        const callId = `approved-${turnId}`
+        const signal = AbortSignal.timeout(this.manifest.limits.toolTimeoutMs)
+        const outcome = await executeIntents({
+            registry: this.tools,
+            intents: [{ callId, slug: call.slug, args: call.args }],
+            context: {
+                agentId: this.id,
+                sessionKey: options.sessionKey,
+                turnId,
+                dir: this.dir,
+                signal,
+                deadlineMs: this.manifest.limits.toolTimeoutMs,
+                now: () => new Date(),
+                actingParticipant: options.participant,
+            },
+            bus: this.#bus,
+            eventContext: { agentId: this.id, sessionKey: options.sessionKey, turnId },
+            timeoutMs: this.manifest.limits.toolTimeoutMs,
+            maxParallel: 1,
+            observationMaxTokens: observationBudget(
+                this.manifest.context.observationMaxTokens,
+                this.window,
+            ),
+            untrustedInTurn: false,
+            onMutate: this.manifest.tools.untrusted.onMutate,
+            policy: this.manifest.tools.policy,
+            approve: async () => true,
+        })
+        const result = outcome.results[0]
+        if (result === undefined) {
+            return {
+                ok: false,
+                output: outcome.repair
+                    .map((error) => `${error.field}: ${error.message}`)
+                    .join("; "),
+            }
+        }
+        return { ok: result.ok, output: result.output }
+    }
+
+    /**
+     * The runtime a turn runs its tools on: the agent's own, or the bare one for a turn's tools. A
+     * subagent gets the unrouted one, which is what makes depth 1 structural: its calls run the tool.
+     */
+    #toolsFor(turnTools: readonly Tool[] | undefined, child = false): ToolRuntime | undefined {
+        if (this.#toolRuntime !== undefined) return child ? this.#toolRuntime : this.#routed()
+        return turnTools !== undefined && turnTools.length > 0 ? this.#bareToolRuntime : undefined
+    }
+
+    /**
+     * The agent's runtime with each routed slug's handler swapped for its subagent. Same specs, so
+     * slot 1 and the policy see exactly what they see without subagents. No block: the same object.
+     */
+    #routed(): ToolRuntime | undefined {
+        const base = this.#toolRuntime
+        const children = this.manifest.subagents ?? []
+        if (base === undefined || children.length === 0) return base
+        if (this.#routedToolRuntime !== undefined) return this.#routedToolRuntime
+        const byRoute = new Map(
+            children.flatMap((child) => child.route.tools.map((slug) => [slug, child] as const)),
+        )
+        const timeoutFor = new Map(
+            children.flatMap((child) =>
+                child.timeoutMs === undefined
+                    ? []
+                    : child.route.tools.map((slug) => [slug, child.timeoutMs as number] as const),
+            ),
+        )
+        this.#routedToolRuntime = {
+            ...base,
+            ...(timeoutFor.size === 0 ? {} : { timeoutFor }),
+            registry: base.registry.withSwapped((tool) => {
+                const child = byRoute.get(tool.spec.slug)
+                return child === undefined
+                    ? undefined
+                    : routedTool({
+                          tool,
+                          child,
+                          runner: this.#subagent,
+                          bus: this.#bus,
+                          store: this.store.handoffs,
+                      })
+            }),
+        }
+        return this.#routedToolRuntime
+    }
+
+    /**
+     * One child turn, inheriting everything that bounds the parent and nothing that widens it: the
+     * parent's taint, its stand-in deferral and its acting participant (`runHandoff` forwards that
+     * one), on the child's tools only, under the routed call's own deadline.
+     */
+    readonly #subagent: SubagentRunner = (child, context) => {
+        let tainted = false
+        const defer = this.#defers.get(context.turnId)
+        const asked = this.#inputs.get(context.turnId)
+        const role =
+            child.model ?? (this.manifest.model.subagent === undefined ? undefined : "subagent")
+        // Inside the executor's deadline for the routed call, so the child ends as a timeout it can
+        // report instead of being abandoned mid-turn by the call's own timer.
+        const timeoutMs = Math.max(1, context.deadlineMs - SUBAGENT_DEADLINE_MARGIN_MS)
+        return {
+            id: this.id,
+            tainted: () => tainted,
+            ...(asked === undefined ? {} : { asked }),
+            send: async (input, options) => {
+                const result = await this.#send(input, {
+                    ...options,
+                    toolsAllow: child.tools,
+                    timeoutMs,
+                    ...(child.maxSteps === undefined ? {} : { maxSteps: child.maxSteps }),
+                    ...(role === undefined ? {} : { role }),
+                    ...(defer === undefined ? {} : { deferMutations: defer }),
+                    child: {
+                        usageRole: "subagent",
+                        parent: { turnId: context.turnId, sessionKey: context.sessionKey },
+                        ...(context.tainted === true
+                            ? { taintedBy: "the turn that delegated this task" }
+                            : {}),
+                    },
+                })
+                tainted = result.tainted === true
+                return result
+            },
+        }
+    }
+
+    /** Whether `speak` can do anything: `media.speech` is configured. */
+    get canSpeak(): boolean {
+        return this.#speech !== undefined
+    }
+
+    /**
+     * A reply, spoken (pilot.15): markup removed, cut at `maxCharacters`, each piece synthesised
+     * under the section's deadline and saved in the agent's `media/` as an Ogg/Opus file. Returns
+     * the files in order, ready to deliver as voice notes. Throws a `MediaError` with a hint; the
+     * caller has already delivered the text, so a failure here costs the audio and nothing else.
+     */
+    async speak(
+        text: string,
+        options: { readonly sessionKey: string; readonly turnId?: string },
+    ): Promise<readonly { readonly path: string; readonly mimeType: string }[]> {
+        const configured = this.#speech
+        if (configured === undefined) {
+            throw new MediaError({
+                code: "media_speech_unconfigured",
+                message: `${this.id} has no speech configured, so it cannot answer in a voice note.`,
+                hint: "Add media.speech to the manifest (provider aws or openai) through PATCH /v1/agents/:id/config or the config command.",
+                field: "media.speech",
+            })
+        }
+        const { config, provider } = configured
+        const synthesize = provider.synthesize as NonNullable<MediaProvider["synthesize"]>
+        const files: { path: string; mimeType: string }[] = []
+        const dir = join(this.dir, MEDIA_DIR)
+        for (const piece of speechChunks(speakable(text), config.maxCharacters)) {
+            const started = performance.now()
+            const audio = await withDeadline(config.timeoutMs, "Speaking the reply", (signal) =>
+                synthesize.call(provider, { text: piece }, signal),
+            )
+            mkdirSync(dir, { recursive: true })
+            const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)
+            const path = join(dir, `${stamp}-${randomBytes(3).toString("hex")}.ogg`)
+            writeFileSync(path, audio.bytes)
+            this.#recordMedia({
+                kind: "speech",
+                provider: config.provider,
+                model: config.model ?? config.provider,
+                latencyMs: Math.round(performance.now() - started),
+                characters: audio.characters ?? piece.length,
+                sessionKey: options.sessionKey,
+                ...(options.turnId === undefined ? {} : { turnId: options.turnId }),
+            })
+            files.push({ path, mimeType: audio.mimeType })
+        }
+        return files
+    }
+
+    /** Whether `transcribe` can do anything. A channel asks before it bothers the sender. */
+    get canTranscribe(): boolean {
+        return this.#transcription !== undefined
+    }
+
+    /**
+     * One media call, written as a `model_calls` row and announced as `media.result`.
+     *
+     * Its tokens are zero and *reported* — nothing was estimated — so it never inflates
+     * `estimatedCalls`; its quantity is `images` or `audioSeconds`. The sender is the turn's, looked
+     * up by id, so a member's images are billed to the member exactly as their tokens are.
+     */
+    #recordMedia(usage: MediaUsage): void {
+        const callId = newCallId()
+        const sender = usage.turnId === undefined ? undefined : this.#senders.get(usage.turnId)
+        this.store.usage
+            .record({
+                agentId: this.id,
+                sessionKey: usage.sessionKey,
+                ...(usage.turnId === undefined ? {} : { turnId: usage.turnId }),
+                role: usage.kind,
+                model: usage.model,
+                promptTokens: 0,
+                promptReported: true,
+                outputTokens: 0,
+                outputReported: true,
+                callId,
+                ...(usage.images === undefined ? {} : { images: usage.images }),
+                ...(usage.audioSeconds === undefined ? {} : { audioSeconds: usage.audioSeconds }),
+                ...(sender === undefined ? {} : { sender }),
+                at: new Date().toISOString(),
+            })
+            .catch((error: unknown) => {
+                this.#bus.emit(
+                    "agent.warning",
+                    {
+                        code: "usage_record_failed",
+                        message: `Recording a media call's usage failed: ${error instanceof Error ? error.message : String(error)}`,
+                        hint: "The result was unaffected; this call is missing from GET /v1/usage. A store that cannot be written is usually full or read-only.",
+                    },
+                    { agentId: this.id, sessionKey: usage.sessionKey },
+                )
+            })
+        this.#bus.emit(
+            "media.result",
+            {
+                callId,
+                kind: usage.kind,
+                provider: usage.provider,
+                model: usage.model,
+                latencyMs: usage.latencyMs,
+                ...(usage.images === undefined ? {} : { images: usage.images }),
+                ...(usage.audioSeconds === undefined ? {} : { audioSeconds: usage.audioSeconds }),
+                ...(usage.characters === undefined ? {} : { characters: usage.characters }),
+                ...(sender === undefined ? {} : { sender }),
+            },
+            {
+                agentId: this.id,
+                sessionKey: usage.sessionKey,
+                ...(usage.turnId === undefined ? {} : { turnId: usage.turnId }),
+            },
+        )
     }
 
     /** Default session key for a surface with no natural one, such as the REPL. */
@@ -725,12 +1301,65 @@ export class Agent {
             if (!admission.ok) throw admission.error
             return this.send(input, { ...options, admission })
         }
+        const successor = DEFERRED.get(options.admission)
+        if (successor !== undefined) {
+            // Held by a reload: the turn runs on whichever instance comes out of it, admitted there
+            // under that instance's limits. Every surface holding this object reaches it this way.
+            options.admission.consume()
+            const { admission: _held, ...rest } = options
+            return (await successor).send(input, rest)
+        }
         options.admission.consume()
         try {
             return await this.#send(input, options)
         } finally {
-            this.#inFlight -= 1
+            this.#settle()
         }
+    }
+
+    /**
+     * Mark this instance as being replaced (`Runtime.reload`). Turns already running finish here;
+     * `onIdle` fires the moment none is left. New turns still run here until `holdNewTurns`.
+     */
+    retireInto(successor: Promise<Agent>, onIdle: () => void): void {
+        this.#successor = successor
+        this.#onIdle = onIdle
+    }
+
+    /** From now on a new turn waits for the successor instead of running on this instance. */
+    holdNewTurns(): void {
+        if (this.#successor !== undefined) this.#holding = true
+    }
+
+    /** The reload did not happen: this instance goes on serving as it was. */
+    cancelRetire(): void {
+        this.#successor = undefined
+        this.#onIdle = undefined
+        this.#holding = false
+    }
+
+    #successor: Promise<Agent> | undefined
+    #onIdle: (() => void) | undefined
+    #holding = false
+
+    #settle(): void {
+        this.#inFlight -= 1
+        if (this.#inFlight === 0) this.#onIdle?.()
+    }
+
+    /** New turns this instance handed to a reload rather than running, for `agent.reloaded`. */
+    get heldTurns(): number {
+        return this.#heldTurns
+    }
+    #heldTurns = 0
+
+    #deferred(): TurnAdmission | undefined {
+        const successor = this.#holding ? this.#successor : undefined
+        if (successor === undefined) return undefined
+        this.#heldTurns += 1
+        const ticket: AdmittedTurn = { ok: true, release: () => {}, consume: () => {} }
+        DEFERRED.set(ticket, successor)
+        return ticket
     }
 
     /**
@@ -747,6 +1376,8 @@ export class Agent {
      * accepted by checking at turn start.
      */
     async admit(): Promise<TurnAdmission> {
+        const held = this.#deferred()
+        if (held !== undefined) return held
         const quick = this.admitNow()
         if (quick !== undefined) return quick
         // A budget is configured: take the slot first, synchronously, then read the meter.
@@ -777,6 +1408,8 @@ export class Agent {
      * as the frame that asked, and a client that stops a turn on that frame relies on it.
      */
     admitNow(): TurnAdmission | undefined {
+        const held = this.#deferred()
+        if (held !== undefined) return held
         if (this.manifest.limits.tokens !== undefined) return undefined
         return this.#takeSlot()
     }
@@ -793,7 +1426,7 @@ export class Agent {
             release: () => {
                 if (settled) return
                 settled = true
-                this.#inFlight -= 1
+                this.#settle()
             },
             // Consuming hands the slot to the running turn, whose `finally` gives it back.
             consume: () => {
@@ -823,15 +1456,59 @@ export class Agent {
 
     #inFlight = 0
 
-    async #send(input: string, options: AgentSendOptions): Promise<TurnResult> {
+    /**
+     * A manifest schedule's `tools.allow`, checked by the phase rule at the moment phases are: only
+     * once the catalogue is resolved. An API-written one is checked when it is written
+     * (`prepareScheduleWrite`). An agent with no tools gets an empty catalogue, so any entry refuses.
+     */
+    #checkScheduleAllows(specs: readonly ToolSpec[]): void {
+        for (const [index, schedule] of this.manifest.schedules.entries()) {
+            const allow = schedule.tools?.allow
+            if (allow === undefined) continue
+            const unknown = unmatchedEntries(allow, specs)
+            if (unknown.length > 0) {
+                throw scheduleToolUnknown(
+                    schedule.id,
+                    unknown,
+                    specs.map((spec) => spec.slug),
+                    `schedules.${index}.tools.allow`,
+                )
+            }
+        }
+    }
+
+    /**
+     * Why a message with images would be refused for this role, or `undefined` when it would not.
+     * Public so a route can answer before it detaches the turn.
+     */
+    refusesImages(roleName?: string): HarnessError | undefined {
+        const role = roleName === undefined ? this.roles.main : this.roles.byName(roleName)
+        return role.capabilities.vision === true ? undefined : modelNoVision(role.config.id)
+    }
+
+    async #send(input: string, options: AgentSendOptions & ChildTurn): Promise<TurnResult> {
         const sessionKey = options.sessionKey ?? Agent.DEFAULT_SESSION
         const turnId = options.turnId ?? newTurnId()
         const source = options.source ?? "library"
+        const named = options.role === undefined ? this.roles.main : this.roles.byName(options.role)
+        // A subagent's calls are reported as `subagent` whichever model ran them, so usage rows and
+        // `model.result` agree about what the spend was for; `model` still names the endpoint.
+        const role =
+            options.child === undefined
+                ? named
+                : { ...named, role: options.child.usageRole as ModelRole }
+        // Before the turn row, so a refused message leaves nothing behind. A route checks this too,
+        // with `refusesImages`, because a detached turn's refusal reaches nobody.
+        if ((options.images?.length ?? 0) > 0) {
+            const refusal = this.refusesImages(options.role)
+            if (refusal !== undefined) throw refusal
+        }
         this.#refreshVolatile()
 
         await this.store.sessions.ensure(this.id, sessionKey)
         const history = await this.store.messages.history(this.id, sessionKey)
 
+        const actingId = (options.participant ?? participantOf(options.from))?.id
         await this.store.turns.start({
             turnId,
             agentId: this.id,
@@ -841,16 +1518,91 @@ export class Agent {
             // beside it, so a reader can reconstruct the framing without the evidence carrying it.
             input,
             ...(options.from === undefined ? {} : { sender: options.from }),
+            ...(options.turnNote === undefined ? {} : { note: options.turnNote }),
+            // Who the turn was for (pilot.15): what `memory_forget` matches a person's messages by.
+            ...(actingId === undefined ? {} : { participantId: actingId }),
         })
 
-        const active = this.knowledge === undefined ? [] : activateKnowledge(input, this.knowledge)
-        const skills = this.#activateSkills(input, history)
-        const remembered = await this.#recall(input, sessionKey, history)
+        // A subagent gets its task and its tools, and none of what an ordinary turn adds on: no
+        // knowledge, skills or memory. Its context is meant to be small, and its parent has those.
+        const child = options.child
+        const active =
+            this.knowledge === undefined || child !== undefined
+                ? []
+                : activateKnowledge(input, this.knowledge)
+        const skills = child !== undefined ? [] : this.#activateSkills(input, history)
+        const participant = options.participant ?? participantOf(options.from)
+        const plan = await this.#readPlan(options.from, participant, options.peerAsk !== undefined)
+        // A peer ask is one hop: the asked agent answers and cannot hand the work on, to a peer or to
+        // its own team, so `A ↔ B` delegation cannot loop however the two are configured.
+        const slugs = this.tools.specs().map((spec) => spec.slug)
+        // Whose agent this is and who is asking, said by the runtime on a peer ask rather than left to
+        // a note retrieval may miss: the volatile tier that names the owner is withheld here.
+        const peerNote =
+            options.peerAsk === undefined
+                ? undefined
+                : await this.#peerAskNote(options.peerAsk.askedBy, participant?.id)
+        const runtimeNote =
+            [peerNote, options.runtimeNote].filter((note) => note !== undefined).join("\n\n") ||
+            undefined
+        // The owner's personal tools (Composio, MCP servers marked personal) only for a turn that acts
+        // for the owner (pilot.15): another member asking, a delegation from their agent, a stand-in
+        // or a channel sender who is not one of the owner's own gets none of them.
+        const withheld = (await this.#notTheOwners(participant))
+            ? this.tools
+                  .specs()
+                  .filter((spec) => spec.personal === true)
+                  .map((spec) => spec.slug)
+            : []
+        const peerAllow =
+            options.peerAsk !== undefined && slugs.includes(HANDOFF)
+                ? (options.toolsAllow ?? slugs).filter((slug) => slug !== HANDOFF)
+                : options.toolsAllow
+        const toolsAllow =
+            withheld.length === 0
+                ? peerAllow
+                : (peerAllow ?? slugs).filter((slug) => !withheld.includes(slug))
+        const remembered =
+            child !== undefined
+                ? []
+                : await this.#recall(input, sessionKey, history, plan, {
+                      turnId,
+                      participant,
+                      owner: plan.owner,
+                  })
 
         const meter = this.#meter(sessionKey, turnId, options.from?.id)
+        // A turn on another model role (a subagent's, a schedule's, a message's) is budgeted against
+        // that model's window, not main's: a schedule on a 32k model sized against a 1M main overflows,
+        // and one on a 1M model sized against a 32k main compacts for nothing (pilot.7).
+        const window = named === this.roles.main ? this.window : named.capabilities.contextWindow
+        const tools = this.#toolsFor(options.turnTools, child !== undefined)
+        // A child reads its routed call's output up to what its window holds, not the parent's
+        // `observationMaxTokens`: reading all of it is the child's job, and it holds nothing else. Cut
+        // at the parent's figure, mail triage lost the two messages that mattered and the child
+        // reported that nothing needed a reply. A budget optimises; it must not decide the answer.
+        const turnRuntime =
+            child === undefined || tools === undefined
+                ? tools
+                : {
+                      ...tools,
+                      observationMaxTokens: Math.max(
+                          tools.observationMaxTokens,
+                          Math.floor(
+                              (window - this.manifest.context.reserveOutput) *
+                                  CHILD_OBSERVATION_SHARE,
+                          ),
+                      ),
+                  }
+        if (options.from?.id !== undefined) this.#senders.set(turnId, options.from.id)
+        if (options.deferMutations !== undefined) this.#defers.set(turnId, options.deferMutations)
+        this.#inputs.set(turnId, input)
+        const spaceWriter = (await this.store.conversations.spaceWriter()) === `agent:${this.id}`
         const result = await runTurn({
             agentId: this.id,
             meter,
+            ...(this.#onPinned === undefined ? {} : { onPinned: this.#onPinned }),
+            ...(options.from?.id === undefined ? {} : { sender: options.from.id }),
             ...(this.#middleware.length === 0 ? {} : { middleware: this.#middleware }),
             sessionKey,
             turnId,
@@ -861,7 +1613,12 @@ export class Agent {
             // As of `#refreshVolatile` at the top of this turn. The tier sits after the cache
             // breakpoint so that a write leaves slots 0 and 1 byte-identical.
             ...(this.workspace.examples === "" ? {} : { examples: this.workspace.examples }),
-            ...(this.workspace.volatile === "" ? {} : { volatile: this.workspace.volatile }),
+            // The volatile tier *is* private memory — `USER.md` and the notes `memory_write` appends —
+            // so a turn that may not read private memory does not get it in its prompt either.
+            // Skipping retrieval alone would still hand a stand-in every note in `MEMORY.md`.
+            ...(this.workspace.volatile === "" || !plan.private || child !== undefined
+                ? {}
+                : { volatile: this.workspace.volatile }),
             ...(this.workspace.reminder === "" ? {} : { reminder: this.workspace.reminder }),
             // Activated once per turn against the input — the selection is a function of the turn,
             // so it is stable across the steps within one and re-selecting per step would let two
@@ -876,19 +1633,24 @@ export class Agent {
                   }),
             ...(remembered.length === 0 ? {} : { memory: remembered }),
             ...(skills.length === 0 ? {} : { skills }),
-            role: options.role === undefined ? this.roles.main : this.roles.byName(options.role),
-            window: this.window,
+            role,
+            window,
             reserveOutput: this.manifest.context.reserveOutput,
             // Named field by field rather than spread, so the compiler names anything the manifest
             // grows and this forgets — which is what it did for `noProgress`.
             limits: {
-                maxSteps: this.manifest.limits.maxSteps,
+                // A schedule may lower these and never raise them: the agent can write its own
+                // schedules (`config_set`), and a cap it could lift is not a cap.
+                maxSteps: Math.min(this.manifest.limits.maxSteps, options.maxSteps ?? Infinity),
                 noProgress: this.manifest.limits.noProgress,
-                turnTimeoutMs: this.manifest.limits.turnTimeoutMs,
+                turnTimeoutMs: Math.min(
+                    this.manifest.limits.turnTimeoutMs,
+                    options.timeoutMs ?? Infinity,
+                ),
                 toolTimeoutMs: this.manifest.limits.toolTimeoutMs,
                 maxParallelTools: this.manifest.limits.maxParallelTools,
             },
-            ...(this.#toolRuntime === undefined ? {} : { tools: this.#toolRuntime }),
+            ...(turnRuntime === undefined ? {} : { tools: turnRuntime }),
             compaction: this.#compaction(sessionKey, meter),
             ...(isPhased(this.manifest.phases)
                 ? {
@@ -907,9 +1669,59 @@ export class Agent {
                 : {}),
             bus: this.#bus,
             source,
+            ...(options.inputKind === undefined ? {} : { inputKind: options.inputKind }),
             ...(options.from === undefined ? {} : { from: options.from }),
+            ...(participant === null ? {} : { participant }),
+            ...(options.deferMutations === undefined
+                ? {}
+                : { deferMutations: options.deferMutations }),
+            ...(runtimeNote === undefined ? {} : { runtimeNote }),
+            ...(options.images === undefined || options.images.length === 0
+                ? {}
+                : { images: options.images }),
+            ...(toolsAllow === undefined ? {} : { toolsAllow }),
+            ...(withheld.length === 0 ? {} : { withheld }),
+            ...(options.turnNote === undefined ? {} : { turnNote: options.turnNote }),
             ...(options.turnTools === undefined ? {} : { turnTools: options.turnTools }),
             ...(options.signal === undefined ? {} : { signal: options.signal }),
+            // A turn that may not read private memory may not write it either (QA 0.2.0): the
+            // generated `policy.allow` names `memory_write`, so any room member could otherwise
+            // put words into the agent's own notes. The space writer's notes are the team's.
+            ...(spaceWriter
+                ? { writeNote: (text: string) => this.#writeSpaceNote(text) }
+                : plan.private
+                  ? {}
+                  : {
+                        writeNote: async () => {
+                            throw privateMemoryRefused()
+                        },
+                    }),
+            // `memory_forget` reaches exactly the memory `memory_write` would write on this turn (pilot.15).
+            forgetMemory: spaceWriter
+                ? (request) => this.#forget("space", request, { sessionKey, turnId })
+                : plan.private
+                  ? (request) =>
+                        this.#forget("private", request, {
+                            sessionKey,
+                            turnId,
+                            // A person reaches what they said; the owner also what predates attribution.
+                            reach:
+                                participant === null
+                                    ? {}
+                                    : {
+                                          participant: participant.id,
+                                          unattributed: participant.id === plan.owner,
+                                      },
+                        })
+                  : async () => {
+                        throw memoryForgetRefused()
+                    },
+            ...(child?.taintedBy === undefined ? {} : { taintedBy: child.taintedBy }),
+            ...(child?.parent === undefined ? {} : { parent: child.parent }),
+        }).finally(() => {
+            this.#senders.delete(turnId)
+            this.#defers.delete(turnId)
+            this.#inputs.delete(turnId)
         })
 
         // Carried per session, not per turn. One turn's observations are a sample of the estimator's
@@ -956,6 +1768,9 @@ export class Agent {
                       errorCode: result.error.code,
                       errorMessage: result.error.message,
                       errorHint: result.error.hint,
+                      ...(result.error.detail === undefined
+                          ? {}
+                          : { errorDetail: result.error.detail }),
                   }),
         })
 
@@ -964,10 +1779,48 @@ export class Agent {
         }
         // After the append, so this turn is in the corpus before the next one asks about it — and after
         // `turns.finish`, so a failure to index cannot lose the audit record.
+        await this.#redactForgetConversation(sessionKey, turnId)
         await this.#indexHistory()
 
         this.#reportManifestChange()
         return result
+    }
+
+    /** Turns in a session that listed or deleted with `memory_forget`, until a deletion lands. */
+    readonly #forgetSessions = new Map<string, Set<string>>()
+    /** Turns in which `memory_forget` deleted something. */
+    readonly #forgotThisTurn = new Set<string>()
+
+    #forgetTurns(sessionKey: string): Set<string> {
+        const existing = this.#forgetSessions.get(sessionKey)
+        if (existing !== undefined) return existing
+        const created = new Set<string>()
+        this.#forgetSessions.set(sessionKey, created)
+        return created
+    }
+
+    /**
+     * After a turn that deleted with `memory_forget`, redact the conversation that asked for it: the
+     * listing quoted every note it found, and the person's request usually names the thing. Left in
+     * place, the next session's recall answers from that exchange and forgetting looks broken
+     * (pilot.15). Done before indexing, so the index never holds the text.
+     */
+    async #redactForgetConversation(sessionKey: string, turnId: string): Promise<void> {
+        if (!this.#forgotThisTurn.delete(turnId)) return
+        const turns = [...(this.#forgetSessions.get(sessionKey) ?? [])]
+        this.#forgetSessions.delete(sessionKey)
+        const touched = await this.store.messages.redactTurns(this.id, turns, FORGOTTEN_MARKER)
+        // The listing went out on webhooks too, as this conversation's replies and tool results.
+        await this.store.webhooks.scrubBodies(
+            this.id,
+            touched.texts
+                .map((text) => text.trim())
+                .filter((text) => text.length >= MIN_SCRUB_LENGTH),
+            FORGOTTEN_MARKER,
+        )
+        for (const key of touched.sessions) {
+            await this.store.memory.dropSource(this.id, sessionSource(key))
+        }
     }
 
     /**
@@ -1132,7 +1985,13 @@ export class Agent {
                 ? []
                 : activateKnowledge(input, this.knowledge)
         const skills = input === "" ? [] : this.#activateSkills(input, history)
-        const remembered = await this.#recall(input, sessionKey, history)
+        const remembered = await this.#recall(
+            input,
+            sessionKey,
+            history,
+            await this.#readPlan(undefined, null),
+            undefined,
+        )
         const tools = this.#toolRuntime
 
         const assembled = assembleContext({
@@ -1319,12 +2178,40 @@ export class Agent {
         input: string,
         sessionKey: string,
         history: readonly ChatMessage[],
+        plan: ReadPlan,
+        audit:
+            | {
+                  readonly turnId: string
+                  readonly participant: ActingParticipant | null
+                  readonly owner: string | undefined
+              }
+            | undefined,
     ): Promise<readonly { source: string; at: string; text: string; because?: string }[]> {
         const memory = this.#memory
         if (memory === undefined || memory.maxActive === 0 || input === "") return []
 
         try {
-            await this.#syncMemory(memory.dir)
+            if (plan.private) await this.#syncMemory(memory.dir)
+            const retrievers: MemoryRetriever[] = plan.private ? [memory.retrieve] : []
+            for (const scope of plan.scopes) {
+                // The scope's whole note list, every time: `syncNotes` owns its corpus and drops what it
+                // was not handed. One indexed query, and nothing re-read unless a note arrived or went.
+                await syncNotes({
+                    store: this.store.memory,
+                    scope,
+                    notes: await this.store.conversations.notes(scope),
+                    now: new Date(),
+                })
+                retrievers.push(
+                    fts5Retriever({ store: this.store.memory, agentId: scopeCorpus(scope) }),
+                )
+            }
+            // Every corpus scores on the same normalised scale (`rank/bm25.ts`), so one ranking across
+            // them is a fair one: a strong team note outranks a weak private one, and the reverse.
+            const retrieve: MemoryRetriever = async (request) =>
+                (await Promise.all(retrievers.map((each) => each(request))))
+                    .flat()
+                    .sort((a, b) => b.score - a.score)
 
             const previousAssistant = [...history]
                 .reverse()
@@ -1333,7 +2220,7 @@ export class Agent {
                 previousAssistant?.origin === undefined && previousAssistant?.tainted !== true
                     ? previousAssistant
                     : undefined
-            const ranked = await retrieveWithContext(memory.retrieve, {
+            const ranked = await retrieveWithContext(retrieve, {
                 input,
                 now: new Date(),
                 minimumScore: memory.threshold,
@@ -1354,11 +2241,27 @@ export class Agent {
                 ],
             })
 
-            return selectPassages(ranked, {
+            const selected = selectPassages(ranked, {
                 threshold: memory.threshold,
                 maxActive: memory.maxActive,
                 budget: memory.budget,
-            }).map((hit) => ({
+            })
+            if (audit !== undefined) await this.#auditReads(selected, sessionKey, audit)
+            // What slot 7 holds this turn, on the stream (pilot.13): without it, "where did that come
+            // from" could only be answered by previewing the context afterwards and hoping it matched.
+            if (audit !== undefined && selected.length > 0) {
+                this.#bus.emit(
+                    "memory.recalled",
+                    {
+                        passages: selected.map((hit) => ({
+                            source: hit.passage.source,
+                            score: Math.round(hit.score * 1000) / 1000,
+                        })),
+                    },
+                    { agentId: this.id, sessionKey, turnId: audit.turnId },
+                )
+            }
+            return selected.map((hit) => ({
                 source: hit.passage.source,
                 at: hit.passage.at,
                 text: hit.passage.text,
@@ -1371,6 +2274,310 @@ export class Agent {
                 hint: "The turn continues without slot 7. Run `memory rebuild` to re-read the files; if it keeps failing, the store may be from a newer build.",
             })
             return []
+        }
+    }
+
+    /**
+     * Which memory this turn may read (`memory/scopes.ts` has the rule and its reasons).
+     *
+     * Only a conversation turn or a stand-in narrows anything, and only those pay for the lookups that
+     * decide it — every other turn reads what it always read, plus any shared scope it belongs to.
+     */
+    /**
+     * The asked turn's framing (pilot.9): this agent's owner, the asking agent and the
+     * person it acts for, each with the title and timezone their participant record carries. Facts the
+     * embedder registered, so nothing here is the model's to doubt; absent fields are left out.
+     */
+    async #peerAskNote(askedBy: string, actingFor: string | undefined): Promise<string> {
+        const conversations = this.store.conversations
+        const describe = async (id: string | undefined) => {
+            if (id === undefined) return undefined
+            const person = await conversations.participant(id)
+            const name = person?.name ?? id
+            const detail = [
+                person?.title,
+                person?.timezone === undefined ? undefined : `timezone ${person.timezone}`,
+            ]
+                .filter((part) => part !== undefined)
+                .join(", ")
+            return detail === "" ? name : `${name} (${detail})`
+        }
+        const ownerId = (await conversations.assignment(this.id))?.participantId
+        const owner = await describe(ownerId)
+        const asker = await describe(actingFor)
+        return [
+            owner === undefined
+                ? "You are answering another member's agent."
+                : `You are the agent of ${owner}, answering another member's agent.`,
+            asker === undefined
+                ? `The agent asking is ${askedBy}.`
+                : `The agent asking is ${askedBy}, on behalf of ${asker}.`,
+            "Your answer goes back to them, so it is written from what your owner shares, not from what they keep private.",
+            // Without this an agent with no calendar answered "3pm works, no conflict I'm aware of",
+            // and the asker relayed it as a commitment (pilot.10). The owner's own ask reads
+            // everything, so it is not told this.
+            actingFor !== undefined && actingFor === ownerId
+                ? undefined
+                : "Their private notes and saved memory are not in this turn. Where the answer depends on something you cannot check here, such as their availability, a preference or a commitment, say you cannot confirm it rather than guessing.",
+        ]
+            .filter((line) => line !== undefined)
+            .join(" ")
+    }
+
+    /**
+     * Whether this turn acts for someone other than the agent's assigned owner. No assignment, and a
+     * turn with no person (the operator, a schedule), are today's behaviour: nothing is withheld.
+     * A channel sender is the owner only when listed in the assignment's `channelIds`.
+     */
+    async #notTheOwners(participant: ActingParticipant | null): Promise<boolean> {
+        if (participant === null) return false
+        const assignment = await this.store.conversations.assignment(this.id)
+        if (assignment === undefined) return false
+        if (participant.onBehalfOf !== undefined) return true
+        return (
+            participant.id !== assignment.participantId &&
+            !(assignment.channelIds ?? []).includes(participant.id)
+        )
+    }
+
+    async #readPlan(
+        from: TurnSender | undefined,
+        participant: ActingParticipant | null,
+        peerAsk = false,
+    ): Promise<ReadPlan> {
+        const conversations = this.store.conversations
+        const room = from?.room
+        // An unknown room reads as a room rather than a DM: the narrower plan, when the record is missing.
+        const conversation =
+            room === undefined || from === undefined
+                ? undefined
+                : { kind: (await conversations.get(room))?.kind ?? "room", authorId: from.id }
+        const owner = (await conversations.assignment(this.id))?.participantId
+        return readPlan({
+            ...(participant?.onBehalfOf === undefined
+                ? {}
+                : { standingInFor: participant.onBehalfOf }),
+            ...(peerAsk ? { askedFor: participant?.id ?? "" } : {}),
+            ...(conversation === undefined ? {} : { conversation }),
+            ...(owner === undefined ? {} : { owner }),
+            projects: await conversations.projectsOf(this.id),
+        })
+    }
+
+    /**
+     * `memory_forget`'s two halves (pilot.15): a query lists, ids delete. Private memory is the carried
+     * file and the archives — what `memory_write` and eviction wrote. The space is its notes table, and
+     * only the space writer is handed `"space"` (checked at turn start in `send`). Recall reconciles the
+     * index against both on every read, so nothing else has to be told.
+     */
+    async #forget(
+        scope: "private" | "space",
+        request: ForgetRequest,
+        context: {
+            readonly sessionKey: string
+            readonly turnId: string
+            readonly reach?: MessageReach
+        },
+    ): Promise<ForgetResult> {
+        const conversations = this.store.conversations
+        if (scope === "space") {
+            const notes = (await conversations.notes("space")).map((note) => ({
+                id: note.id,
+                source: "space",
+                text: note.text,
+            }))
+            if ("query" in request) {
+                return {
+                    scope,
+                    notes: notes.filter((note) => matchesQuery(note.text, request.query)),
+                    missing: [],
+                }
+            }
+            const wanted = new Set(request.ids)
+            const gone = notes.filter((note) => wanted.has(note.id))
+            for (const note of gone) await conversations.deleteNote(note.id)
+            return this.#forgotten(scope, gone, request.ids, context)
+        }
+
+        const target = writeTarget(this.workspace)
+        const files = memoryFiles({
+            ...(target?.path === undefined || target.mode === "refused"
+                ? {}
+                : { carried: { source: target.name, path: target.path } }),
+            archiveDir: this.#memory?.dir ?? join(this.dir, MEMORY_DIR),
+        })
+        const reach = context.reach ?? {}
+        if ("query" in request) {
+            const notes = (await notesIn(files)).filter((note) =>
+                matchesQuery(note.text, request.query),
+            )
+            // Past conversations too: recall answers from them, so a forgotten note that was also said
+            // aloud would otherwise come straight back (pilot.15).
+            const words = request.query.split(/\s+/).filter((word) => word !== "")
+            const said = (
+                await this.store.messages.findProse(this.id, words, reach, FORGET_MESSAGE_LIMIT)
+            )
+                .filter((message) => matchesQuery(message.content, request.query))
+                .map((message) => ({
+                    id: `${FORGET_MESSAGE_PREFIX}${message.id}`,
+                    source: `conversation, ${message.createdAt.slice(0, 10)}, ${message.role === "user" ? "said to you" : "your reply"}`,
+                    text: snippet(message.content),
+                }))
+            this.#forgetTurns(context.sessionKey).add(context.turnId)
+            return { scope, notes: [...notes, ...said], missing: [] }
+        }
+        const messageIds = request.ids
+            .filter((id) => id.startsWith(FORGET_MESSAGE_PREFIX))
+            .map((id) => Number(id.slice(FORGET_MESSAGE_PREFIX.length)))
+            .filter((id) => Number.isInteger(id))
+        const gone = await forgetNotes(files, new Set(request.ids))
+        const redacted = await this.store.messages.redact(
+            this.id,
+            messageIds,
+            reach,
+            FORGOTTEN_MARKER,
+        )
+        // Then the same words wherever else they were written: `memory_write`'s own call carries the
+        // note as its argument, and an earlier listing quoted it (pilot.15).
+        const needles = [
+            ...gone
+                .filter((note) => !note.id.startsWith(FORGET_MESSAGE_PREFIX))
+                .map((note) => noteBody(note.text)),
+            ...redacted.map((message) => message.content.trim()),
+        ].filter((needle) => needle.length >= MIN_SCRUB_LENGTH)
+        const scrubbed = await this.store.messages.scrub(this.id, needles, reach, FORGOTTEN_MARKER)
+        // The turn that saved a deleted note is the exact link to the reply that restated it in the
+        // agent's own words, which no text match finds ("Remembered: your accountant is …").
+        const saving = await this.store.messages.redactTurns(
+            this.id,
+            scrubbed.writeTurns,
+            FORGOTTEN_MARKER,
+        )
+        // And the silo's own copy of what webhooks carried: a `turn.end` or `message` event quoted it.
+        await this.store.webhooks.scrubBodies(
+            this.id,
+            [...needles, ...saving.texts.map((text) => text.trim())].filter(
+                (needle) => needle.length >= MIN_SCRUB_LENGTH,
+            ),
+            FORGOTTEN_MARKER,
+        )
+        // The index re-reads a file only when a later private turn asks, and a stale passage of a
+        // deleted note would sit in the store until then (pilot.15): re-read now.
+        if (gone.length > 0 && this.#memory !== undefined) await this.#syncMemory(this.#memory.dir)
+        // The history index is keyed on a session's activity and length, and a redaction changes
+        // neither, so its passages are dropped outright and the next recall re-indexes the session.
+        for (const key of new Set([
+            ...redacted.map((message) => message.sessionKey),
+            ...scrubbed.sessions,
+            ...saving.sessions,
+        ])) {
+            await this.store.memory.dropSource(this.id, sessionSource(key))
+        }
+        if (gone.length > 0 || redacted.length > 0) {
+            this.#forgetTurns(context.sessionKey).add(context.turnId)
+            this.#forgotThisTurn.add(context.turnId)
+        }
+        return this.#forgotten(
+            scope,
+            [
+                ...gone,
+                ...redacted.map((message) => ({
+                    id: `${FORGET_MESSAGE_PREFIX}${message.id}`,
+                    source: "conversation",
+                    text: snippet(message.content),
+                })),
+            ],
+            request.ids,
+            context,
+            redacted.length,
+        )
+    }
+
+    #forgotten(
+        scope: string,
+        gone: ForgetResult["notes"],
+        ids: readonly string[],
+        context: { readonly sessionKey: string; readonly turnId: string },
+        messages = 0,
+    ): ForgetResult {
+        const found = new Set(gone.map((note) => note.id))
+        if (gone.length > 0) {
+            this.#bus.emit(
+                "memory.forgotten",
+                {
+                    scope,
+                    count: gone.length - messages,
+                    ...(messages === 0 ? {} : { messages }),
+                },
+                { agentId: this.id, sessionKey: context.sessionKey, turnId: context.turnId },
+            )
+        }
+        return { scope, notes: gone, missing: ids.filter((id) => !found.has(id)) }
+    }
+
+    /** `memory_write` for the space writer: a team note, indexed at the next read of the space. */
+    async #writeSpaceNote(text: string): Promise<string> {
+        await this.store.conversations.addNote({
+            id: `mn_${randomUUID().replaceAll("-", "").slice(0, 20)}`,
+            scope: "space",
+            text,
+            writtenBy: `agent:${this.id}`,
+            createdAt: new Date().toISOString(),
+        })
+        return "Saved to the team's shared memory (space), where every agent in the team can read it."
+    }
+
+    /**
+     * Record every read of somebody's owner scope that was not made for that person (Phase 29).
+     *
+     * A person's own agent answering the person themselves is not a disclosure; anything else is — a
+     * stand-in speaking to someone else, a room, the operator — and the owner can list them all.
+     */
+    async #auditReads(
+        selected: readonly { readonly passage: { readonly source: string } }[],
+        sessionKey: string,
+        audit: {
+            readonly turnId: string
+            readonly participant: ActingParticipant | null
+            readonly owner: string | undefined
+        },
+    ): Promise<void> {
+        const byScope = new Map<string, string[]>()
+        for (const hit of selected) {
+            const scope = scopeOfSource(hit.passage.source)
+            if (scope === undefined || !scope.startsWith("owner:")) continue
+            const owner = scope.slice("owner:".length)
+            if (audit.participant?.id === owner) continue
+            // Unattributed work on the owner's own agent — a schedule, the operator's console — is
+            // work for the owner, not a disclosure to someone else.
+            if (audit.participant === null && audit.owner === owner) continue
+            byScope.set(scope, [...(byScope.get(scope) ?? []), hit.passage.source])
+        }
+        const at = new Date().toISOString()
+        for (const [scope, sources] of byScope) {
+            const requestedBy = audit.participant?.id
+            const onBehalfOf = audit.participant?.onBehalfOf
+            await this.store.conversations.recordRead({
+                scope,
+                reader: this.id,
+                turnId: audit.turnId,
+                sessionKey,
+                ...(requestedBy === undefined ? {} : { requestedBy }),
+                ...(onBehalfOf === undefined ? {} : { onBehalfOf }),
+                sources,
+                at,
+            })
+            this.#bus.emit(
+                "memory.read",
+                {
+                    scope,
+                    reader: this.id,
+                    sources,
+                    ...(requestedBy === undefined ? {} : { requestedBy }),
+                    ...(onBehalfOf === undefined ? {} : { onBehalfOf }),
+                },
+                { agentId: this.id, sessionKey, turnId: audit.turnId },
+            )
         }
     }
 
@@ -1446,12 +2653,26 @@ export class Agent {
      * only shape with no silent loss in it — and it makes a rebuild the backfill for an agent whose
      * sessions predate this being wired up at all.
      */
-    async rebuildMemory(): Promise<IndexReport & { readonly sessions: readonly string[] }> {
+    async rebuildMemory(): Promise<
+        IndexReport & { readonly sessions: readonly string[]; readonly scopes: readonly string[] }
+    > {
         const memory = this.#memory
         if (memory === undefined) throw memoryNotConfigured()
         await this.store.memory.clear(this.id)
+        // Every shared scope too, from its canonical notes: a rebuild is what somebody runs when
+        // retrieval looks wrong, and a scope's index is exactly as rebuildable as a file's.
+        const scopes = await this.store.conversations.noteScopes()
+        for (const scope of scopes) {
+            await this.store.memory.clear(scopeCorpus(scope))
+            await syncNotes({
+                store: this.store.memory,
+                scope,
+                notes: await this.store.conversations.notes(scope),
+                now: new Date(),
+            })
+        }
         const files = await this.#syncMemory(memory.dir)
-        if (!memory.includeHistory) return { ...files, sessions: [] }
+        if (!memory.includeHistory) return { ...files, sessions: [], scopes }
         const sessions = await syncSessions({
             store: this.store.memory,
             agentId: this.id,
@@ -1463,7 +2684,7 @@ export class Agent {
             now: new Date(),
         })
         // The session pass ran second, so its count is the corpus total rather than the files' subtotal.
-        return { ...files, passages: sessions.passages, sessions: sessions.indexed }
+        return { ...files, passages: sessions.passages, sessions: sessions.indexed, scopes }
     }
 
     #activateSkills(
@@ -1491,12 +2712,19 @@ export class Agent {
 
         const role = this.roles.main.capabilities.promptStyle.skillsIn
         const runner = this.#scriptRunner
+        // `skills.trusted` (pilot.14): when the operator lists the skills that may run code,
+        // only those get script tools. Absent, every skill does, as before.
+        const trusted = this.manifest.skills?.trusted
+        const mayRun = (name: string) => trusted === undefined || trusted.includes(name)
         return active.map((entry) => {
             // The catalogue record, for the scripts. `ActiveSkill` deliberately carries only what the
             // block needs; looking the record up here keeps the activation result from growing a second
             // copy of it that could drift.
             const record = catalogue.skills.find((skill) => skill.name === entry.name)
-            const scripts = record === undefined ? "" : renderScripts(record, runner !== undefined)
+            const scripts =
+                record === undefined
+                    ? ""
+                    : renderScripts(record, runner !== undefined, mayRun(record.name))
             return {
                 name: entry.name,
                 // The scripts section is appended, never interleaved — the authored body stays
@@ -1504,7 +2732,7 @@ export class Agent {
                 content: scripts === "" ? entry.content : `${entry.content}\n\n${scripts}`,
                 role,
                 tools:
-                    record === undefined || runner === undefined
+                    record === undefined || runner === undefined || !mayRun(record.name)
                         ? []
                         : skillScriptTools({ skill: record, runner }),
             }
@@ -1569,9 +2797,13 @@ export class Agent {
                     ...(usage.cachedPromptTokens === undefined
                         ? {}
                         : { cachedPromptTokens: usage.cachedPromptTokens }),
+                    ...(usage.cacheWriteTokens === undefined
+                        ? {}
+                        : { cacheWriteTokens: usage.cacheWriteTokens }),
                     outputTokens: usage.outputTokens,
                     outputReported: usage.outputReported,
                     ...(sender === undefined ? {} : { sender }),
+                    callId: usage.callId,
                     at: new Date().toISOString(),
                 })
                 .catch((error: unknown) => {
@@ -1693,6 +2925,10 @@ export class Agent {
                 schedulerStarted: this.#schedulerStarted,
                 serverListening: this.#serverListening,
                 servedElsewhere: this.#servedElsewhere,
+                // The same files, under the same names, as the labels in the tiers carry.
+                contextFiles: this.workspace.files
+                    .filter((file) => file.content !== "")
+                    .map((file) => ({ name: basename(file.path), tier: file.tier })),
                 // Absent, not zero, when no block is configured — the row distinguishes "off" from
                 // "no such concept", and only this side knows which it is.
                 ...(this.skills === undefined
@@ -1780,6 +3016,20 @@ export function resolveWorkspace(
     }
 
     const workspace = loadWorkspace({ refs, budgets: context.budgets, style })
+    // A template placeholder that reached the model unrendered (pilot.14): a REMINDER.md
+    // copied raw carried `{{vars.userName}}`, and the model told the person they had pasted its
+    // instructions. A warning, never a refusal, since a file may quote template syntax on purpose.
+    // Read on the text the model receives, so a placeholder inside a stripped comment is not one.
+    for (const file of workspace.files) {
+        const found = [...new Set(file.content.match(/\{\{\s*vars\.[\w.-]+\s*\}\}/g) ?? [])]
+        if (found.length === 0) continue
+        warnings.push({
+            code: "workspace_unrendered_var",
+            message: `${file.name} reaches the model with ${found.length === 1 ? "a template placeholder" : "template placeholders"} still in it: ${found.join(", ")}.`,
+            hint: "These are filled in when an agent is provisioned from a template. A file copied in by hand keeps them literally, and the model reads them as text. Render the file, or PATCH /v1/agents/:id/vars to re-render the agent's template files.",
+            field: file.field,
+        })
+    }
     return { workspace, warnings }
 }
 
@@ -1804,4 +3054,30 @@ function readWorkspace(
     }
 
     return { workspace, warnings }
+}
+
+/** How a past message is named to `memory_forget`: its row id behind a prefix no note id uses. */
+const FORGET_MESSAGE_PREFIX = "msg_"
+/** Past messages one listing returns; a broader query is asked to narrow down by the tool. */
+const FORGET_MESSAGE_LIMIT = 50
+
+/** A listed message, one line, short enough that thirty of them fit an observation. */
+function snippet(text: string): string {
+    const line = text.replace(/\s+/g, " ").trim()
+    return line.length <= 200 ? line : `${line.slice(0, 199)}…`
+}
+
+/**
+ * Shorter than this, forgotten text is not looked for elsewhere: "yes" or "ok" would match half the
+ * store, and a scrub that redacts unrelated messages is worse than one that leaves a trace.
+ */
+const MIN_SCRUB_LENGTH = 12
+
+/** A note's words as `memory_write` was given them: the bullet, stamp and tags removed. */
+function noteBody(text: string): string {
+    return text
+        .replace(/^[-*+]\s+/, "")
+        .replace(/\*\*\d{4}-\d{2}-\d{2}T[^*]*\*\*/, "")
+        .replace(/_\([^)]*\)_/, "")
+        .trim()
 }

@@ -10,7 +10,7 @@ One package, one number, one tag. Semver. Short bullets in `CHANGELOG.md`; the r
 2. **Cut it** from a clean `main`:
 
    ```bash
-   bun run release 0.1.3
+   bun run release 0.2.0
    ```
 
    Writes the version into `packages/cli/package.json`, `packages/core/src/version.ts` and the
@@ -26,7 +26,7 @@ One package, one number, one tag. Semver. Short bullets in `CHANGELOG.md`; the r
    ```bash
    npm view dispach version
    brew update && brew info moeen-mahmud/tap/dispach
-   docker pull ghcr.io/moeen-mahmud/dispach:0.1.3
+   docker pull ghcr.io/moeen-mahmud/dispach:0.2.0
    ```
 
 A release that failed part-way: fix, cut the *next* patch number. npm versions are immutable, and

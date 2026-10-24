@@ -1,0 +1,133 @@
+{
+    "$comment": "The benchmark roster. Every eval that sweeps models reads this file. A hosted model is pinned to ONE provider (the vendor's own endpoint where one exists, otherwise the highest-precision one) with fallbacks off, so a result is a result about that model and not about whichever quantisation OpenRouter routed to. `bun scripts/roster.ts --check` verifies every pin against OpenRouter on the day of a run.",
+    "selectedAt": "2026-10-21",
+    "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKeyEnv": "OPENROUTER_API_KEY"
+    },
+    "ollama": {
+        "baseUrl": "http://localhost:11434/v1"
+    },
+    "models": [
+        {
+            "key": "opus-5.5",
+            "tier": "frontier",
+            "id": "anthropic/claude-opus-5.5",
+            "provider": "anthropic",
+            "openWeight": false
+        },
+        {
+            "key": "sonnet-5.5",
+            "tier": "frontier",
+            "id": "anthropic/claude-sonnet-5.5",
+            "provider": "anthropic",
+            "openWeight": false
+        },
+        {
+            "key": "gpt-6.1-sol",
+            "tier": "frontier",
+            "id": "openai/gpt-6.1-sol",
+            "provider": "openai",
+            "openWeight": false
+        },
+        {
+            "key": "gemini-4-argon",
+            "tier": "frontier",
+            "id": "google/gemini-4-argon",
+            "provider": "google-ai-studio",
+            "openWeight": false
+        },
+        {
+            "key": "grok-4.7",
+            "tier": "frontier",
+            "id": "x-ai/grok-4.7",
+            "provider": "xai",
+            "openWeight": false
+        },
+        {
+            "key": "haiku-5.5",
+            "tier": "cheap",
+            "id": "anthropic/claude-haiku-5.5",
+            "provider": "anthropic",
+            "openWeight": false
+        },
+        {
+            "key": "gpt-6-luna",
+            "tier": "cheap",
+            "id": "openai/gpt-6-luna",
+            "provider": "openai",
+            "openWeight": false
+        },
+        {
+            "key": "gemini-3.8-flash",
+            "tier": "cheap",
+            "id": "google/gemini-3.8-flash",
+            "provider": "google-ai-studio",
+            "openWeight": false
+        },
+        {
+            "key": "deepseek-v4-pro",
+            "tier": "open-large",
+            "id": "deepseek/deepseek-v4-pro-0813",
+            "provider": "deepseek",
+            "openWeight": true,
+            "params": 1600
+        },
+        {
+            "key": "kimi-k3",
+            "tier": "open-large",
+            "id": "moonshotai/kimi-k3",
+            "provider": "moonshotai/mxfp4",
+            "openWeight": true,
+            "params": 2800
+        },
+        {
+            "key": "glm-5.3",
+            "tier": "open-large",
+            "id": "z-ai/glm-5.3",
+            "provider": "z-ai/fp8",
+            "openWeight": true
+        },
+        {
+            "key": "gpt-oss-20b",
+            "tier": "open-small",
+            "id": "openai/gpt-oss-20b",
+            "provider": "deepinfra/bf16",
+            "openWeight": true,
+            "params": 21
+        },
+        {
+            "key": "qwen3.5-9b",
+            "tier": "open-small",
+            "id": "qwen/qwen3.5-9b",
+            "provider": "deepinfra/bf16",
+            "openWeight": true,
+            "params": 9,
+            "turnTimeoutMs": 900000
+        },
+        {
+            "key": "gemma4-26b-a4b",
+            "tier": "open-small",
+            "id": "google/gemma-4-26b-a4b-it",
+            "provider": "google-vertex/global",
+            "openWeight": true,
+            "params": 26
+        },
+        {
+            "key": "qwen3.5-9b-local",
+            "tier": "local",
+            "id": "qwen3.5:9b",
+            "host": "ollama",
+            "openWeight": true,
+            "params": 9
+        },
+        {
+            "key": "gemma4-12b-local",
+            "tier": "local",
+            "id": "gemma4:12b",
+            "host": "ollama",
+            "openWeight": true,
+            "params": 12
+        }
+    ]
+}

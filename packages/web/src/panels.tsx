@@ -47,7 +47,7 @@ export interface AgentRow {
  * A stopped agent is **shown, not hidden** — the same reasoning `listAgents` uses for a broken
  * directory and `GET /v1/agents` for its thin `disabled` row: somebody who set an agent up and
  * cannot find it has no way to discover that it is switched off, which is the launchd trap that
- * `dispach stop` was designed around. So the row says it is off, says why if anybody said, and
+ * the CLI's `stop` was designed around. So the row says it is off, says why if anybody said, and
  * offers the one action that makes it reachable again.
  *
  * **`start` is offered and `stop` is not.** From a browser, stopping is one click from making an

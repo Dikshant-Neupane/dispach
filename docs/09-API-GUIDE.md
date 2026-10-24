@@ -184,7 +184,7 @@ A receiver on a private network (your backend on the same Docker network, say) n
 to allow it, in the server's environment and never over the API:
 
 ```bash
-DISPACH_WEBHOOK_ALLOW=velacrew-api,172.16.0.0/12
+DISPACH_WEBHOOK_ALLOW=internal-api,172.16.0.0/12
 ```
 
 Link-local addresses, where cloud metadata lives, are refused whatever is listed.

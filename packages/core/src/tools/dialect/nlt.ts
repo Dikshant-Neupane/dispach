@@ -25,6 +25,7 @@
 import type { ContextBlock } from "../../context/blocks.ts"
 import { SLOT } from "../../context/blocks.ts"
 import { estimateMessageTokens } from "../../context/tokens.ts"
+import { typeWords } from "../json-schema.ts"
 import { renderTrusted } from "../trust.ts"
 import type { FieldError, JsonSchemaNode, ToolIntent, ToolResult, ToolSpec } from "../types.ts"
 import type { ParsedOutput, StreamFilter, ToolDialect } from "./dialect.ts"
@@ -135,7 +136,26 @@ const ATTEMPTED_CALL: readonly RegExp[] = [
     /tool[\u2581_]calls?[\u2581_]begin/i,
     // A bare JSON call, which several models fall back to when a text protocol confuses them.
     /^\s*\{\s*"(?:name|tool|tool_name|function)"\s*:/m,
+    // An opening call tag naming a tool, alone on its line, with nothing after it: deepseek-v4-pro wrote
+    // `<invoke name="incident_list">` and stopped (eval:subagents, pilot.6). Unclosed, so the closing-tag
+    // rule above missed it, and it was delivered as the reply. The `name=` attribute on a line of its
+    // own is what prose about markup does not write.
+    /^\s*<\s*(?:invoke|tool_call|tool_use|tool|function_call|function)\b[^>]*\bname\s*=\s*["'][^"']+["'][^>]*>\s*$/im,
 ]
+
+/** `ACTION:` after other text on its line, with an `END` alone on a later line. */
+/**
+ * `ACTION:` after other text on its line, with an `END` line somewhere below. Walked line by line: the
+ * single pattern this replaces (`/\S[^\n]*?\bACTION…/m`) restarted at every character of a long line,
+ * which is quadratic on text the model wrote.
+ */
+function gluedAction(text: string): boolean {
+    const lines = text.split("\n")
+    const at = lines.findIndex((line) =>
+        [...line.matchAll(/\bACTION\s*:\s*\S/g)].some((m) => line.slice(0, m.index).trim() !== ""),
+    )
+    return at !== -1 && lines.slice(at + 1).some((line) => line.trim() === "END")
+}
 
 /**
  * Did this step attempt a tool call the parser could not read?
@@ -143,6 +163,16 @@ const ATTEMPTED_CALL: readonly RegExp[] = [
  * Only asked when nothing parsed, and answered from the *prose*, which is what the markup became.
  */
 function attemptedCall(text: string): FieldError | undefined {
+    // A block glued onto a sentence: GLM 5.3 wrote `…then store the error code.ACTION: bench__read_file`
+    // with the fields and END on the lines after (5 of 125 runs, evals/harness/runs/baseline-aae8fe4).
+    // The block parser only opens at a line start, so the markup was delivered as the reply. Its own
+    // message, because the remedy is a line break, not a different format.
+    if (gluedAction(text))
+        return {
+            field: "the block",
+            message: "started in the middle of a line, so it was read as prose and nothing ran.",
+            hint: "Put `ACTION:` at the start of a line of its own, with nothing before it on that line, then one `name: value` per line, then `END` alone on its own line. Nothing was executed, so writing it again correctly is safe.",
+        }
     if (!ATTEMPTED_CALL.some((pattern) => pattern.test(text))) return undefined
     return {
         field: "the block",
@@ -616,12 +646,26 @@ export function parseNlt(output: string): ParsedOutput {
     })
 
     const text = state.text.join("\n").trim()
+    // The same block written several times in a row is one call. GPT-6 Luna wrote an identical
+    // lookup six times in one reply while "waiting" for its result, and all six ran — a write would
+    // have happened six times. Only *consecutive* identical blocks collapse: a call repeated after a
+    // different one is a deliberate sequence. Call ids are renumbered so they stay contiguous.
+    const collapsed = intents
+        .filter(
+            (intent, index) =>
+                index === 0 ||
+                intent.slug !== intents[index - 1]?.slug ||
+                JSON.stringify(intent.args) !== JSON.stringify(intents[index - 1]?.args),
+        )
+        .map((intent, index) => ({ ...intent, callId: `c${index + 1}` }))
     // Reported *alongside* the intents rather than instead of them. The loop reads `malformed` first
     // and makes the step all-or-nothing, so a damaged value stops the call it belongs to — and
     // carrying the intents means the repair names the tool the model was reaching for. Dropping them
     // here would report "nothing parsed", which is both untrue and less useful.
-    if (intents.length > 0) {
-        return damaged.length === 0 ? { intents, text } : { intents, text, malformed: damaged }
+    if (collapsed.length > 0) {
+        return damaged.length === 0
+            ? { intents: collapsed, text }
+            : { intents: collapsed, text, malformed: damaged }
     }
 
     // Nothing parsed. If the prose is markup rather than prose, say so instead of delivering it.
@@ -849,9 +893,9 @@ never guess a value for a required field you have not been given.`
 function typeLabel(node: JsonSchemaNode): string {
     if (node.type === "array") {
         const item = node.items?.type
-        return item === undefined ? "list" : `list of ${item}`
+        return item === undefined ? "list" : `list of ${typeWords(item)}`
     }
-    return node.type
+    return typeWords(node.type)
 }
 
 function fieldLine(name: string, node: JsonSchemaNode, required: boolean, pad: number): string {
@@ -870,8 +914,30 @@ function fieldLine(name: string, node: JsonSchemaNode, required: boolean, pad: n
         notes.push(`one of: ${node.enum.map((value) => String(value)).join(" | ")}`)
     }
     if (node.default !== undefined) notes.push(`defaults to ${JSON.stringify(node.default)}`)
+    const shape = objectShape(node.type === "array" ? node.items : node)
+    if (shape !== undefined) {
+        notes.push(
+            node.type === "array"
+                ? `write it as a JSON list of objects, each with ${shape}`
+                : `write it as a JSON object with ${shape}`,
+        )
+    }
 
     return notes.length === 0 ? head : `${head} ${notes.join("; ")}`
+}
+
+/**
+ * An object's own fields, for a field whose value is one: `list of object` alone left a model to
+ * guess every key, and a guessed key is a call the tool refuses.
+ */
+function objectShape(node: JsonSchemaNode | undefined): string | undefined {
+    if (node?.type !== "object" || node.properties === undefined) return undefined
+    const required = new Set(node.required ?? [])
+    const fields = Object.entries(node.properties).map(([name, child]) => {
+        const kind = child.type === "string" ? "" : `, ${typeLabel(child)}`
+        return `"${name}" (${required.has(name) ? "required" : "optional"}${kind})`
+    })
+    return fields.length === 0 ? undefined : fields.join(", ")
 }
 
 const NO_NEGATIVE_GUIDANCE =

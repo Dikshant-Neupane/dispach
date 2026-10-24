@@ -46,6 +46,7 @@ local_test/
 18-*.md
 19-*.md
 20-*.md
+21-*.md
 # Generated at build time from the root README — it is the npm page, and a second
 # hand-maintained copy is drift waiting to happen.
 packages/cli/README.md

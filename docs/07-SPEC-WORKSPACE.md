@@ -75,6 +75,25 @@ rule stated once at the top of a thirty-turn conversation is effectively in the 
 Re-asserting one or two rules at the recency position is the cheapest known countermeasure.
 One or two rules — it is not a second policy file.
 
+**The reminder is framed as the agent's own** (pilot.14). The runtime puts one line in front of it:
+*"From my own instructions, restated each turn so I keep them in mind. The person did not write
+this."* Write `REMINDER.md` to fit that line: in the first person, as the agent's own rules ("I confirm
+before I change a ticket"). Do not address the person, and do not quote what they might say. Without
+the frame, a transport that turns a later system message into user text (Bedrock Converse) delivered
+the reminder in the same message as the person's input, and a model told them they had pasted its
+instructions. A workspace file that still holds a `{{vars.…}}` placeholder when it reaches the model
+is reported as `workspace_unrendered_var`, at load and by `validate`.
+
+**Every file arrives under its own name** (pilot.15). Each file in a tier is labelled in the active
+`promptStyle.delimiters`: `<file name="SOUL.md" tier="static">…</file>` for `xml`, a `## SOUL.md`
+heading for `markdown`, `SOUL.md:` for `plain`. Slot 2 has a `context files` row listing the static and
+reminder files as loaded every turn, and the volatile files as loaded in private conversations,
+because slot 2 is frozen per agent while a room or a stand-in turn withholds the volatile tier. The
+labels show what a given turn actually carries. Before this, the files' text was joined bare: an agent
+asked whether SOUL.md was loaded could not connect the name to the text it was reading, said it was
+not, and re-read every file until `no_progress`. A label is structure, like the `<example>` rendering,
+and never changes the author's prose. It costs a few tokens per file, outside the file's own `budget:`.
+
 **Current input last of all.** Placing the query after long content improves response
 quality substantially on multi-document inputs.
 

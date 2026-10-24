@@ -1,0 +1,11 @@
+pass  single-kv-set            r2  2 calls  13640 ms  $0.00071
+pass  single-read-answer       r2  4 calls  51240 ms  $0.00130
+pass  single-calculator        r2  3 calls  201188 ms  $0.00138
+pass  single-now               r2  2 calls  17514 ms  $0.00072  (1 429 retries)
+pass  single-send              r2  2 calls  12826 ms  $0.00070
+pass  chain-order-notify       r2  5 calls  510172 ms  $0.00253  (1 429 retries)
+FAIL  chain-file-to-kv         r2  2 calls  41536 ms  $0.00080  (3 429 retries)  — region not stored as eu-west-2
+pass  chain-sum-to-file        r2  6 calls  39079 ms  $0.00115  (5 429 retries)
+pass  chain-kv-to-send         r2  3 calls  796045 ms  $0.00258  (2 429 retries)
+pass  chain-edit-json          r2  3 calls  43445 ms  $0.00110  (1 429 retries)
+pass  recall-fact              r2  8 calls  288232 ms  $0.00189

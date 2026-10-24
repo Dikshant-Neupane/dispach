@@ -1,0 +1,8 @@
+pass  single-kv-set            r3  2 calls  332261 ms  $0.00187
+pass  single-read-answer       r3  3 calls  301086 ms  $0.00170
+pass  single-calculator        r3  2 calls  14928 ms  $0.00071
+FAIL  single-now               r3  1 calls  7323 ms  $0.00035  — clock not read (a guess)
+FAIL  single-send              r3  1 calls  6315 ms  $0.00034  (3 429 retries)  — no message to Priya about the build
+pass  chain-order-notify       r3  3 calls  86197 ms  $0.00122  (2 429 retries)
+pass  chain-file-to-kv         r3  6 calls  27539 ms  $0.00107  (1 429 retries)
+pass  chain-kv-to-send         r3  5 calls  44829 ms  $0.00109  (7 429 retries)

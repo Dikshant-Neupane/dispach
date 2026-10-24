@@ -29,6 +29,8 @@
  * accumulates inside the loop, seeded by what earlier steps saw.
  */
 
+import { posix } from "node:path"
+import { artifactId, type Displaced } from "../context/compaction/stages.ts"
 import { estimateTokens } from "../context/tokens.ts"
 import { type ErrorDetail, toolFailed, toolTimedOut } from "../errors.ts"
 import type { EventBus } from "../events/bus.ts"
@@ -36,10 +38,11 @@ import type { EventContext } from "../events/types.ts"
 import { newApprovalId } from "../loop/ids.ts"
 import { compose, type Middleware } from "../plugins/middleware.ts"
 import { coerceArgs } from "./coerce.ts"
+import type { EventDetail } from "./event-detail.ts"
 import { authorize, type PolicyConfig } from "./policy.ts"
 import type { ToolRegistry } from "./registry.ts"
 import { stripControl } from "./sanitise.ts"
-import { gatedResult, type OnMutate, refusedResult } from "./trust.ts"
+import { gatedResult, type OnMutate, refusedResult, type Trust } from "./trust.ts"
 import type { FieldError, Tool, ToolContext, ToolIntent, ToolResult } from "./types.ts"
 
 export interface ExecuteInput {
@@ -49,10 +52,31 @@ export interface ExecuteInput {
     readonly bus: EventBus
     readonly eventContext: EventContext
     readonly timeoutMs: number
+    /**
+     * A per-slug bound in place of `timeoutMs`: a routed slug runs a subagent whose own
+     * `subagents[].timeoutMs` may be longer than any single tool should take (pilot.15).
+     */
+    readonly timeoutFor?: ReadonlyMap<string, number>
+    /**
+     * Personal tools withheld from this turn because it does not act for the agent's owner
+     * (pilot.15). Already absent from `registry`; a call naming one is refused as `tool_personal`
+     * and reported as `tool.gated`, rather than answered as a tool that does not exist.
+     */
+    readonly withheld?: ReadonlySet<string>
     /** Read-only calls only. Mutating calls always run one at a time. */
     readonly maxParallel: number
     /** Above this, an observation is cut to head and tail with a visible marker. */
     readonly observationMaxTokens: number
+    /**
+     * Stores the whole of an observation that was cut, so its marker can name an id `artifact_read`
+     * follows. Without it the marker only says how much was cut, and a model that needs the middle
+     * re-runs the call until `no_progress` (a pilot's field report: a project plan's ids were in the
+     * cut middle). Used only when `artifact_read` is in the catalogue: a marker naming a tool the agent
+     * lacks is an instruction it can't follow.
+     */
+    readonly keepFull?: (artifacts: readonly Displaced[]) => Promise<void>
+    /** `tools.eventDetail: redacted`: the arguments and output the tool events carry. */
+    readonly eventDetail?: EventDetail
     /**
      * True when an earlier step in this turn produced untrusted output.
      *
@@ -84,6 +108,17 @@ export interface ExecuteInput {
      * intentions, which is why it is stated here and not left to a plugin author's judgement.
      */
     readonly middleware?: readonly Middleware[]
+    /**
+     * Queue every mutating call for someone else to approve later, instead of running or asking now
+     * (Phase 28: a stand-in never commits). Consulted **before** `policy.allow`, so no allow rule
+     * lets a stand-in act; a `deny` rule and the hardline floor still refuse outright. Returns what
+     * the model reads — that the call is queued and has not happened.
+     */
+    readonly defer?: (call: {
+        readonly callId: string
+        readonly slug: string
+        readonly args: Readonly<Record<string, unknown>>
+    }) => Promise<string>
 }
 
 /** What a person is being asked to allow. */
@@ -196,6 +231,12 @@ function reasonFor(slug: string, by: "approver" | "error" | "abandoned"): string
 }
 
 /** The match argument as text. A non-string argument cannot be pattern-matched, so it is not. */
+/** A path as a rule should see it: `..` and `.` resolved lexically, no leading `./`. */
+function policyPath(value: string): string {
+    const normalised = posix.normalize(value.replaceAll("\\", "/"))
+    return normalised.startsWith("./") ? normalised.slice(2) : normalised
+}
+
 function stringArg(value: unknown): string | undefined {
     return typeof value === "string" ? value : undefined
 }
@@ -220,6 +261,7 @@ export function hashArgs(args: Readonly<Record<string, unknown>>): string {
 function truncate(
     output: string,
     maxTokens: number,
+    artifact?: string,
 ): { readonly text: string; readonly truncated: boolean } {
     if (maxTokens <= 0 || estimateTokens(output) <= maxTokens) {
         return { text: output, truncated: false }
@@ -230,8 +272,12 @@ function truncate(
     const head = output.slice(0, Math.floor(budget * 0.6))
     const tail = output.slice(-Math.floor(budget * 0.4))
     const elided = output.length - head.length - tail.length
+    const marker =
+        artifact === undefined
+            ? `[… ${elided} characters cut from the middle of this observation to fit the context budget …]`
+            : `[… ${elided} characters cut from the middle of this observation to fit the context budget — the whole result is readable with artifact_read("${artifact}") …]`
     return {
-        text: `${head}\n\n[… ${elided} characters cut from the middle of this observation to fit the context budget …]\n\n${tail}`,
+        text: `${head}\n\n${marker}\n\n${tail}`,
         truncated: true,
     }
 }
@@ -332,7 +378,39 @@ async function decideAndRun(
 ): Promise<ToolResult> {
     const { spec } = entry.tool
     const call = { callId: entry.intent.callId, slug: spec.slug }
-    const match = spec.policyArg === undefined ? undefined : stringArg(entry.args[spec.policyArg])
+    const raw = spec.policyArg === undefined ? undefined : stringArg(entry.args[spec.policyArg])
+    const match = raw !== undefined && spec.policyArgIsPath === true ? policyPath(raw) : raw
+
+    if (spec.mutating && input.defer !== undefined) {
+        // The rules alone, with the taint set aside: a stand-in's input is room text and would be
+        // refused by the gate, where the point is to hand the decision to the owner. What the rules
+        // deny stays denied; everything else waits for the owner.
+        const ruled = authorize({
+            policy: input.policy,
+            query: { slug: spec.slug, ...(match === undefined ? {} : { match }) },
+            mutating: true,
+            tainted: false,
+            onMutate: input.onMutate,
+            approver: true,
+        })
+        if (ruled.effect !== "deny") {
+            const output = await input.defer({
+                callId: call.callId,
+                slug: spec.slug,
+                args: entry.args,
+            })
+            return {
+                callId: call.callId,
+                slug: spec.slug,
+                ok: true,
+                output,
+                latencyMs: 0,
+                bytes: new TextEncoder().encode(output).byteLength,
+                truncated: false,
+                trust: "trusted",
+            }
+        }
+    }
 
     let decision = authorize({
         policy: input.policy,
@@ -402,7 +480,7 @@ async function decideAndRun(
             : { effect: "deny", reason: reasonFor(spec.slug, outcome.by) }
     }
 
-    if (decision.effect === "allow") return runOne(entry, input)
+    if (decision.effect === "allow") return runOne(entry, input, tainted)
 
     // Both refusal shapes emit `tool.gated` and nothing else. No `tool.call` and no `tool.result`:
     // nothing ran, and a consumer pairing the two would otherwise hold an orphan forever. A policy
@@ -424,6 +502,29 @@ async function decideAndRun(
 }
 
 export async function executeIntents(input: ExecuteInput): Promise<ExecuteOutcome> {
+    const withheld = input.withheld
+    if (withheld !== undefined && input.intents.some((intent) => withheld.has(intent.slug))) {
+        const rest = await executeIntents({
+            ...input,
+            intents: input.intents.filter((intent) => !withheld.has(intent.slug)),
+        })
+        if (rest.repair.length > 0) return rest
+        const ran = new Map(rest.results.map((result) => [result.callId, result]))
+        // In the order the calls were made, which the native protocol requires.
+        const results = input.intents.flatMap((intent) => {
+            if (!withheld.has(intent.slug)) {
+                const result = ran.get(intent.callId)
+                return result === undefined ? [] : [result]
+            }
+            input.bus.emit(
+                "tool.gated",
+                { slug: intent.slug, callId: intent.callId, reason: "personal", policy: "refuse" },
+                input.eventContext,
+            )
+            return [personalResult(intent)]
+        })
+        return { results, repair: [] }
+    }
     const { planned, repair } = planIntents(input.registry, input.intents)
 
     if (repair.length > 0) {
@@ -439,6 +540,8 @@ export async function executeIntents(input: ExecuteInput): Promise<ExecuteOutcom
     }
 
     const results: ToolResult[] = []
+    // A call that must stand alone is refused when it does not: see `ToolSpec.alone`.
+    const crowded = planned.length > 1
     let tainted = input.untrustedInTurn
     let source = input.untrustedSource ?? "an earlier tool call"
 
@@ -450,7 +553,11 @@ export async function executeIntents(input: ExecuteInput): Promise<ExecuteOutcom
             // and neither the gate nor the policy should quietly depend on that staying true.
             // Position is preserved either way, so `results` still answers every announced call in
             // order — which the native protocol requires.
-            group.map((entry) => wrapped(entry, input, tainted, source)),
+            group.map((entry) =>
+                crowded && entry.tool.spec.alone === true
+                    ? Promise.resolve(notAlone(entry, planned, input))
+                    : wrapped(entry, input, tainted, source),
+            ),
         )
         results.push(...settled)
 
@@ -467,6 +574,47 @@ export async function executeIntents(input: ExecuteInput): Promise<ExecuteOutcom
     }
 
     return { results, repair: [] }
+}
+
+/** `alone` refused beside other calls. Not an error the model caused on purpose: it says what to do. */
+function notAlone(
+    entry: PlannedCall,
+    planned: readonly PlannedCall[],
+    input: ExecuteInput,
+): ToolResult {
+    const { slug } = entry.tool.spec
+    const others = [
+        ...new Set(planned.filter((other) => other !== entry).map((other) => other.tool.spec.slug)),
+    ]
+    const reason = `${slug} was called in the same step as ${others.join(", ")}, so it could only report results that did not exist yet.`
+    input.bus.emit(
+        "tool.gated",
+        { slug, callId: entry.intent.callId, reason, policy: input.onMutate },
+        input.eventContext,
+    )
+    const output = [
+        `${slug} was not run.`,
+        "",
+        reason,
+        "",
+        `Read what ${others.join(", ")} returned, then call ${slug} again on its own, in a step of its own.`,
+    ].join("\n")
+    return {
+        callId: entry.intent.callId,
+        slug,
+        ok: false,
+        gated: true,
+        trust: "trusted",
+        output,
+        error: {
+            code: "tool_not_alone",
+            message: reason,
+            hint: `Call ${slug} by itself, after the other calls' results are in.`,
+        },
+        latencyMs: 0,
+        bytes: output.length,
+        truncated: false,
+    }
 }
 
 /**
@@ -494,7 +642,11 @@ export function batch(
     return groups
 }
 
-async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResult> {
+async function runOne(
+    entry: PlannedCall,
+    input: ExecuteInput,
+    tainted: boolean,
+): Promise<ToolResult> {
     const { intent, tool, args } = entry
     const started = performance.now()
 
@@ -505,12 +657,25 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
             callId: intent.callId,
             argsHash: hashArgs(args),
             mutating: tool.spec.mutating,
+            ...(input.eventDetail === undefined ? {} : { args: input.eventDetail.args(args) }),
         },
         input.eventContext,
     )
 
-    const settle = (ok: boolean, output: string, error?: ErrorDetail): ToolResult => {
-        const capped = truncate(output, input.observationMaxTokens)
+    const settle = async (
+        ok: boolean,
+        output: string,
+        error?: ErrorDetail,
+    ): Promise<ToolResult> => {
+        // Unreachable for anything that came through a `ToolRegistry` — every tool there has been
+        // normalised — but `ToolSpec.trust` is optional in the type, so the fallback has to exist. It
+        // is `trusted` because the only specs that bypass the registry are ones core itself constructed.
+        // `trustOf` can only lower it: a call can't vouch for itself past what its spec says.
+        const trust =
+            tool.spec.trust === "untrusted"
+                ? "untrusted"
+                : (tool.trustOf?.(args) ?? tool.spec.trust ?? "trusted")
+        const capped = await capObservation(output, trust, tool.spec.slug, input)
         const result: ToolResult = {
             callId: intent.callId,
             slug: tool.spec.slug,
@@ -520,11 +685,7 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
             latencyMs: Math.round(performance.now() - started),
             bytes: output.length,
             truncated: capped.truncated,
-            // Unreachable for anything that came through a `ToolRegistry` — every tool there has
-            // been normalised — but `ToolSpec.trust` is optional in the type, so the fallback has to
-            // exist. It is `trusted` because the only specs that bypass the registry are ones core
-            // itself constructed.
-            trust: tool.spec.trust ?? "trusted",
+            trust,
         }
         input.bus.emit(
             "tool.result",
@@ -536,14 +697,17 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
                 bytes: result.bytes,
                 truncated: result.truncated,
                 trust: result.trust,
+                // The output as the model saw it, then capped again for the event.
+                ...(input.eventDetail === undefined ? {} : input.eventDetail.output(result.output)),
             },
             input.eventContext,
         )
         return result
     }
 
+    const timeoutMs = input.timeoutFor?.get(tool.spec.slug) ?? input.timeoutMs
     const timeout = new AbortController()
-    const timer = setTimeout(() => timeout.abort(), input.timeoutMs)
+    const timer = setTimeout(() => timeout.abort(), timeoutMs)
     // The turn's cancellation and this call's timeout are different outcomes, so they stay separate
     // controllers and the handler is handed the union.
     const signal = AbortSignal.any([input.context.signal, timeout.signal])
@@ -551,7 +715,31 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
     try {
         const output = await Promise.race([
             Promise.resolve(
-                tool.handler(args, { ...input.context, signal, deadlineMs: input.timeoutMs }),
+                tool.handler(args, {
+                    ...input.context,
+                    signal,
+                    deadlineMs: timeoutMs,
+                    callId: intent.callId,
+                    tainted,
+                    meter: (usage) => {
+                        const participant = input.context.actingParticipant?.id
+                        input.bus.emit(
+                            "tool.usage",
+                            {
+                                slug: tool.spec.slug,
+                                callId: intent.callId,
+                                provider: usage.provider,
+                                ...(usage.operation === undefined
+                                    ? {}
+                                    : { operation: usage.operation }),
+                                unit: usage.unit,
+                                units: usage.units,
+                                ...(participant === undefined ? {} : { participant }),
+                            },
+                            input.eventContext,
+                        )
+                    },
+                }),
             ),
             new Promise<never>((_, reject) => {
                 signal.addEventListener(
@@ -559,7 +747,7 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
                     () => {
                         reject(
                             timeout.signal.aborted
-                                ? toolTimedOut(tool.spec.slug, input.timeoutMs)
+                                ? toolTimedOut(tool.spec.slug, timeoutMs)
                                 : new DOMException("aborted", "AbortError"),
                         )
                     },
@@ -585,6 +773,60 @@ async function runOne(entry: PlannedCall, input: ExecuteInput): Promise<ToolResu
     }
 }
 
+/**
+ * Cut an observation to the budget, keeping the whole of it as an artifact when that is possible.
+ *
+ * A failed store falls back to the marker without an id rather than failing the call: the tool ran,
+ * and its result is still in front of the model, which is what the call was for.
+ */
+async function capObservation(
+    output: string,
+    trust: Trust,
+    slug: string,
+    input: ExecuteInput,
+): Promise<{ readonly text: string; readonly truncated: boolean }> {
+    const plain = truncate(output, input.observationMaxTokens)
+    if (!plain.truncated || input.keepFull === undefined || !input.registry.has("artifact_read")) {
+        return plain
+    }
+    const id = artifactId(output, trust)
+    try {
+        await input.keepFull([{ id, slug, content: output, tokens: estimateTokens(output) }])
+    } catch (error) {
+        input.bus.emit(
+            "agent.warning",
+            {
+                code: "observation_store_failed",
+                message: `Storing the whole of a cut ${slug} result failed: ${error instanceof Error ? error.message : String(error)}`,
+                hint: "The model still saw the cut result, but its marker names no id to read the rest with. A store that cannot be written is usually full or read-only.",
+            },
+            input.eventContext,
+        )
+        return plain
+    }
+    return truncate(output, input.observationMaxTokens, id)
+}
+
 function isAbortError(value: unknown): boolean {
     return value instanceof Error && value.name === "AbortError"
+}
+
+/** A personal tool asked for in a turn that is not its owner's (pilot.15). Nothing ran. */
+function personalResult(call: { readonly callId: string; readonly slug: string }): ToolResult {
+    return {
+        callId: call.callId,
+        slug: call.slug,
+        ok: false,
+        gated: true,
+        trust: "trusted",
+        output: `${call.slug} was not run. It acts as the person this agent belongs to, and this conversation is not theirs, so their connected apps are not available here. Answer without it, and say that this needs the owner.`,
+        error: {
+            code: "tool_personal",
+            message: `${call.slug} is the owner's, and this turn does not act for the owner.`,
+            hint: "Personal tools (Composio, MCP servers marked personal) run only when the turn acts for the agent's assigned owner, or for one of the owner's channelIds on PUT /v1/agents/:id/assignee.",
+        },
+        latencyMs: 0,
+        bytes: 0,
+        truncated: false,
+    }
 }

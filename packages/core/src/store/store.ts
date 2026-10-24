@@ -36,6 +36,11 @@ export interface SessionRecord {
     readonly thread?: string
     /** Phase-scoped tool visibility, persisted per session from Phase 7. */
     readonly phase?: string
+    /**
+     * Present, and false, on a conversation kept out of history recall (pilot.10). Absent means
+     * recalled, which is every session that existed before the flag.
+     */
+    readonly recall?: false
     /** RFC 3339 UTC. */
     readonly createdAt: string
     readonly updatedAt: string
@@ -115,9 +120,13 @@ export interface TurnRecord {
     readonly sender?: string
     readonly senderName?: string
     readonly senderKind?: SenderKind
+    /** `POST /messages {runtimeNote}`, as sent. Absent when there was none. */
+    readonly note?: string
     readonly errorCode?: string
     readonly errorMessage?: string
     readonly errorHint?: string
+    /** The provider's own words, when the error carried them (pilot.14). */
+    readonly errorDetail?: string
     readonly startedAt: string
     readonly endedAt?: string
     readonly durationMs?: number
@@ -135,6 +144,8 @@ export interface SessionStore {
     get(agentId: string, sessionKey: string): Promise<SessionRecord | undefined>
     list(agentId: string): Promise<readonly SessionSummary[]>
     setPhase(agentId: string, sessionKey: string, phase: string | undefined): Promise<void>
+    /** Keep a conversation out of history recall, or put it back. Its messages are untouched. */
+    setRecall(agentId: string, sessionKey: string, recall: boolean): Promise<void>
     /** Clears history, turns, and their derived session-memory source. Canonical files are untouched. */
     clear(agentId: string, sessionKey: string): Promise<void>
     /** Deletes the session and its derived session-memory source. Canonical files are untouched. */
@@ -169,6 +180,67 @@ export interface MessageStore {
         },
     ): Promise<MessagePage>
     count(agentId: string, sessionKey: string): Promise<number>
+    /**
+     * Prose messages (no `origin`, user or assistant) across this agent's sessions containing every
+     * word, case-insensitive, newest first (pilot.15, `memory_forget`). Already forgotten ones are not
+     * returned.
+     */
+    findProse(
+        agentId: string,
+        words: readonly string[],
+        reach: MessageReach,
+        limit: number,
+    ): Promise<readonly StoredMessage[]>
+    /**
+     * Replace these messages' text with `marker`, and the matching text on their turn rows (the input
+     * for a person's message; the reply and reasoning for the agent's). Only within `reach`, so an id
+     * outside it is left alone. Returns what was redacted, as it was.
+     */
+    redact(
+        agentId: string,
+        ids: readonly number[],
+        reach: MessageReach,
+        marker: string,
+    ): Promise<readonly StoredMessage[]>
+    /**
+     * Replace the text of every message these turns wrote, of any kind, and their turn rows' input,
+     * reply and reasoning (pilot.15): the conversation in which a person asked to forget something
+     * quotes it. Each tool call keeps its id and name, because a native trace without them is refused
+     * on replay; every argument value is replaced. Returns the sessions touched.
+     */
+    redactTurns(agentId: string, turnIds: readonly string[], marker: string): Promise<RedactedTurns>
+    /**
+     * Replace forgotten text wherever else it was written, within `reach` (pilot.15): a message of any
+     * kind whose text contains a needle becomes `marker`, and a tool call whose arguments contain one
+     * keeps its shape with that value replaced, so a native trace still replays. `memory_write`'s own
+     * call is the case that made this necessary: its `text` argument is the fact, verbatim. Returns the
+     * sessions it changed, and the turns whose `memory_write` call carried a needle: the turn that saved
+     * a note is the exact link to the reply that restated it, which no text match finds.
+     */
+    scrub(
+        agentId: string,
+        needles: readonly string[],
+        reach: MessageReach,
+        marker: string,
+    ): Promise<{ readonly sessions: readonly string[]; readonly writeTurns: readonly string[] }>
+}
+
+/** What `redactTurns` changed: the sessions, and the text it replaced, for the webhook scrub. */
+export interface RedactedTurns {
+    readonly sessions: readonly string[]
+    readonly texts: readonly string[]
+}
+
+/** The text a forgotten message keeps, so a session's order and pairing survive (pilot.15). */
+export const FORGOTTEN_MARKER = "[forgotten at the person's request]"
+
+/**
+ * Whose messages a call may reach (pilot.15). Absent `participant`: every session of the agent. Present:
+ * turns taken for that participant or sent by them, and, with `unattributed`, turns that record nobody.
+ */
+export interface MessageReach {
+    readonly participant?: string
+    readonly unattributed?: boolean
 }
 
 export interface TurnStore {
@@ -186,6 +258,10 @@ export interface TurnStore {
          */
         readonly input: string
         readonly sender?: TurnSender
+        /** The acting participant, when the turn was taken for one (pilot.15). */
+        readonly participantId?: string
+        /** The embedder's note about this message, kept for debugging and replay. Never history. */
+        readonly note?: string
     }): Promise<TurnRecord>
     finish(
         turnId: string,
@@ -203,6 +279,7 @@ export interface TurnStore {
             readonly errorCode?: string
             readonly errorMessage?: string
             readonly errorHint?: string
+            readonly errorDetail?: string
         },
     ): Promise<void>
     get(turnId: string): Promise<TurnRecord | undefined>
@@ -372,10 +449,15 @@ export const DEFAULT_KEY_TOUCH_MS = 60_000
  *
  * The names go on the wire (`GET /v1/keys`, `POST /v1/keys`), so they are append-only in practice.
  */
-export type Capability = "read" | "chat" | "write" | "admin"
+/**
+ * What a credential may do. `peer` is narrower than the others rather than beside them: it reaches only
+ * a plugin route that declares it (an A2A endpoint), and no first-party route asks for it — so a key a
+ * remote agent holds cannot start a trusted turn through `POST /messages` (Phase 30).
+ */
+export type Capability = "read" | "chat" | "write" | "admin" | "peer"
 
 /** Every capability, for validation and for a listing that cannot go stale against the union. */
-export const CAPABILITIES: readonly Capability[] = ["read", "chat", "write", "admin"]
+export const CAPABILITIES: readonly Capability[] = ["read", "chat", "write", "admin", "peer"]
 
 /**
  * How far one key reaches. **Every field absent is byte-identical to an unscoped key**, which is
@@ -410,6 +492,13 @@ export interface KeyScope {
     readonly sessions?: string
     /** Absent means all four. See `Capability`. */
     readonly can?: readonly Capability[]
+    /**
+     * The one participant this key speaks for (doc 16 R7). A member's front end holds a key bound to
+     * that member, so a turn it starts acts for them and no one else: a `from` naming anybody else
+     * is refused, and an absent one is filled in. Absent means the key may name any sender, which is
+     * what an embedder's own backend holds.
+     */
+    readonly participant?: string
 }
 
 export interface OperatorKeyRecord {
@@ -609,6 +698,199 @@ export interface AgentStateRecord {
  * `OperatorKeyStore.revoke` does — the interesting timestamp is when it stopped, not when somebody
  * last asked again.
  */
+/**
+ * A human the embedder registered (Phase 27). Dispach stores no account: `id` is the embedder's own,
+ * the one a key's `scope.participant` names, and the embedder authenticated whoever holds that key.
+ * An agent is a participant too, implicitly, as `agent:<agentId>`; it needs no row.
+ */
+export interface ParticipantRecord {
+    readonly id: string
+    readonly kind: "human"
+    readonly name?: string
+    /** `admin` may assign agents to members. Nothing else differs. */
+    readonly role: "admin" | "member"
+    /** A job title, as the team knows the person (pilot.9). Not a permission. */
+    readonly title?: string
+    /** An IANA zone, `Europe/London`: what "tomorrow at nine" means for this person (pilot.9). */
+    readonly timezone?: string
+    readonly createdAt: string
+    /** Pushed by the embedder (Phase 28). Absent until pushed, and absent reads as online. */
+    readonly presence?: "online" | "offline"
+    readonly presenceAt?: string
+}
+
+/** A mutating call a stand-in queued for its owner, run only when the owner approves. */
+export interface DeferredActionRecord {
+    readonly id: string
+    readonly agentId: string
+    readonly conversationId: string
+    /** The absent owner who decides. */
+    readonly ownerId: string
+    /** Whose message the stand-in was answering. */
+    readonly requestedBy: string
+    readonly slug: string
+    readonly args: Readonly<Record<string, unknown>>
+    readonly status: "pending" | "done" | "failed" | "denied"
+    /** The tool's output, or the error, once decided. */
+    readonly result?: string
+    readonly createdAt: string
+    readonly decidedAt?: string
+}
+
+export type ConversationKind = "room" | "dm"
+
+export interface ConversationRecord {
+    readonly id: string
+    readonly kind: ConversationKind
+    readonly title?: string
+    /** Participant ids: humans as registered, agents as `agent:<id>`. */
+    readonly members: readonly string[]
+    readonly createdAt: string
+}
+
+export interface ConversationMessageRecord {
+    readonly id: string
+    readonly conversationId: string
+    readonly authorId: string
+    /** Stamped by the runtime from who posted, never from the body. */
+    readonly origin: "human" | "agent"
+    readonly text: string
+    /** Participant ids this message addresses. */
+    readonly mentions: readonly string[]
+    /**
+     * How many agent replies deep this message is: 0 for a human's, one more than its trigger for an
+     * agent's. The loop guard's whole state — structural, so two agents of one kind are caught.
+     */
+    readonly hop: number
+    /** The turn that produced it, for an agent's message. */
+    readonly turnId?: string
+    /** The absent owner a stand-in answered for (Phase 28). */
+    readonly onBehalfOf?: string
+    /** Monotonic within the store; `after` in a listing. */
+    readonly seq: number
+    readonly createdAt: string
+}
+
+/**
+ * A note in a shared memory scope (Phase 29): `space`, `owner:<participant>` or `project:<id>`.
+ * Canonical; the memory index holds a projection of it under the scope's own corpus key.
+ */
+export interface MemoryNoteRecord {
+    readonly id: string
+    readonly scope: string
+    readonly text: string
+    /** A participant id, or `agent:<id>` for the space writer's `memory_write`. */
+    readonly writtenBy: string
+    readonly createdAt: string
+}
+
+/** A group of agents sharing a `project:<id>` scope. Defined by the embedder. */
+export interface ProjectRecord {
+    readonly id: string
+    readonly name?: string
+    /** Agent ids, bare. */
+    readonly agents: readonly string[]
+    readonly createdAt: string
+}
+
+/** One retrieval that returned passages from someone's owner scope. What that person can audit. */
+export interface MemoryReadRecord {
+    readonly scope: string
+    /** The agent that read. */
+    readonly reader: string
+    readonly turnId: string
+    readonly sessionKey: string
+    /** Whose message the turn was answering, when a person's. */
+    readonly requestedBy?: string
+    /** Set when the reader was standing in for the owner. */
+    readonly onBehalfOf?: string
+    /** The passages' sources, as recalled. */
+    readonly sources: readonly string[]
+    readonly at: string
+}
+
+/** Who an agent works for, recorded by an admin. The human stays accountable for what it is asked. */
+export interface AssignmentRecord {
+    readonly agentId: string
+    readonly participantId: string
+    /**
+     * The owner's own channel senders, as a channel turn names them (`whatsapp:+8801…`, `slack:U123`):
+     * a turn from one of these acts as the owner, so it keeps the owner's personal tools (pilot.15).
+     */
+    readonly channelIds?: readonly string[]
+    readonly assignedBy?: string
+    readonly assignedAt: string
+}
+
+export interface ConversationStore {
+    upsertParticipant(record: ParticipantRecord): Promise<ParticipantRecord>
+    participant(id: string): Promise<ParticipantRecord | undefined>
+    participants(): Promise<readonly ParticipantRecord[]>
+    deleteParticipant(id: string): Promise<boolean>
+    create(record: ConversationRecord): Promise<ConversationRecord>
+    get(id: string): Promise<ConversationRecord | undefined>
+    list(): Promise<readonly ConversationRecord[]>
+    setMembers(
+        id: string,
+        add: readonly string[],
+        remove: readonly string[],
+    ): Promise<ConversationRecord>
+    append(message: Omit<ConversationMessageRecord, "seq">): Promise<ConversationMessageRecord>
+    messages(
+        conversationId: string,
+        options?: { readonly after?: number; readonly limit?: number },
+    ): Promise<readonly ConversationMessageRecord[]>
+    assign(record: AssignmentRecord): Promise<AssignmentRecord>
+    assignment(agentId: string): Promise<AssignmentRecord | undefined>
+    unassign(agentId: string): Promise<boolean>
+    setPresence(
+        id: string,
+        presence: "online" | "offline",
+        at: string,
+    ): Promise<ParticipantRecord | undefined>
+    /** Agents assigned to a participant. */
+    assignedTo(participantId: string): Promise<readonly AssignmentRecord[]>
+    deferAction(record: DeferredActionRecord): Promise<DeferredActionRecord>
+    action(id: string): Promise<DeferredActionRecord | undefined>
+    actions(filter?: {
+        readonly ownerId?: string
+        readonly status?: DeferredActionRecord["status"]
+    }): Promise<readonly DeferredActionRecord[]>
+    /** Move a pending action to its outcome. `undefined` when it was not pending (decided twice). */
+    decideAction(
+        id: string,
+        status: "done" | "failed" | "denied",
+        result: string | undefined,
+        at: string,
+    ): Promise<DeferredActionRecord | undefined>
+    addNote(record: MemoryNoteRecord): Promise<MemoryNoteRecord>
+    /** Every note in one scope, oldest first. The whole set, because the indexer reconciles against it. */
+    notes(scope: string): Promise<readonly MemoryNoteRecord[]>
+    note(id: string): Promise<MemoryNoteRecord | undefined>
+    deleteNote(id: string): Promise<boolean>
+    /** Every scope that holds a note. What a rebuild re-indexes. */
+    noteScopes(): Promise<readonly string[]>
+    upsertProject(record: Omit<ProjectRecord, "agents">): Promise<ProjectRecord>
+    project(id: string): Promise<ProjectRecord | undefined>
+    projects(): Promise<readonly ProjectRecord[]>
+    deleteProject(id: string): Promise<boolean>
+    setProjectAgents(
+        id: string,
+        add: readonly string[],
+        remove: readonly string[],
+    ): Promise<ProjectRecord>
+    /** Project ids an agent belongs to. */
+    projectsOf(agentId: string): Promise<readonly string[]>
+    setSpaceWriter(writer: string, setBy: string | undefined, at: string): Promise<void>
+    spaceWriter(): Promise<string | undefined>
+    recordRead(record: MemoryReadRecord): Promise<void>
+    /** Newest first. */
+    reads(
+        scope: string,
+        options?: { readonly limit?: number },
+    ): Promise<readonly MemoryReadRecord[]>
+}
+
 export interface AgentStateStore {
     /** `undefined` when nothing has ever been recorded, which means enabled. */
     get(agentId: string): Promise<AgentStateRecord | undefined>
@@ -646,10 +928,18 @@ export interface ModelCallRecord {
     readonly promptReported: boolean
     /** Absent when the endpoint reported no cache figure, which is distinct from a reported zero. */
     readonly cachedPromptTokens?: number
+    /** Prompt tokens written to the cache by this call, when reported. Same third state. */
+    readonly cacheWriteTokens?: number
     readonly outputTokens: number
     readonly outputReported: boolean
+    /** The call's own id. Absent only for a row written before migration 20. */
+    readonly callId?: string
     /** Who sent the turn, when it was not the operator. The key per-member billing groups on. */
     readonly sender?: string
+    /** Images an image call produced. Present only on media rows, whose tokens are zero. */
+    readonly images?: number
+    /** Seconds of audio a transcription processed, when known. */
+    readonly audioSeconds?: number
     readonly at: string
 }
 
@@ -679,7 +969,13 @@ export interface UsageBucket {
     readonly calls: number
     readonly promptTokens: number
     readonly cachedPromptTokens: number
+    /** Prompt tokens written to a cache. Zero from an endpoint that does not report it. */
+    readonly cacheWriteTokens: number
     readonly outputTokens: number
+    /** Images generated. Zero when none were. */
+    readonly images: number
+    /** Seconds of audio transcribed, over the calls that reported a duration. */
+    readonly audioSeconds: number
     /**
      * Calls where either figure was our estimate. Non-zero means the totals are not a measurement,
      * and a caller billing from them should know how much of the number is a guess.
@@ -799,6 +1095,13 @@ export interface WebhookStore {
     ): Promise<readonly WebhookDeliveryRecord[]>
     /** What these agents' subscriptions still owe. */
     backlog(agentIds: readonly string[]): Promise<DeliveryBacklog>
+    /**
+     * Replace forgotten text in this agent's delivery log (pilot.15, `memory_forget`): every string in a
+     * body that contains a needle becomes `marker`, the envelope kept. Sent rows are a record of what
+     * left, and the copy already delivered is the receiver's; this is the silo's own copy. Returns the
+     * rows changed.
+     */
+    scrubBodies(agentId: string, needles: readonly string[], marker: string): Promise<number>
 }
 
 /**
@@ -856,6 +1159,12 @@ export interface AgentFootprint {
  */
 export type DeliveryStatus = "pending" | "inflight" | "sent" | "failed"
 
+/** A file sent as its own chunk after the text of a reply. The path is absolute. */
+export interface DeliveryAttachment {
+    readonly path: string
+    readonly mimeType: string
+}
+
 export interface DeliveryRecord {
     readonly id: number
     readonly agentId: string
@@ -878,7 +1187,9 @@ export interface DeliveryRecord {
     readonly thread?: string
     readonly chunkIndex: number
     readonly chunkTotal: number
+    /** The text, or an attachment's caption (usually empty). */
     readonly body: string
+    readonly attachment?: DeliveryAttachment
     readonly status: DeliveryStatus
     readonly attempts: number
     /** RFC 3339 UTC. A `pending` row is invisible to `due` until this passes. */
@@ -910,6 +1221,7 @@ export interface EnqueueDelivery {
     readonly chunkIndex: number
     readonly chunkTotal: number
     readonly body: string
+    readonly attachment?: DeliveryAttachment
     /**
      * When this row becomes visible to `due`. Defaults to now.
      *
@@ -1035,6 +1347,14 @@ export interface ScheduleRecord {
     readonly sessionMode: string
     /** Model role override. Absent is `main`. */
     readonly role: string | undefined
+    /**
+     * Limits for this schedule's runs (pilot.5, #15). They only narrow: `toolsAllow` selects from the
+     * agent's own catalogue with the phase grammar, and the two numbers are capped by the manifest's
+     * `limits`. Absent is the agent's own.
+     */
+    readonly toolsAllow: readonly string[] | undefined
+    readonly timeoutMs: number | undefined
+    readonly maxSteps: number | undefined
     readonly enabled: boolean
     readonly origin: ScheduleOrigin
     /**
@@ -1090,6 +1410,10 @@ export interface UpsertSchedule {
     readonly deliverTo?: string
     readonly sessionMode: string
     readonly role?: string
+    /** Absent is "the agent's own". Optional so existing callers compile; see `ScheduleRecord`. */
+    readonly toolsAllow?: readonly string[] | undefined
+    readonly timeoutMs?: number | undefined
+    readonly maxSteps?: number | undefined
     readonly enabled: boolean
     readonly origin: ScheduleOrigin
     readonly anchorAt: string
@@ -1350,6 +1674,8 @@ export interface Store {
      * would have made "stopped" a fact that disappeared the moment the host did.
      */
     readonly agentState: AgentStateStore
+    /** Participants, rooms and DMs, their messages, and agent assignments (Phase 27). Server-wide. */
+    readonly conversations: ConversationStore
     readonly kv: KVStore
     readonly artifacts: ArtifactStore
     readonly memory: MemoryStore
@@ -1377,6 +1703,12 @@ export interface Store {
      * deletion come to disagree.
      */
     agentFootprint(agentId: string): Promise<AgentFootprint>
+    /**
+     * A consistent copy of the whole store at `path`, taken while it stays open (pilot.9,
+     * `GET /v1/backup`). `VACUUM INTO`, so the copy is one transaction's view and compacted; the
+     * file must not exist yet. The copy holds no leases: whatever restores it is a new process.
+     */
+    snapshot(path: string): Promise<void>
     /**
      * Delete everything belonging to one agent, in one transaction.
      *

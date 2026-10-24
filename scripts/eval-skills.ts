@@ -21,6 +21,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DEFAULT_PROMPT_STYLE } from "../packages/core/src/model/prompt-style.ts"
 import { loadSkills } from "../packages/core/src/skills/index.ts"
+import { provenance } from "./lib/provenance.ts"
 
 const args = process.argv.slice(2)
 function flag(name: string, fallback: number): number {
@@ -141,5 +142,20 @@ if (over.length > 0) {
     )
     process.exit(1)
 }
+
+writeFileSync(
+    join(import.meta.dirname, "..", "evals", "skills", "results.json"),
+    `${JSON.stringify(
+        {
+            ...provenance(),
+            skills: SKILLS,
+            repeats: REPEATS,
+            coldMs: { median: Number(median(cold).toFixed(2)), criterion: COLD_CRITERION_MS },
+            warmMs: { median: Number(median(warm).toFixed(2)), criterion: WARM_CRITERION_MS },
+        },
+        null,
+        4,
+    )}\n`,
+)
 
 console.log("\neval-skills: ok")

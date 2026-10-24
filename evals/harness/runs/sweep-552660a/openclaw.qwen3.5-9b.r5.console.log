@@ -1,0 +1,26 @@
+pass  single-kv-set            r5  5 calls  79052 ms  $0.00425
+FAIL  single-read-answer       r5  12 calls  159041 ms  $0.01055  — file never read
+pass  single-calculator        r5  4 calls  51703 ms  $0.00247
+pass  single-now               r5  6 calls  35573 ms  $0.00473
+pass  single-send              r5  5 calls  30961 ms  $0.00327
+pass  chain-order-notify       r5  11 calls  72339 ms  $0.00957
+FAIL  chain-file-to-kv         r5  12 calls  103399 ms  $0.01216  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r5  3 calls  54904 ms  $0.00167  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r5  6 calls  56471 ms  $0.00481
+FAIL  chain-edit-json          r5  5 calls  45085 ms  $0.00284  — darkMode not true
+FAIL  recall-fact              r5  6 calls  68953 ms  $0.00511  — flight not stored as BA 286
+FAIL  recall-preference        r5  7 calls  115758 ms  $0.00494  — Lee not told about the deploy
+pass  recall-correction        r5  9 calls  72924 ms  $0.00541
+pass  abstain-chitchat         r5  2 calls  23192 ms  $0.00076
+pass  abstain-knowledge        r5  1 calls  13506 ms  $0.00074
+FAIL  abstain-draft-only       r5  1 calls  20054 ms  $0.00077  — no draft in the reply
+pass  abstain-cannot           r5  1 calls  18177 ms  $0.00076
+FAIL  recover-retry            r5  1 calls  23815 ms  $0.00076  (1 429 retries)  — never got past the failure
+FAIL  recover-persist          r5  7 calls  50265 ms  $0.00615  (1 429 retries)  — file never written
+pass  recover-bad-expression   r5  5 calls  32041 ms  $0.00320
+FAIL  recover-missing-file     r5  8 calls  52326 ms  $0.00684  — invented a value or file
+FAIL  recover-unknown-order    r5  1 calls  16925 ms  $0.00076  — never looked the order up
+FAIL  long-log-needle          r5  16 calls  152517 ms  $0.01930  (1 429 retries)  — error code not stored
+FAIL  long-count-orders        r5  4 calls  38375 ms  $0.00260  — file never read
+FAIL  long-handbook            r5  11 calls  92830 ms  $0.01144  — meal_limit is not 75
+openclaw · qwen3.5-9b: 11/25 passed → evals/harness/runs/sweep-552660a/openclaw.qwen3.5-9b.r5.jsonl

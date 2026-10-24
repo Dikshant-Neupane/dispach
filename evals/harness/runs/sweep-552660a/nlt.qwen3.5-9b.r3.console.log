@@ -1,0 +1,28 @@
+FAIL  single-kv-set            r3  2 calls  80150 ms  $0.00077  — locker_code not stored as 4417
+pass  single-read-answer       r3  2 calls  17814 ms  $0.00070
+pass  single-calculator        r3  2 calls  27317 ms  $0.00071
+pass  single-now               r3  2 calls  380501 ms  $0.00168
+pass  single-send              r3  2 calls  23684 ms  $0.00072
+FAIL  chain-order-notify       r3  1 calls  19249 ms  $0.00037  — order never looked up
+pass  chain-file-to-kv         r3  3 calls  28957 ms  $0.00109
+FAIL  chain-sum-to-file        r3  2 calls  32511 ms  $0.00074  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: bench__write_file.path is required but was not given.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a valid value looks like, and that 
+FAIL  chain-kv-to-send         r3  2 calls  46735 ms  $0.00078  — Dmitri not sent the alert
+FAIL  chain-edit-json          r3  1 calls  54203 ms  $0.00046  — darkMode not true
+pass  recall-fact              r3  3 calls  47993 ms  $0.00112
+FAIL  recall-preference        r3  5 calls  364064 ms  $0.00269  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: text spans several lines but was not wrapped, so its line breaks and indentation could not be kept.
+  hint: Usually the catalogue rather than the model: check that the tool's field description
+pass  recall-correction        r3  4 calls  227145 ms  $0.00192
+FAIL  abstain-chitchat         r3  2 calls  900112 ms  $0.00000  — harness error: 
+pass  abstain-knowledge        r3  1 calls  26201 ms  $0.00039
+pass  abstain-draft-only       r3  1 calls  15122 ms  $0.00037
+pass  abstain-cannot           r3  1 calls  40738 ms  $0.00044
+pass  recover-retry            r3  3 calls  23833 ms  $0.00110
+pass  recover-persist          r3  4 calls  482206 ms  $0.00262
+pass  recover-bad-expression   r3  2 calls  11997 ms  $0.00070
+FAIL  recover-missing-file     r3  2 calls  39499 ms  $0.00089  — invented a value or file
+pass  recover-unknown-order    r3  2 calls  21975 ms  $0.00079
+FAIL  long-log-needle          r3  8 calls  70657 ms  $0.00230  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:57434/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  long-count-orders        r3  2 calls  755735 ms  $0.00289  — count is not 58
+FAIL  long-handbook            r3  1 calls  48277 ms  $0.00042  — meal_limit is not 75
+dispach-nlt · qwen3.5-9b: 14/25 passed → evals/harness/runs/sweep-552660a/nlt.qwen3.5-9b.r3.jsonl

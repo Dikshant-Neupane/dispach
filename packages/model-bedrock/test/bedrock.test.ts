@@ -1,0 +1,908 @@
+/**
+ * `bedrock-converse` against a recorded ConverseStream: the request Bedrock would receive, the chunks
+ * the loop would see, and one real turn through the runtime. The sender is injected, so the SDK is
+ * never loaded here — which is also the claim `bundle.test.ts` makes about boot.
+ */
+
+import { describe, expect, test } from "bun:test"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import type {
+    ConverseStreamCommandInput,
+    ConverseStreamOutput,
+} from "@aws-sdk/client-bedrock-runtime"
+import { BRAND, type ChatChunk, type ChatRequest, Runtime } from "@dispach/core"
+import {
+    bedrockTransport,
+    type ConverseSend,
+    classify,
+    converseInput,
+    roleWarnings,
+    toChunks,
+} from "../src/index.ts"
+
+const MODEL = "eu.anthropic.claude-sonnet-4-6"
+const CONFIG = { id: MODEL, api: "bedrock-converse", options: { region: "eu-west-1" } }
+
+async function* events(list: ConverseStreamOutput[]): AsyncIterable<ConverseStreamOutput> {
+    for (const event of list) yield event
+}
+
+async function collect(stream: AsyncIterable<ChatChunk>): Promise<ChatChunk[]> {
+    const out: ChatChunk[] = []
+    for await (const chunk of stream) out.push(chunk)
+    return out
+}
+
+/** A turn that thinks, calls a tool, and reports usage with cache figures. */
+const TOOL_STEP: ConverseStreamOutput[] = [
+    { messageStart: { role: "assistant" } },
+    {
+        contentBlockDelta: {
+            contentBlockIndex: 0,
+            delta: { reasoningContent: { text: "Need the time." } },
+        },
+    },
+    {
+        contentBlockDelta: {
+            contentBlockIndex: 0,
+            delta: { reasoningContent: { signature: "sig-1" } },
+        },
+    },
+    { contentBlockStop: { contentBlockIndex: 0 } },
+    {
+        contentBlockStart: {
+            contentBlockIndex: 1,
+            start: { toolUse: { toolUseId: "tu_1", name: "now" } },
+        },
+    },
+    { contentBlockDelta: { contentBlockIndex: 1, delta: { toolUse: { input: '{"zone"' } } } },
+    { contentBlockDelta: { contentBlockIndex: 1, delta: { toolUse: { input: ':"UTC"}' } } } },
+    { contentBlockStop: { contentBlockIndex: 1 } },
+    { messageStop: { stopReason: "tool_use" } },
+    {
+        metadata: {
+            usage: {
+                inputTokens: 40,
+                outputTokens: 12,
+                totalTokens: 1052,
+                cacheReadInputTokens: 900,
+                cacheWriteInputTokens: 100,
+            },
+            metrics: { latencyMs: 300 },
+        },
+    },
+]
+
+describe("request mapping", () => {
+    test("system split, roles merged, cachePoint after each breakpoint, thinking replayed", () => {
+        const request: ChatRequest = {
+            model: MODEL,
+            messages: [
+                { role: "system", content: "identity" },
+                { role: "system", content: "tools and config", cacheBreakpoint: true },
+                { role: "user", content: "what time is it?" },
+                {
+                    role: "assistant",
+                    content: "",
+                    toolCalls: [{ id: "tu_1", name: "now", arguments: '{"zone":"UTC"}' }],
+                    thinking: [{ text: "Need the time.", signature: "sig-1" }],
+                },
+                { role: "tool", content: "12:00", toolCallId: "tu_1" },
+                { role: "system", content: "reminder: be brief" },
+            ],
+            tools: [{ name: "now", description: "the time", parameters: { type: "object" } }],
+            maxTokens: 1000,
+        }
+        const input = converseInput(request, CONFIG)
+        expect(input.system).toEqual([
+            { text: "identity" },
+            { text: "tools and config" },
+            { cachePoint: { type: "default" } },
+        ])
+        expect(input.messages?.map((m) => m.role)).toEqual(["user", "assistant", "user"])
+        expect(input.messages?.[1]?.content).toEqual([
+            { reasoningContent: { reasoningText: { text: "Need the time.", signature: "sig-1" } } },
+            { toolUse: { toolUseId: "tu_1", name: "now", input: { zone: "UTC" } } },
+        ])
+        // The observation and the late system message merge into one user turn, and the request ends
+        // on a rolling cache point so the next step reads all of this from the cache (pilot.13).
+        expect(input.messages?.[2]?.content).toEqual([
+            { toolResult: { toolUseId: "tu_1", content: [{ text: "12:00" }] } },
+            // A later system message is user text on Converse, fenced so it never reads as the
+            // person's (pilot.14).
+            { text: "<system>\nreminder: be brief\n</system>" },
+            { cachePoint: { type: "default" } },
+        ])
+        expect(input.toolConfig?.tools?.[0]).toEqual({
+            toolSpec: {
+                name: "now",
+                description: "the time",
+                inputSchema: { json: { type: "object" } },
+            },
+        })
+        expect(input.inferenceConfig).toEqual({ maxTokens: 1000 })
+    })
+
+    test("thinking effort becomes a budget, drops temperature and lifts maxTokens above it", () => {
+        const input = converseInput(
+            {
+                model: MODEL,
+                messages: [{ role: "user", content: "hi" }],
+                reasoningEffort: "medium",
+                temperature: 0.3,
+            },
+            CONFIG,
+        )
+        expect(input.additionalModelRequestFields).toEqual({
+            thinking: { type: "enabled", budget_tokens: 8192 },
+        })
+        expect(input.inferenceConfig).toEqual({ maxTokens: 8192 + 16_384 })
+    })
+
+    describe("reasoning effort by model (pilot.6)", () => {
+        const fields = (
+            model: string,
+            effort: ChatRequest["reasoningEffort"],
+            temperature?: number,
+        ) =>
+            converseInput(
+                {
+                    model,
+                    messages: [{ role: "user", content: "hi" }],
+                    ...(effort === undefined ? {} : { reasoningEffort: effort }),
+                    ...(temperature === undefined ? {} : { temperature }),
+                },
+                CONFIG,
+            )
+
+        test("Claude 4.7 and later get adaptive thinking with an effort, never a budget or a temperature", () => {
+            for (const model of [
+                "eu.anthropic.claude-opus-4-7",
+                "global.anthropic.claude-sonnet-5-5",
+            ]) {
+                const input = fields(model, "xhigh", 0.3)
+                expect(input.additionalModelRequestFields).toEqual({
+                    thinking: { type: "adaptive" },
+                    output_config: { effort: "xhigh" },
+                })
+                expect(input.inferenceConfig).toEqual({ maxTokens: 32_768 })
+            }
+            expect(
+                fields("global.anthropic.claude-opus-5-5", "max").additionalModelRequestFields,
+            ).toEqual({
+                thinking: { type: "adaptive" },
+                output_config: { effort: "max" },
+            })
+        })
+
+        test("Haiku 5.5 is adaptive too (a budget is a 400 there); Haiku 4.5 keeps its budget", () => {
+            expect(fields("global.anthropic.claude-haiku-5-5", "low", 0.3)).toMatchObject({
+                additionalModelRequestFields: {
+                    thinking: { type: "adaptive" },
+                    output_config: { effort: "low" },
+                },
+                inferenceConfig: { maxTokens: 32_768 },
+            })
+            expect(
+                fields("global.anthropic.claude-haiku-5-5", "none").additionalModelRequestFields,
+            ).toEqual({ thinking: { type: "disabled" } })
+            expect(
+                fields("global.anthropic.claude-haiku-4-5-20251001-v1:0", "medium")
+                    .additionalModelRequestFields,
+            ).toEqual({ thinking: { type: "enabled", budget_tokens: 8192 } })
+        })
+
+        test("none is each model's own off switch, or low effort where there is none", () => {
+            expect(
+                fields("global.anthropic.claude-sonnet-5-5", "none").additionalModelRequestFields,
+            ).toEqual({
+                thinking: { type: "between_tools" },
+            })
+            expect(
+                fields("global.anthropic.claude-opus-5-5", "none").additionalModelRequestFields,
+            ).toEqual({
+                thinking: { type: "adaptive" },
+                output_config: { effort: "low" },
+            })
+            expect(
+                fields("us.anthropic.claude-opus-5", "none").additionalModelRequestFields,
+            ).toEqual({
+                thinking: { type: "disabled" },
+            })
+        })
+
+        test("an unset effort sends nothing, and 4.6 keeps its budget", () => {
+            expect(
+                fields("global.anthropic.claude-opus-5-5", undefined).additionalModelRequestFields,
+            ).toBeUndefined()
+            expect(
+                fields("eu.anthropic.claude-opus-4-6", "high").additionalModelRequestFields,
+            ).toEqual({
+                thinking: { type: "enabled", budget_tokens: 16_384 },
+            })
+        })
+
+        test("an openai model gets the effort as reasoning.effort; Nova gets none", () => {
+            // Top-level `reasoning_effort` is a 400 `unknown_parameter` on Bedrock (probed).
+            expect(
+                fields("global.openai.gpt-6-luna", "xhigh").additionalModelRequestFields,
+            ).toEqual({
+                reasoning: { effort: "xhigh" },
+            })
+            expect(
+                fields("amazon.nova-micro-v1:0", "high").additionalModelRequestFields,
+            ).toBeUndefined()
+        })
+
+        test("GPT-6 is never sent a temperature; gpt-oss and Nova still are (pilot.6)", () => {
+            // Bedrock: "This model doesn't support the temperature field" on every turn of Luna.
+            expect(
+                fields("global.openai.gpt-6-luna", undefined, 0.3).inferenceConfig,
+            ).toBeUndefined()
+            expect(fields("openai.gpt-oss-120b-1:0", undefined, 0.3).inferenceConfig).toEqual({
+                temperature: 0.3,
+            })
+            expect(fields("amazon.nova-micro-v1:0", undefined, 0.3).inferenceConfig).toEqual({
+                temperature: 0.3,
+            })
+        })
+
+        test("what cannot be honoured is said at load", () => {
+            const codes = (id: string, extra: Record<string, unknown>) =>
+                roleWarnings({ id, api: "bedrock-converse", ...extra }, "model.main").map(
+                    (w) => w.code,
+                )
+            expect(codes("global.anthropic.claude-opus-5-5", { reasoningEffort: "none" })).toEqual([
+                "model_thinking_always_on",
+            ])
+            expect(codes("global.anthropic.claude-sonnet-5-5", { temperature: 0.2 })).toEqual([
+                "model_sampling_unsupported",
+            ])
+            expect(codes("eu.anthropic.claude-sonnet-4-6", { temperature: 0.2 })).toEqual([])
+            expect(codes("global.openai.gpt-6-luna", { temperature: 0.3 })).toEqual([
+                "model_sampling_unsupported",
+            ])
+            expect(codes("openai.gpt-oss-120b-1:0", { temperature: 0.3 })).toEqual([])
+        })
+
+        test("a refusal stop reason is a content_filter finish", async () => {
+            const chunks = await collect(
+                toChunks(events([{ messageStop: { stopReason: "refusal" as never } }])),
+            )
+            expect(chunks).toContainEqual({ type: "finish", reason: "content_filter" })
+        })
+    })
+
+    test("a model family without prompt caching is sent no cachePoint, nor is one opted out", () => {
+        const messages = [{ role: "system" as const, content: "s", cacheBreakpoint: true as const }]
+        const other = converseInput({ model: "meta.llama3-70b-instruct-v1:0", messages }, CONFIG)
+        expect(other.system).toEqual([{ text: "s" }])
+        const off = converseInput(
+            { model: MODEL, messages },
+            { ...CONFIG, capabilities: { promptCache: "none" } },
+        )
+        expect(off.system).toEqual([{ text: "s" }])
+    })
+
+    test("an image becomes an image block of raw bytes after the text (pilot.5)", () => {
+        const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 2])
+        const input = converseInput(
+            {
+                model: MODEL,
+                messages: [
+                    {
+                        role: "user",
+                        content: "what is this?\n\n[image: files/c1/shot.png]",
+                        images: [
+                            {
+                                mediaType: "image/png",
+                                data: Buffer.from(png).toString("base64"),
+                                ref: "files/c1/shot.png",
+                            },
+                        ],
+                    },
+                ],
+            },
+            CONFIG,
+        )
+        expect(input.messages?.[0]?.content).toEqual([
+            { text: "what is this?\n\n[image: files/c1/shot.png]" },
+            { image: { format: "png", source: { bytes: png } } },
+            { cachePoint: { type: "default" } },
+        ])
+    })
+
+    test("only a caching model gets the rolling cache point, and never two at the end (pilot.13)", () => {
+        const ask = (model: string, cacheBreakpoint?: true): ChatRequest => ({
+            model,
+            messages: [
+                { role: "user", content: "hi", ...(cacheBreakpoint ? { cacheBreakpoint } : {}) },
+            ],
+        })
+        const tail = (model: string, cacheBreakpoint?: true) =>
+            converseInput(ask(model, cacheBreakpoint), { ...CONFIG, id: model }).messages?.[0]
+                ?.content
+        expect(tail(MODEL)).toEqual([{ text: "hi" }, { cachePoint: { type: "default" } }])
+        expect(tail(MODEL, true)).toEqual([{ text: "hi" }, { cachePoint: { type: "default" } }])
+        expect(tail("openai.gpt-oss-120b-1:0")).toEqual([{ text: "hi" }])
+    })
+
+    test("Nova gets no cache point beside a tool result, which it refuses; Claude does (pilot.14)", () => {
+        const step = (model: string) =>
+            converseInput(
+                {
+                    model,
+                    messages: [
+                        { role: "user", content: "list my projects", turnInput: true },
+                        {
+                            role: "assistant",
+                            content: "",
+                            origin: "call",
+                            toolCalls: [{ id: "t1", name: "list", arguments: "{}" }],
+                        },
+                        { role: "tool", content: "[a, b]", toolCallId: "t1" },
+                    ],
+                },
+                { ...CONFIG, id: model },
+            )
+        const nova = JSON.stringify(step("amazon.nova-lite-v1:0").messages)
+        expect(nova).toContain("toolResult")
+        expect(nova).not.toContain("cachePoint")
+        expect(JSON.stringify(step(MODEL).messages?.at(-1)?.content?.at(-1))).toBe(
+            JSON.stringify({ cachePoint: { type: "default" } }),
+        )
+        // A Nova turn's first call still gets its tail point.
+        expect(
+            JSON.stringify(
+                converseInput(
+                    { model: "amazon.nova-lite-v1:0", messages: [{ role: "user", content: "hi" }] },
+                    { ...CONFIG, id: "amazon.nova-lite-v1:0" },
+                ).messages,
+            ),
+        ).toContain("cachePoint")
+    })
+})
+
+describe("stream mapping", () => {
+    test("reasoning streams and closes into a signed block; tool input is reassembled; usage is whole", async () => {
+        const chunks = await collect(toChunks(events(TOOL_STEP)))
+        expect(chunks).toEqual([
+            { type: "reasoning", delta: "Need the time." },
+            { type: "thinking_block", block: { text: "Need the time.", signature: "sig-1" } },
+            { type: "tool_call", call: { id: "tu_1", name: "now", arguments: '{"zone":"UTC"}' } },
+            { type: "finish", reason: "tool_calls" },
+            {
+                type: "usage",
+                promptTokens: 1040,
+                completionTokens: 12,
+                cachedPromptTokens: 900,
+                cacheSource: "metadata.usage.cacheReadInputTokens",
+                cacheWriteTokens: 100,
+            },
+        ])
+    })
+})
+
+describe("errors", () => {
+    const sdkError = (name: string, status: number) =>
+        Object.assign(new Error(`${name} happened`), {
+            name,
+            $metadata: { httpStatusCode: status },
+        })
+
+    test("throttling retries; access denied is a terminal 403; no credentials names the chain", () => {
+        expect(
+            classify(sdkError("ThrottlingException", 429), MODEL, "eu-west-1", "model.main")
+                .retryable,
+        ).toBe(true)
+        const denied = classify(
+            sdkError("AccessDeniedException", 403),
+            MODEL,
+            "eu-west-1",
+            "model.main",
+        )
+        expect(denied.retryable).toBe(false)
+        expect(denied.error.status).toBe(403)
+        expect(denied.error.code).toBe("model_access_denied")
+        const noCreds = classify(
+            Object.assign(new Error("Could not load credentials from any providers"), {
+                name: "CredentialsProviderError",
+            }),
+            MODEL,
+            "eu-west-1",
+            "model.main",
+        )
+        expect(noCreds.error.code).toBe("bedrock_credentials_missing")
+        expect(noCreds.error.hint).toContain("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+    })
+
+    test("an access refusal keeps AWS's text, ARN and all, in detail and out of message (pilot.14)", () => {
+        const aws =
+            "User: arn:aws:sts::123456789012:assumed-role/silo-role/session is not authorized to perform: bedrock:InvokeModelWithResponseStream"
+        const denied = classify(
+            Object.assign(new Error(aws), {
+                name: "AccessDeniedException",
+                $metadata: { httpStatusCode: 403 },
+            }),
+            MODEL,
+            "eu-west-1",
+            "model.main",
+        )
+        expect(denied.error.message).not.toContain("arn:aws")
+        expect(denied.error.message).not.toContain("123456789012")
+        expect(denied.error.toDetail().detail).toBe(aws)
+        expect(denied.error.format()).toContain(`detail: ${aws}`)
+    })
+
+    test("a credentials endpoint that refuses is not a missing chain (pilot.4)", () => {
+        // What the SDK's HTTP provider throws once its retry wrapper has re-thrown it: the body is
+        // gone, the status survives in the text.
+        const refused = classify(
+            Object.assign(
+                new Error("CredentialsProviderError: Server responded with status: 403"),
+                { name: "CredentialsProviderError" },
+            ),
+            MODEL,
+            "eu-west-1",
+            "model.main",
+        )
+        expect(refused.retryable).toBe(false)
+        expect(refused.error.code).toBe("bedrock_credentials_refused")
+        expect(refused.error.status).toBe(403)
+    })
+
+    test("a new account's onboarding refusals name the onboarding step, not the model id or IAM", () => {
+        // Both messages verbatim from a live account, 2026-09-28.
+        const form = classify(
+            {
+                name: "ResourceNotFoundException",
+                message:
+                    "Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model.",
+                $metadata: { httpStatusCode: 404 },
+            },
+            MODEL,
+            "eu-west-1",
+            "model.main",
+        )
+        expect(form.error.hint).toContain("use-case form")
+        const verifying = classify(
+            {
+                name: "AccessDeniedException",
+                message:
+                    "Your account is currently being verified. Verification normally takes less than 2 hours.",
+                $metadata: { httpStatusCode: 403 },
+            },
+            MODEL,
+            "eu-west-2",
+            "model.main",
+        )
+        expect(verifying.error.status).toBe(403)
+        expect(verifying.error.hint).toContain("still verifying")
+    })
+
+    test("the transport retries before output, reports each retry, and stops on a 403 at once", async () => {
+        const throttled = Object.assign(new Error("slow down"), {
+            name: "ThrottlingException",
+            $metadata: { httpStatusCode: 429 },
+        })
+        const denied = Object.assign(new Error("no"), {
+            name: "AccessDeniedException",
+            $metadata: { httpStatusCode: 403 },
+        })
+        for (const [failure, expectedCalls, expectedRetries] of [
+            [throttled, 3, 2],
+            [denied, 1, 0],
+        ] as const) {
+            let calls = 0
+            const retries: number[] = []
+            const send: ConverseSend = async () => {
+                calls += 1
+                throw failure
+            }
+            const provider = bedrockTransport(async () => send).create({
+                id: "bedrock-converse:main",
+                field: "model.main",
+                config: CONFIG,
+                options: { region: "eu-west-1" },
+                retry: { attempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+                onRetry: (info) => retries.push(info.status),
+            })
+            let status: number | undefined
+            try {
+                await collect(
+                    provider.chat({ model: MODEL, messages: [] }, new AbortController().signal),
+                )
+            } catch (error) {
+                status = (error as { status?: number }).status
+            }
+            expect(calls).toBe(expectedCalls)
+            expect(retries.length).toBe(expectedRetries)
+            expect(status).toBe(failure === denied ? 403 : 429)
+        }
+    })
+})
+
+describe("a refused thinking replay (pilot.13)", () => {
+    test("is sent again once without thinking, reported as a retry, and a second refusal is final", async () => {
+        const refused = Object.assign(
+            new Error(
+                "messages.5.content.9: Invalid signature in thinking block. The block is bound to a different conversation.",
+            ),
+            { name: "ValidationException", $metadata: { httpStatusCode: 400 } },
+        )
+        for (const [refusals, expectedCalls, ok] of [
+            [1, 2, true],
+            [2, 2, false],
+        ] as const) {
+            const inputs: ConverseStreamCommandInput[] = []
+            const send: ConverseSend = async (input) => {
+                inputs.push(input)
+                if (inputs.length <= refusals) throw refused
+                return events([
+                    { contentBlockDelta: { contentBlockIndex: 0, delta: { text: "done" } } },
+                    { contentBlockStop: { contentBlockIndex: 0 } },
+                    { messageStop: { stopReason: "end_turn" } },
+                ])
+            }
+            const retries: number[] = []
+            const provider = bedrockTransport(async () => send).create({
+                id: "bedrock-converse:main",
+                field: "model.main",
+                config: CONFIG,
+                options: { region: "eu-west-1" },
+                onRetry: (info) => retries.push(info.status),
+            })
+            let failed = false
+            try {
+                await collect(
+                    provider.chat(
+                        {
+                            model: MODEL,
+                            messages: [
+                                { role: "user", content: "what time is it?" },
+                                {
+                                    role: "assistant",
+                                    content: "",
+                                    origin: "call",
+                                    toolCalls: [{ id: "t1", name: "now", arguments: "{}" }],
+                                    thinking: [{ text: "Need the time.", signature: "sig-1" }],
+                                },
+                                { role: "tool", content: "noon", toolCallId: "t1" },
+                            ],
+                        },
+                        new AbortController().signal,
+                    ),
+                )
+            } catch {
+                failed = true
+            }
+            expect(inputs.length).toBe(expectedCalls)
+            expect(JSON.stringify(inputs[0]?.messages)).toContain("reasoningContent")
+            expect(JSON.stringify(inputs[1]?.messages)).not.toContain("reasoningContent")
+            expect(JSON.stringify(inputs[1]?.messages)).toContain("toolUse")
+            expect(retries).toEqual([400])
+            expect(failed).toBe(!ok)
+        }
+    })
+})
+
+describe("through a real turn", () => {
+    test("a tool call with thinking completes over two steps, replaying the signed block with a cachePoint", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "bedrock-"))
+        writeFileSync(
+            join(dir, "agent.yaml"),
+            `apiVersion: ${BRAND.apiVersion}
+id: bedrocked
+model:
+  main:
+    id: ${MODEL}
+    api: bedrock-converse
+    options:
+      region: eu-west-1
+tools:
+  dialect: native
+  local:
+    - now
+limits:
+  maxSteps: 4
+  turnTimeoutMs: 5000
+`,
+        )
+        const inputs: ConverseStreamCommandInput[] = []
+        const send: ConverseSend = async (input) => {
+            inputs.push(input)
+            return inputs.length === 1
+                ? events(TOOL_STEP)
+                : events([
+                      {
+                          contentBlockDelta: {
+                              contentBlockIndex: 0,
+                              delta: { text: "It is noon." },
+                          },
+                      },
+                      { contentBlockStop: { contentBlockIndex: 0 } },
+                      { messageStop: { stopReason: "end_turn" } },
+                      {
+                          metadata: {
+                              usage: {
+                                  inputTokens: 60,
+                                  outputTokens: 4,
+                                  totalTokens: 1064,
+                                  cacheReadInputTokens: 1000,
+                              },
+                              metrics: { latencyMs: 200 },
+                          },
+                      },
+                  ])
+        }
+        const runtime = await Runtime.create({
+            agents: [join(dir, "agent.yaml")],
+            env: {},
+            store: ":memory:",
+            modelTransports: { "bedrock-converse": bedrockTransport(async () => send) },
+        })
+        const reply = await runtime.agent("bedrocked").send("what time is it?")
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        const [total] = (await runtime.store.usage.report({ by: [] })).buckets
+        await runtime.stop()
+
+        expect(reply.text).toBe("It is noon.")
+        expect(inputs.length).toBe(2)
+        // A fresh session opens with the person's message under native too, not the model's call.
+        expect(inputs[1]?.messages?.map((m) => m.role)).toEqual(["user", "assistant", "user"])
+        const second = inputs[1]
+        expect(second?.system?.some((block) => block.cachePoint !== undefined)).toBe(true)
+        const call = second?.messages?.find((m) => m.role === "assistant")
+        expect(call?.content?.[0]).toEqual({
+            reasoningContent: { reasoningText: { text: "Need the time.", signature: "sig-1" } },
+        })
+        expect(
+            second?.messages?.some((m) =>
+                m.content?.some((c) => c.toolResult?.toolUseId === "tu_1"),
+            ),
+        ).toBe(true)
+        expect(total?.cachedPromptTokens).toBe(1900)
+        expect(total?.cacheWriteTokens).toBe(100)
+    })
+})
+
+describe("a native tool turn on GPT-6 (pilot.15)", () => {
+    test("the tool result comes after the question, so the model answers instead of calling again", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "bedrock-gpt-"))
+        writeFileSync(
+            join(dir, "agent.yaml"),
+            `apiVersion: ${BRAND.apiVersion}
+id: luna
+model:
+  main:
+    id: global.openai.gpt-6-luna
+    api: bedrock-converse
+    reasoningEffort: low
+    options:
+      region: eu-west-1
+tools:
+  dialect: native
+  local:
+    - now
+limits:
+  maxSteps: 4
+  turnTimeoutMs: 5000
+`,
+        )
+        const inputs: ConverseStreamCommandInput[] = []
+        const send: ConverseSend = async (input) => {
+            inputs.push(input)
+            return inputs.length === 1
+                ? events(TOOL_STEP)
+                : events([
+                      { contentBlockDelta: { contentBlockIndex: 0, delta: { text: "Noon." } } },
+                      { contentBlockStop: { contentBlockIndex: 0 } },
+                      { messageStop: { stopReason: "end_turn" } },
+                  ])
+        }
+        const runtime = await Runtime.create({
+            agents: [join(dir, "agent.yaml")],
+            env: {},
+            store: ":memory:",
+            modelTransports: { "bedrock-converse": bedrockTransport(async () => send) },
+        })
+        const agent = runtime.agent("luna")
+        await agent.send("hello", { sessionKey: "api:x" })
+        inputs.length = 0
+        const reply = await agent.send("what time is it?", { sessionKey: "api:x" })
+        await runtime.stop()
+
+        expect(reply.text).toBe("Noon.")
+        // Step two ends on the tool result. With the trace before the input, Converse merged the
+        // result and the restated question into one message, and GPT-6 read it as a new request.
+        const last = inputs[1]?.messages?.at(-1)
+        expect(last?.role).toBe("user")
+        expect(last?.content?.some((block) => block.toolResult?.toolUseId === "tu_1")).toBe(true)
+        const flat = JSON.stringify(inputs[1]?.messages)
+        expect(flat.lastIndexOf("what time is it?")).toBeLessThan(flat.lastIndexOf("toolUse"))
+        // And it caches nothing on Converse, so nothing claims it does.
+        expect(JSON.stringify(inputs[1])).not.toContain("cachePoint")
+    })
+})
+
+describe("an NLT tool turn on Nova", () => {
+    /** One step of plain text, as Nova streams it. */
+    const said = (text: string): ConverseStreamOutput[] => [
+        { contentBlockDelta: { contentBlockIndex: 0, delta: { text } } },
+        { contentBlockStop: { contentBlockIndex: 0 } },
+        { messageStop: { stopReason: "end_turn" } },
+    ]
+
+    test("every request starts with a user message, step two included (pilot.5)", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "bedrock-nova-"))
+        writeFileSync(
+            join(dir, "agent.yaml"),
+            `apiVersion: ${BRAND.apiVersion}
+id: nova
+model:
+  main:
+    id: amazon.nova-micro-v1:0
+    api: bedrock-converse
+    options:
+      region: eu-west-1
+tools:
+  local:
+    - now
+limits:
+  maxSteps: 4
+  turnTimeoutMs: 5000
+`,
+        )
+        const inputs: ConverseStreamCommandInput[] = []
+        const send: ConverseSend = async (input) => {
+            inputs.push(input)
+            return events(inputs.length === 1 ? said("ACTION: now\nEND") : said("It is noon."))
+        }
+        const runtime = await Runtime.create({
+            agents: [join(dir, "agent.yaml")],
+            env: {},
+            store: ":memory:",
+            modelTransports: { "bedrock-converse": bedrockTransport(async () => send) },
+        })
+        const reply = await runtime
+            .agent("nova")
+            .send("Use your now tool to check the current time")
+        await runtime.stop()
+
+        expect(inputs.length).toBe(2)
+        for (const input of inputs) expect(input.messages?.[0]?.role).toBe("user")
+        // The question, then the call it led to, then what the call returned.
+        const second = inputs[1]?.messages ?? []
+        expect(second[0]?.content?.[0]).toEqual({
+            text: "Use your now tool to check the current time",
+        })
+        expect(second[1]?.role).toBe("assistant")
+        expect(JSON.stringify(second[2]?.content)).toContain("OBSERVATION now")
+        expect(reply.text).toBe("It is noon.")
+    })
+})
+
+describe("Nova's <thinking> in the text (pilot.13)", () => {
+    const deltas = (parts: string[]): ConverseStreamOutput[] => [
+        ...parts.map((text) => ({ contentBlockDelta: { contentBlockIndex: 0, delta: { text } } })),
+        { contentBlockStop: { contentBlockIndex: 0 } },
+        { messageStop: { stopReason: "end_turn" } },
+    ]
+    const joined = (chunks: ChatChunk[], type: "text" | "reasoning") =>
+        chunks.map((chunk) => (chunk.type === type ? chunk.delta : "")).join("")
+
+    test("is routed to reasoning, a tag cut across deltas included; other markup is left alone", async () => {
+        const chunks = await collect(
+            toChunks(
+                events(
+                    deltas([
+                        "<thin",
+                        "king>I need the",
+                        " tool.</thi",
+                        "nking>\n\nDone, <b>",
+                        "ok</b> <th",
+                    ]),
+                ),
+                { thinkingTags: true },
+            ),
+        )
+        expect(joined(chunks, "reasoning")).toBe("I need the tool.")
+        expect(joined(chunks, "text")).toBe("Done, <b>ok</b> <th")
+    })
+
+    test("is left in the text when the option is off", async () => {
+        const chunks = await collect(toChunks(events(deltas(["<thinking>x</thinking>hi"]))))
+        expect(joined(chunks, "text")).toBe("<thinking>x</thinking>hi")
+    })
+
+    test("a Nova reply reaches the person without it; a Claude one is untouched", async () => {
+        const reply = async (id: string) => {
+            const dir = mkdtempSync(join(tmpdir(), "bedrock-tags-"))
+            writeFileSync(
+                join(dir, "agent.yaml"),
+                `apiVersion: ${BRAND.apiVersion}
+id: tags
+model:
+  main:
+    id: ${id}
+    api: bedrock-converse
+    options:
+      region: eu-west-1
+`,
+            )
+            const runtime = await Runtime.create({
+                agents: [join(dir, "agent.yaml")],
+                env: {},
+                store: ":memory:",
+                modelTransports: {
+                    "bedrock-converse": bedrockTransport(
+                        async () => async () =>
+                            events(
+                                deltas([
+                                    "<thinking>The user wants a phase.</thinking>\n\nProposed.",
+                                ]),
+                            ),
+                    ),
+                },
+            })
+            const result = await runtime.agent("tags").send("add a phase")
+            await runtime.stop()
+            return result.text
+        }
+        expect(await reply("eu.amazon.nova-lite-v1:0")).toBe("Proposed.")
+        expect(await reply("eu.anthropic.claude-haiku-4-5-20251001-v1:0")).toContain("<thinking>")
+    })
+})
+
+test("a transport's load warnings reach the agent", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bedrock-warn-"))
+    writeFileSync(
+        join(dir, "agent.yaml"),
+        `apiVersion: ${BRAND.apiVersion}
+id: warned
+model:
+  main:
+    id: global.anthropic.claude-opus-5-5
+    api: bedrock-converse
+    reasoningEffort: none
+    options:
+      region: eu-west-1
+`,
+    )
+    const runtime = await Runtime.create({
+        agents: [join(dir, "agent.yaml")],
+        env: {},
+        store: ":memory:",
+        modelTransports: {
+            "bedrock-converse": bedrockTransport(async () => async () => events([])),
+        },
+    })
+    const codes = runtime.agent("warned")?.warnings.map((warning) => warning.code) ?? []
+    await runtime.stop()
+    expect(codes).toContain("model_thinking_always_on")
+})
+
+describe("capabilities through the transport", () => {
+    test("Claude on Bedrock caches its prompt; a manifest's own promptCache still wins", async () => {
+        const { resolveRoles } = await import("@dispach/core")
+        const manifest = (capabilities?: { promptCache: "none" }) =>
+            ({
+                model: {
+                    main: { ...CONFIG, ...(capabilities === undefined ? {} : { capabilities }) },
+                },
+            }) as unknown as Parameters<typeof resolveRoles>[0]
+        const transports = new Map([
+            ["bedrock-converse", bedrockTransport(async () => async () => events([]))],
+        ])
+        const cached = resolveRoles(manifest(), { transports }).main.capabilities
+        expect(cached.promptCache).toBe("bedrock")
+        expect(cached.nativeTools).toBe(true)
+        expect(cached.thinking).toBe("anthropic")
+        expect(
+            resolveRoles(manifest({ promptCache: "none" }), { transports }).main.capabilities
+                .promptCache,
+        ).toBe("none")
+    })
+})

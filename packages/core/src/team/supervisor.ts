@@ -55,6 +55,12 @@ export const MAX_TEAM_DEPTH = 2
 export interface ResolvedMember {
     readonly config: TeamMemberConfig
     readonly agent: HandoffTarget
+    /**
+     * Another member's agent in the silo, reached through `delegation` rather than `team` (Phase 28).
+     * Its turn acts for the person who asked the coordinator, so the delegating member stays the
+     * accountable one; an in-process team member's turn acts for nobody, as it always has.
+     */
+    readonly crossMember?: true
 }
 
 /**
@@ -207,6 +213,11 @@ export function handoffTool(init: {
                     turnId: context.turnId,
                 },
                 signal: context.signal,
+                ...(context.callId === undefined ? {} : { callId: context.callId }),
+                ...(member.crossMember === true && context.actingParticipant
+                    ? { participant: context.actingParticipant }
+                    : {}),
+                ...(member.crossMember === true ? { peerAsk: { askedBy: context.agentId } } : {}),
             })
 
             if (outcome.kind === "ok") {

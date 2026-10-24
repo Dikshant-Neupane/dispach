@@ -1,0 +1,142 @@
+pass  single-kv-set            r1  3 calls  21058 ms  $0.00122
+pass  single-read-answer       r1  2 calls  4527 ms  $0.00011
+pass  single-calculator        r1  2 calls  4447 ms  $0.00010
+pass  single-now               r1  2 calls  6142 ms  $0.00011
+FAIL  single-send              r1  1 calls  3314 ms  $0.00007  — no message to Priya about the build
+FAIL  chain-order-notify       r1  2 calls  12364 ms  $0.00024  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r1  1 calls  4634 ms  $0.00013  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r1  40 calls  168310 ms  $0.01481  — harness error: I’ll read the invoice amounts, total them, then write only the total to `reports/total.txt`.I’ll read the invoice amounts, total them, and overwrite `reports/total.txt` with only the total.I’ll read the invoice amounts, add them, then write only the total to `reports/total.txt`.I’ll read the invoice
+FAIL  chain-kv-to-send         r1  2 calls  6565 ms  $0.00016  — Dmitri not sent the alert
+pass  chain-edit-json          r1  4 calls  13899 ms  $0.00044
+FAIL  recall-fact              r1  4 calls  14655 ms  $0.00034  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+FAIL  recall-preference        r1  3 calls  8267 ms  $0.00098  — Lee not told about the deploy
+FAIL  recall-correction        r1  3 calls  7264 ms  $0.00058  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+pass  abstain-chitchat         r1  1 calls  3412 ms  $0.00045
+pass  abstain-knowledge        r1  1 calls  1596 ms  $0.00004
+pass  abstain-draft-only       r1  1 calls  2334 ms  $0.00009
+pass  abstain-cannot           r1  1 calls  3412 ms  $0.00014
+FAIL  recover-retry            r1  2 calls  4812 ms  $0.00053  — never got past the failure
+FAIL  recover-persist          r1  2 calls  7421 ms  $0.00021  — file never written
+pass  recover-bad-expression   r1  2 calls  2905 ms  $0.00010
+pass  recover-missing-file     r1  2 calls  6011 ms  $0.00019
+pass  recover-unknown-order    r1  2 calls  8686 ms  $0.00030
+pass  long-log-needle          r1  6 calls  24736 ms  $0.01005
+pass  long-count-orders        r1  11 calls  82022 ms  $0.01832
+pass  long-handbook            r1  11 calls  40570 ms  $0.00980
+pass  single-kv-set            r2  2 calls  8139 ms  $0.00062
+pass  single-read-answer       r2  2 calls  4912 ms  $0.00051
+pass  single-calculator        r2  2 calls  4794 ms  $0.00051
+pass  single-now               r2  3 calls  7573 ms  $0.00028
+FAIL  single-send              r2  1 calls  2961 ms  $0.00045  — no message to Priya about the build
+FAIL  chain-order-notify       r2  2 calls  8129 ms  $0.00067  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r2  1 calls  3008 ms  $0.00050  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r2  38 calls  144260 ms  $0.01501  — harness error: I’ll read the invoice file, total the amounts, then write only that total to the report file.I’ll reread the invoice file, calculate the total, and replace the report with just that value.I’ll check the invoice file again, then overwrite the report with the total only.I’ll read the invoice data, tot
+FAIL  chain-kv-to-send         r2  2 calls  6321 ms  $0.00057  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  1 calls  3378 ms  $0.00051  — darkMode not true
+pass  recall-fact              r2  3 calls  9077 ms  $0.00061
+FAIL  recall-preference        r2  3 calls  8403 ms  $0.00102  — Lee not told about the deploy
+pass  recall-correction        r2  7 calls  24072 ms  $0.00105
+pass  abstain-chitchat         r2  1 calls  1707 ms  $0.00043
+pass  abstain-knowledge        r2  1 calls  1470 ms  $0.00042
+pass  abstain-draft-only       r2  1 calls  3405 ms  $0.00046
+pass  abstain-cannot           r2  1 calls  5355 ms  $0.00054
+FAIL  recover-retry            r2  2 calls  5750 ms  $0.00065  — never got past the failure
+FAIL  recover-persist          r2  2 calls  8211 ms  $0.00064  — file never written
+pass  recover-bad-expression   r2  2 calls  3990 ms  $0.00049
+pass  recover-missing-file     r2  2 calls  7587 ms  $0.00059
+pass  recover-unknown-order    r2  2 calls  6542 ms  $0.00063
+FAIL  long-log-needle          r2  16 calls  63494 ms  $0.02974  — harness error: I’ll read `logs/app.log`, identify the error code, then save it as `incident_code`.The first part of the log is all successful requests. I’ll continue through the remaining output to find the error entry before saving its code.
+  · The model called bench__kv_set 3 times in a row with identical argum
+FAIL  long-count-orders        r2  11 calls  107228 ms  $0.01712  — count is not 58
+pass  long-handbook            r2  13 calls  51969 ms  $0.01318
+pass  single-kv-set            r3  3 calls  13241 ms  $0.00079
+pass  single-read-answer       r3  2 calls  8139 ms  $0.00056
+FAIL  single-calculator        r3  3 calls  6966 ms  $0.00061  — harness error: · The model called bench__calculator 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  single-now               r3  3 calls  8021 ms  $0.00066
+FAIL  single-send              r3  1 calls  9758 ms  $0.00047  — no message to Priya about the build
+FAIL  chain-order-notify       r3  2 calls  7415 ms  $0.00068  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r3  1 calls  3791 ms  $0.00053  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r3  1 calls  3277 ms  $0.00052  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r3  2 calls  5969 ms  $0.00057  — Dmitri not sent the alert
+FAIL  chain-edit-json          r3  1 calls  3937 ms  $0.00050  — darkMode not true
+pass  recall-fact              r3  3 calls  10215 ms  $0.00067
+FAIL  recall-preference        r3  3 calls  7141 ms  $0.00112  — Lee not told about the deploy
+FAIL  recall-correction        r3  3 calls  6963 ms  $0.00065  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+pass  abstain-chitchat         r3  1 calls  1470 ms  $0.00044
+pass  abstain-knowledge        r3  1 calls  1833 ms  $0.00043
+pass  abstain-draft-only       r3  1 calls  3066 ms  $0.00050
+pass  abstain-cannot           r3  1 calls  4126 ms  $0.00053
+FAIL  recover-retry            r3  2 calls  6178 ms  $0.00067  — never got past the failure
+FAIL  recover-persist          r3  2 calls  7998 ms  $0.00068  — file never written
+pass  recover-bad-expression   r3  2 calls  4767 ms  $0.00055
+pass  recover-missing-file     r3  2 calls  5075 ms  $0.00061
+pass  recover-unknown-order    r3  2 calls  6577 ms  $0.00073
+FAIL  long-log-needle          r3  1 calls  4859 ms  $0.00058  — error code not stored
+pass  long-count-orders        r3  10 calls  62731 ms  $0.01452
+FAIL  long-handbook            r3  9 calls  33101 ms  $0.01005  — harness error: I’ll check `docs/handbook.md`, then save the stated amount as `meal_limit`.I’ll continue through the handbook’s omitted section to find the meal limit, then save the amount under `meal_limit`.
+  · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    
+FAIL  single-kv-set            r4  3 calls  10458 ms  $0.00082  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+pass  single-read-answer       r4  2 calls  5891 ms  $0.00058
+FAIL  single-calculator        r4  3 calls  6457 ms  $0.00069  — harness error: · The model called bench__calculator 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  single-now               r4  3 calls  7269 ms  $0.00071
+FAIL  single-send              r4  1 calls  3874 ms  $0.00049  — no message to Priya about the build
+FAIL  chain-order-notify       r4  2 calls  6188 ms  $0.00071  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r4  1 calls  3838 ms  $0.00054  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r4  1 calls  4431 ms  $0.00053  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r4  2 calls  6427 ms  $0.00063  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  1 calls  3759 ms  $0.00053  — darkMode not true
+pass  recall-fact              r4  5 calls  15603 ms  $0.00148
+FAIL  recall-preference        r4  3 calls  8247 ms  $0.00121  — Lee not told about the deploy
+FAIL  recall-correction        r4  3 calls  7734 ms  $0.00074  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+pass  abstain-chitchat         r4  1 calls  1779 ms  $0.00047
+pass  abstain-knowledge        r4  1 calls  1718 ms  $0.00046
+pass  abstain-draft-only       r4  1 calls  2257 ms  $0.00050
+pass  abstain-cannot           r4  1 calls  13682 ms  $0.00058
+FAIL  recover-retry            r4  2 calls  7336 ms  $0.00076  — never got past the failure
+FAIL  recover-persist          r4  2 calls  5858 ms  $0.00068  — file never written
+pass  recover-bad-expression   r4  5 calls  12735 ms  $0.00103
+pass  recover-missing-file     r4  2 calls  7114 ms  $0.00078
+pass  recover-unknown-order    r4  2 calls  5703 ms  $0.00073
+FAIL  long-log-needle          r4  1 calls  4085 ms  $0.00055  — error code not stored
+FAIL  long-count-orders        r4  12 calls  83241 ms  $0.02056  — count is not 58
+FAIL  long-handbook            r4  14 calls  45563 ms  $0.01514  — harness error: I’ll check the handbook, then save the amount under `meal_limit`.
+  · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating
+pass  single-kv-set            r5  2 calls  6652 ms  $0.00070
+pass  single-read-answer       r5  2 calls  3489 ms  $0.00061
+pass  single-calculator        r5  3 calls  6884 ms  $0.00074
+FAIL  single-now               r5  3 calls  4678 ms  $0.00071  — harness error: · The model called now 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — check whether
+FAIL  single-send              r5  1 calls  3621 ms  $0.00052  — no message to Priya about the build
+FAIL  chain-order-notify       r5  2 calls  6817 ms  $0.00076  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r5  1 calls  2870 ms  $0.00055  — region not stored as eu-west-2
+FAIL  chain-sum-to-file        r5  1 calls  3613 ms  $0.00055  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r5  2 calls  5435 ms  $0.00069  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  1 calls  3354 ms  $0.00055  — darkMode not true
+pass  recall-fact              r5  3 calls  9280 ms  $0.00078
+FAIL  recall-preference        r5  3 calls  9087 ms  $0.00124  — Lee not told about the deploy
+FAIL  recall-correction        r5  3 calls  6784 ms  $0.00075  — harness error: · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs — che
+pass  abstain-chitchat         r5  1 calls  1628 ms  $0.00049
+pass  abstain-knowledge        r5  1 calls  1707 ms  $0.00048
+pass  abstain-draft-only       r5  1 calls  2875 ms  $0.00052
+pass  abstain-cannot           r5  1 calls  3851 ms  $0.00058
+FAIL  recover-retry            r5  2 calls  5650 ms  $0.00068  — never got past the failure
+FAIL  recover-persist          r5  3 calls  10659 ms  $0.00102  — file never written
+pass  recover-bad-expression   r5  2 calls  4960 ms  $0.00060
+pass  recover-missing-file     r5  2 calls  10238 ms  $0.00085
+pass  recover-unknown-order    r5  2 calls  7377 ms  $0.00077
+FAIL  long-log-needle          r5  1 calls  4152 ms  $0.00056  — error code not stored
+pass  long-count-orders        r5  5 calls  23501 ms  $0.00544
+FAIL  long-handbook            r5  16 calls  61625 ms  $0.02086  — harness error: I’ll read the handbook to find the limit, then save the amount under `meal_limit`.I’ll locate the meal policy in the handbook, then save its stated daily limit as `meal_limit`.
+  · The model called bench__kv_set 3 times in a row with identical arguments, so the turn was stopped.
+    The same call wi
+dispach-native · gpt-6-luna: 63/125 passed → evals/harness/runs/baseline-aae8fe4/dispach-native.gpt-6-luna.jsonl

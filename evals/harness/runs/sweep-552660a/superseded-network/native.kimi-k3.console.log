@@ -1,0 +1,129 @@
+note: dispach-native — the registry does not know moonshotai/kimi-k3; init's agent did not load, so its window (1048576) and native tool support (true) were set from moonshotai/mxfp4's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  24977 ms  $0.02311
+pass  single-read-answer       r1  2 calls  12448 ms  $0.00627
+pass  single-calculator        r1  2 calls  12688 ms  $0.00505
+pass  single-now               r1  2 calls  16456 ms  $0.00900
+pass  single-send              r1  2 calls  18405 ms  $0.01134
+pass  chain-order-notify       r1  3 calls  28356 ms  $0.01589
+pass  chain-file-to-kv         r1  3 calls  16697 ms  $0.00926
+pass  chain-sum-to-file        r1  4 calls  22181 ms  $0.01278
+pass  chain-kv-to-send         r1  3 calls  23011 ms  $0.01028
+pass  chain-edit-json          r1  3 calls  19012 ms  $0.01107
+pass  recall-fact              r1  5 calls  83644 ms  $0.04507
+pass  recall-preference        r1  4 calls  22794 ms  $0.01493
+pass  recall-correction        r1  4 calls  20812 ms  $0.01278
+pass  abstain-chitchat         r1  1 calls  10082 ms  $0.00614
+pass  abstain-knowledge        r1  1 calls  4357 ms  $0.00282
+pass  abstain-draft-only       r1  1 calls  19968 ms  $0.00935
+pass  abstain-cannot           r1  1 calls  51560 ms  $0.02789
+pass  recover-retry            r1  3 calls  12405 ms  $0.00927
+FAIL  recover-persist          r1  3 calls  18585 ms  $0.01265  — file never written
+pass  recover-bad-expression   r1  2 calls  8153 ms  $0.00530
+pass  recover-missing-file     r1  2 calls  19915 ms  $0.00966
+pass  recover-unknown-order    r1  2 calls  14829 ms  $0.00980
+pass  long-log-needle          r1  3 calls  19479 ms  $0.09650
+pass  long-count-orders        r1  2 calls  19377 ms  $0.04712
+pass  long-handbook            r1  3 calls  18810 ms  $0.04551
+pass  single-kv-set            r2  2 calls  14495 ms  $0.00976
+pass  single-read-answer       r2  2 calls  8592 ms  $0.00591
+pass  single-calculator        r2  2 calls  8519 ms  $0.00514
+pass  single-now               r2  2 calls  11149 ms  $0.00541
+pass  single-send              r2  2 calls  14605 ms  $0.00968
+pass  chain-order-notify       r2  3 calls  19643 ms  $0.01251
+pass  chain-file-to-kv         r2  3 calls  20407 ms  $0.01084
+pass  chain-sum-to-file        r2  4 calls  27984 ms  $0.01283
+FAIL  chain-kv-to-send         r2  2 calls  11570 ms  $0.00603  — Dmitri not sent the alert
+pass  chain-edit-json          r2  3 calls  17022 ms  $0.01072
+pass  recall-fact              r2  5 calls  48594 ms  $0.02693
+pass  recall-preference        r2  4 calls  29616 ms  $0.01635
+pass  recall-correction        r2  4 calls  21078 ms  $0.01164
+pass  abstain-chitchat         r2  1 calls  5152 ms  $0.00336
+pass  abstain-knowledge        r2  1 calls  4504 ms  $0.00328
+pass  abstain-draft-only       r2  1 calls  11139 ms  $0.00685
+pass  abstain-cannot           r2  1 calls  63467 ms  $0.03624
+pass  recover-retry            r2  3 calls  14567 ms  $0.00970
+FAIL  recover-persist          r2  3 calls  18960 ms  $0.01439  — file never written
+pass  recover-bad-expression   r2  2 calls  7596 ms  $0.00524
+pass  recover-missing-file     r2  3 calls  18965 ms  $0.01162
+pass  recover-unknown-order    r2  2 calls  21634 ms  $0.01141
+pass  long-log-needle          r2  3 calls  17302 ms  $0.09725
+pass  long-count-orders        r2  2 calls  29573 ms  $0.05722
+pass  long-handbook            r2  3 calls  19599 ms  $0.04605
+pass  single-kv-set            r3  2 calls  11730 ms  $0.00807
+pass  single-read-answer       r3  2 calls  9765 ms  $0.00579
+FAIL  single-calculator        r3  1 calls  6728 ms  $0.00358  — calculator not used
+pass  single-now               r3  2 calls  25829 ms  $0.01104
+pass  single-send              r3  2 calls  14860 ms  $0.00995
+pass  chain-order-notify       r3  3 calls  23199 ms  $0.01282
+pass  chain-file-to-kv         r3  3 calls  16977 ms  $0.00889
+pass  chain-sum-to-file        r3  4 calls  20921 ms  $0.01252
+pass  chain-kv-to-send         r3  3 calls  20090 ms  $0.01112
+pass  chain-edit-json          r3  3 calls  16582 ms  $0.01081
+pass  recall-fact              r3  3 calls  52720 ms  $0.02631
+pass  recall-preference        r3  4 calls  29153 ms  $0.01596
+pass  recall-correction        r3  4 calls  19527 ms  $0.01186
+pass  abstain-chitchat         r3  1 calls  10180 ms  $0.00360
+pass  abstain-knowledge        r3  1 calls  2944 ms  $0.00226
+pass  abstain-draft-only       r3  1 calls  15975 ms  $0.00788
+pass  abstain-cannot           r3  2 calls  43453 ms  $0.02322
+pass  recover-retry            r3  3 calls  18094 ms  $0.00976
+FAIL  recover-persist          r3  3 calls  18551 ms  $0.01279  — file never written
+pass  recover-bad-expression   r3  2 calls  14213 ms  $0.00543
+FAIL  recover-missing-file     r3  3 calls  2132214 ms  $0.00349  — harness error: There's no file at notes/budget.md — the read came back saying it doesn't exist, so there's no total to store.
+
+A couple of possibilities: the file might live at a different path, or it hasn't been created yet. If you give me the right path I'll read it and store the total under `budget`. Or if you 
+pass  recover-unknown-order    r3  2 calls  21865 ms  $0.02304
+pass  long-log-needle          r3  3 calls  17889 ms  $0.09563
+pass  long-count-orders        r3  2 calls  26932 ms  $0.05221
+pass  long-handbook            r3  3 calls  19611 ms  $0.04768
+pass  single-kv-set            r4  2 calls  18842 ms  $0.01080
+pass  single-read-answer       r4  2 calls  11196 ms  $0.00649
+pass  single-calculator        r4  2 calls  10755 ms  $0.00680
+pass  single-now               r4  3 calls  20787 ms  $0.01140
+pass  single-send              r4  2 calls  11852 ms  $0.00781
+FAIL  chain-order-notify       r4  2 calls  14604 ms  $0.00869  — Sam not told it is delayed
+pass  chain-file-to-kv         r4  3 calls  15877 ms  $0.00990
+pass  chain-sum-to-file        r4  4 calls  18725 ms  $0.01239
+pass  chain-kv-to-send         r4  3 calls  19218 ms  $0.01038
+pass  chain-edit-json          r4  3 calls  16378 ms  $0.01227
+pass  recall-fact              r4  5 calls  71136 ms  $0.03868
+pass  recall-preference        r4  5 calls  25919 ms  $0.01877
+pass  recall-correction        r4  3 calls  19882 ms  $0.01019
+pass  abstain-chitchat         r4  1 calls  9740 ms  $0.00495
+pass  abstain-knowledge        r4  1 calls  4273 ms  $0.00207
+pass  abstain-draft-only       r4  1 calls  17306 ms  $0.00893
+pass  abstain-cannot           r4  1 calls  42346 ms  $0.02204
+pass  recover-retry            r4  3 calls  13865 ms  $0.00955
+FAIL  recover-persist          r4  3 calls  17761 ms  $0.01166  — file never written
+pass  recover-bad-expression   r4  2 calls  10052 ms  $0.00532
+pass  recover-missing-file     r4  2 calls  11249 ms  $0.00725
+pass  recover-unknown-order    r4  2 calls  24580 ms  $0.01423
+pass  long-log-needle          r4  3 calls  20767 ms  $0.09723
+pass  long-count-orders        r4  2 calls  82871 ms  $0.09183
+pass  long-handbook            r4  3 calls  19685 ms  $0.04509
+pass  single-kv-set            r5  2 calls  22780 ms  $0.01256
+pass  single-read-answer       r5  2 calls  8933 ms  $0.00640
+pass  single-calculator        r5  2 calls  10179 ms  $0.00529
+pass  single-now               r5  2 calls  16206 ms  $0.00976
+FAIL  single-send              r5  1 calls  8961 ms  $0.00516  — no message to Priya about the build
+pass  chain-order-notify       r5  3 calls  25889 ms  $0.01437
+pass  chain-file-to-kv         r5  3 calls  17300 ms  $0.00999
+pass  chain-sum-to-file        r5  4 calls  19658 ms  $0.01185
+pass  chain-kv-to-send         r5  3 calls  22640 ms  $0.01216
+pass  chain-edit-json          r5  3 calls  14861 ms  $0.01004
+pass  recall-fact              r5  4 calls  95652 ms  $0.05156
+pass  recall-preference        r5  4 calls  36349 ms  $0.02165
+pass  recall-correction        r5  4 calls  26740 ms  $0.01278
+pass  abstain-chitchat         r5  1 calls  19576 ms  $0.01031
+pass  abstain-knowledge        r5  1 calls  5437 ms  $0.00312
+pass  abstain-draft-only       r5  1 calls  21769 ms  $0.01036
+pass  abstain-cannot           r5  1 calls  24618 ms  $0.01322
+pass  recover-retry            r5  3 calls  15392 ms  $0.00918
+FAIL  recover-persist          r5  3 calls  18104 ms  $0.01146  — file never written
+pass  recover-bad-expression   r5  2 calls  9927 ms  $0.00542
+pass  recover-missing-file     r5  2 calls  13907 ms  $0.00757
+pass  recover-unknown-order    r5  2 calls  22322 ms  $0.01254
+pass  long-log-needle          r5  3 calls  18389 ms  $0.09628
+pass  long-count-orders        r5  2 calls  20559 ms  $0.04903
+pass  long-handbook            r5  3 calls  20290 ms  $0.04609
+dispach-native · kimi-k3: 115/125 passed → evals/harness/runs/sweep-552660a/native.kimi-k3.jsonl

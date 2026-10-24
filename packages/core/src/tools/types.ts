@@ -13,12 +13,22 @@
  */
 
 import type { ConfigError, ErrorDetail } from "../errors.ts"
+import type { ActingParticipant } from "../loop/sender.ts"
+import type { MediaProviderFactory } from "../media/provider.ts"
 import type { Trust } from "./trust.ts"
 
 export type JsonType = "string" | "number" | "integer" | "boolean" | "array" | "object"
 
+/** The types a union may combine (pilot.16): plain values only, never a list or an object. */
+export type ScalarType = "string" | "number" | "integer" | "boolean"
+
 export interface JsonSchemaNode {
-    readonly type: JsonType
+    /**
+     * One type, or a list of scalar types any of which is valid (pilot.16): JSON Schema's own spelling,
+     * so the native dialect hands it to the endpoint unchanged. A union of lists or objects is refused
+     * where the schema is mapped, never represented here.
+     */
+    readonly type: JsonType | readonly ScalarType[]
     readonly description?: string
     /** Coercion matches case-insensitively against these, then reports the allowed set. */
     readonly enum?: readonly (string | number | boolean)[]
@@ -54,6 +64,14 @@ export interface ToolSpec {
     /** Mutating tools serialise, hold reserved budget slots, and are never retried. */
     readonly mutating: boolean
     /**
+     * This call must be the only one in its step. Asked for beside others, it is refused and they run.
+     *
+     * For a tool that reports on what the step's other calls return: `submit_artifact`. Several calls
+     * may share a step and run in order, so a model can write the call and the report in one breath
+     * and submit an answer invented before the result existed. Measured live in `eval:subagents`.
+     */
+    readonly alone?: true
+    /**
      * Whether this tool's output may contain text a stranger wrote.
      *
      * Optional here and **normalised by the registry**, which defaults anything a remote provider
@@ -80,6 +98,13 @@ export interface ToolSpec {
      */
     readonly trustReason?: string
     /**
+     * The tool acts as the agent's owner: their mail, their accounts (pilot.15). A turn acting for
+     * anyone else (another member asking, a stand-in, a channel sender who is not the owner) gets
+     * no such tool, and a call to one is refused with `tool_personal`. Set by the provider: Composio
+     * for every tool, MCP for a server declared `personal: true`. Absent, the tool is shared.
+     */
+    readonly personal?: boolean
+    /**
      * Which argument a `tools.policy` pattern matches against — `command` for a shell tool, `path`
      * for a file tool.
      *
@@ -88,6 +113,12 @@ export interface ToolSpec {
      * it simply cannot be narrowed, which is honest for something like `now`.
      */
     readonly policyArg?: string
+    /**
+     * `policyArg` is a filesystem path, so it is matched **normalised**: `./a/../.env` is `.env`.
+     * Matched raw, a `../` walked past any path rule — `deny: ["file_read(.env)"]` did not stop
+     * `file_read(workspace/../.env)` (pilot.4).
+     */
+    readonly policyArgIsPath?: true
     /** Matched by `phases.*.allow` as `tag:<name>`. */
     readonly tags: readonly string[]
     readonly parameters: ToolParameters
@@ -126,6 +157,30 @@ export interface ToolContext {
     readonly deadlineMs: number
     readonly now: () => Date
     /**
+     * Send a file with the reply: an image a tool generated. `path` is absolute and inside the
+     * agent's directory. Collected across the turn and delivered after the text by whichever surface
+     * delivers it — a channel sends it, the API reports it on `turn.end`. Optional so a plugin's own
+     * fixture keeps compiling; the runtime always supplies it.
+     */
+    readonly attach?: (file: { readonly path: string; readonly mimeType: string }) => void
+    /**
+     * Who this turn acts for, stamped by the runtime from the surface the turn arrived through, or
+     * `null` for a schedule, a peer agent or the operator. Never from model output. An HTTP tool that
+     * calls an embedder forwards it so the embedder can authorise the person, not only the agent.
+     * Optional so a plugin's own test fixture keeps compiling; absent reads as `null`. The runtime
+     * always sets it, and `acting-participant.test.ts` reads it from a real turn's tool call, because
+     * a field set in one layer and dropped by the next has cost this repo six debugging rounds.
+     */
+    readonly actingParticipant?: ActingParticipant | null
+    /** The call this handler is answering, as the model announced it. Set by the executor. */
+    readonly callId?: string
+    /**
+     * The turn had read untrusted content before this call: the value the write gate just decided
+     * with. Set by the executor. A tool that starts work of its own carries it on, so a subagent of a
+     * tainted turn starts tainted too.
+     */
+    readonly tainted?: boolean
+    /**
      * Where a durable note goes, when a workspace declares somewhere for it.
      *
      * Resolved by the runtime rather than chosen by the model, and deliberately not exposed as a
@@ -150,6 +205,13 @@ export interface ToolContext {
      */
     readonly readArtifact?: (id: string) => Promise<DisplacedArtifact | undefined>
     /**
+     * Report what this call spent at a third party (pilot.9): a web search's credit, a crawl's pages.
+     * Emitted as `tool.usage` beside the call's own events, with the acting participant, so an
+     * embedder bills a user's web spend the way it bills `model.result`. Supplied by the executor on
+     * every call; absent only in a context built by hand.
+     */
+    readonly meter?: (usage: ToolUsage) => void
+    /**
      * Moves the session to another phase. Resolved by the turn, which owns the current one.
      *
      * A seam rather than state on the context, because the change has to reach three places the tool
@@ -159,6 +221,13 @@ export interface ToolContext {
      */
     readonly setPhase?: (to: string) => Promise<void>
     /**
+     * Make slugs just added to `tools.pinned` callable for the rest of this turn (pilot.14). Adds the
+     * ones a provider can resolve without the network, a slug `composio_search` just cached, and
+     * returns them; the rest arrive with the reload the call also queues for when the turn ends.
+     * Absent where no turn can take them (a preview, a tool run outside a turn).
+     */
+    readonly pinTools?: (slugs: readonly string[]) => Promise<readonly string[]>
+    /**
      * Absolute path of the archive directory eviction writes to — `memory.dir`, resolved.
      *
      * Absent means the runtime has no memory configured, and `memory_write` then appends without
@@ -166,6 +235,33 @@ export interface ToolContext {
      * dropping notes on the floor because nowhere was configured to keep them.
      */
     readonly memoryDir?: string
+    /**
+     * Where `memory_write` saves instead of the workspace file, when this agent is the team's
+     * designated space writer (Phase 29). Returns the observation. Absent: the workspace file, as ever.
+     */
+    readonly writeNote?: (text: string) => Promise<string>
+    /**
+     * `memory_forget` (pilot.15): list the notes a query matches, or delete the ones named. Resolved
+     * per turn by the agent, because which memory a turn may change is the memory `memory_write` would
+     * write there: private on a private turn, the space for the space writer, refused otherwise.
+     * Absent where no turn runs, and the tool then refuses rather than reporting nothing found.
+     */
+    readonly forgetMemory?: (request: ForgetRequest) => Promise<ForgetResult>
+}
+
+export type ForgetRequest = { readonly query: string } | { readonly ids: readonly string[] }
+
+export interface ForgetResult {
+    /** `private`, or `space` for the space writer. */
+    readonly scope: string
+    /** What the query matched, or what the ids deleted. */
+    readonly notes: readonly {
+        readonly id: string
+        readonly source: string
+        readonly text: string
+    }[]
+    /** Ids that named nothing: already gone, or never this turn's to delete. */
+    readonly missing: readonly string[]
 }
 
 /** What `artifact_read` needs to know about a displaced observation. Structural on purpose. */
@@ -223,6 +319,12 @@ export type ToolHandler = (
 export interface Tool {
     readonly spec: ToolSpec
     readonly handler: ToolHandler
+    /**
+     * The trust of one call's result, where the spec's single value can't answer for every call.
+     * `artifact_read` is the case: it returns whatever it stored, and the trust of that is a fact
+     * about the artifact, not about the tool. It can only lower trust; `untrusted` on the spec wins.
+     */
+    readonly trustOf?: (args: Readonly<Record<string, unknown>>) => Trust
 }
 
 /**
@@ -234,6 +336,17 @@ export interface Tool {
 export interface ToolAvailability {
     readonly slug: string
     readonly summary: string
+    /**
+     * Pinned, and its provider could not load it (pilot.16): rendered as unavailable rather than as
+     * a tool to ask for, because asking for it to be pinned is the advice that is already followed.
+     */
+    readonly unavailable?: boolean
+}
+
+/** A pinned tool its provider found and could not load, and why (pilot.16). */
+export interface RefusedTool {
+    readonly slug: string
+    readonly detail: ErrorDetail
 }
 
 export interface ToolProvider {
@@ -286,6 +399,13 @@ export interface ToolProvider {
      * sentence and the registry decides whether anyone needs to hear it.
      */
     explainUnresolved?(slugs: readonly string[]): ConfigError | undefined
+    /**
+     * Pinned tools the last `resolve` found and left out because they could not be loaded, such as a
+     * schema this runtime cannot represent (pilot.16). Read by the registry right after resolving, so
+     * one tool an upstream change broke costs that tool and not the agent: it is warned about by name
+     * and kept out of the "no provider resolved it" report, which would be untrue.
+     */
+    refused?(): readonly RefusedTool[]
     /**
      * Release anything this provider owns outside the process. Called once, from `Runtime.stop`.
      *
@@ -375,6 +495,17 @@ export interface ScriptRunResult {
     readonly timedOut: boolean
 }
 
+/** One call's spend at a third party, in that party's own unit. */
+export interface ToolUsage {
+    /** Who charged it: `tavily`, `firecrawl`. */
+    readonly provider: string
+    /** What was done, when a tool does several: `search`, `scrape`, `crawl`, `map`. */
+    readonly operation?: string
+    /** `credits` where the provider bills in them, `requests` where it bills per call. */
+    readonly unit: string
+    readonly units: number
+}
+
 export interface ToolProviderContext {
     /** The agent's own directory — where a resolution cache belongs, never `process.cwd()`. */
     readonly dir: string
@@ -383,6 +514,14 @@ export interface ToolProviderContext {
     /** `tools.providerConfig`, verbatim. */
     readonly config: Readonly<Record<string, unknown>>
     readonly agentId: string
+    /**
+     * Every provider factory this runtime builds agents with. For a provider whose tools edit the
+     * manifest (`config_set`), so an edit to `tools.providers` is checked by the providers themselves
+     * before it is written — the same check the person's editors make (decision 14.24).
+     */
+    readonly providers?: Readonly<Record<string, ToolProviderFactory>>
+    /** The runtime's media providers, so a `media` edit from `config_set` is checked the same way. */
+    readonly mediaProviders?: Readonly<Record<string, MediaProviderFactory>>
 }
 
 export interface ToolIntent {

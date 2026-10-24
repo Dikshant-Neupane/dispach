@@ -1,0 +1,26 @@
+pass  single-kv-set            r2  3 calls  25144 ms  $0.00200
+pass  single-read-answer       r2  3 calls  18439 ms  $0.00200
+pass  single-calculator        r2  3 calls  23506 ms  $0.00199
+pass  single-now               r2  3 calls  22256 ms  $0.00199
+pass  single-send              r2  3 calls  19408 ms  $0.00198
+pass  chain-order-notify       r2  4 calls  45834 ms  $0.00270
+pass  chain-file-to-kv         r2  3 calls  18175 ms  $0.00201
+pass  chain-sum-to-file        r2  7 calls  47381 ms  $0.00412
+pass  chain-kv-to-send         r2  5 calls  35455 ms  $0.00267
+pass  chain-edit-json          r2  5 calls  32088 ms  $0.00338
+pass  recall-fact              r2  7 calls  217317 ms  $0.00492
+pass  recall-preference        r2  8 calls  66536 ms  $0.00554
+pass  recall-correction        r2  7 calls  41214 ms  $0.00475
+pass  abstain-chitchat         r2  1 calls  6467 ms  $0.00065
+pass  abstain-knowledge        r2  1 calls  4694 ms  $0.00065
+pass  abstain-draft-only       r2  1 calls  18925 ms  $0.00067
+pass  abstain-cannot           r2  1 calls  14294 ms  $0.00067
+pass  recover-retry            r2  4 calls  21239 ms  $0.00269
+pass  recover-persist          r2  5 calls  25100 ms  $0.00343
+pass  recover-bad-expression   r2  3 calls  21003 ms  $0.00199
+pass  recover-missing-file     r2  10 calls  95676 ms  $0.00735
+pass  recover-unknown-order    r2  5 calls  37087 ms  $0.00337
+pass  long-log-needle          r2  4 calls  62827 ms  $0.01372
+FAIL  long-count-orders        r2  3 calls  204954 ms  $0.00535  — count is not 58
+pass  long-handbook            r2  4 calls  27507 ms  $0.00650
+hermes · qwen3.5-9b: 24/25 passed → evals/harness/runs/sweep-552660a/hermes.qwen3.5-9b.r2.jsonl

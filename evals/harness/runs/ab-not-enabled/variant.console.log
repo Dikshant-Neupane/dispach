@@ -1,0 +1,51 @@
+FAIL  single-kv-set            r1  1 calls  4448 ms  $0.00050  — locker_code not stored as 4417
+FAIL  single-read-answer       r1  1 calls  2129 ms  $0.00005  — file never read
+pass  single-calculator        r1  2 calls  8830 ms  $0.00023
+FAIL  single-now               r1  1 calls  2573 ms  $0.00005  — clock not read (a guess)
+FAIL  single-send              r1  1 calls  2185 ms  $0.00007  — no message to Priya about the build
+FAIL  chain-order-notify       r1  1 calls  4238 ms  $0.00013  — order never looked up
+FAIL  chain-file-to-kv         r1  1 calls  3963 ms  $0.00051  — region not stored as eu-west-2
+pass  chain-sum-to-file        r1  3 calls  14181 ms  $0.00058
+pass  chain-kv-to-send         r1  3 calls  15903 ms  $0.00053
+pass  chain-edit-json          r1  3 calls  14150 ms  $0.00062
+pass  single-kv-set            r2  2 calls  6561 ms  $0.00021
+FAIL  single-read-answer       r2  1 calls  2820 ms  $0.00049  — file never read
+FAIL  single-calculator        r2  1 calls  2473 ms  $0.00045  — calculator not used
+FAIL  single-now               r2  1 calls  4492 ms  $0.00047  — clock not read (a guess)
+FAIL  single-send              r2  1 calls  3386 ms  $0.00049  — no message to Priya about the build
+pass  chain-order-notify       r2  3 calls  17373 ms  $0.00083
+pass  chain-file-to-kv         r2  3 calls  18043 ms  $0.00095
+pass  chain-sum-to-file        r2  3 calls  34035 ms  $0.00132
+pass  chain-kv-to-send         r2  3 calls  14825 ms  $0.00092
+pass  chain-edit-json          r2  3 calls  12713 ms  $0.00093
+FAIL  single-kv-set            r3  1 calls  2906 ms  $0.00051  — locker_code not stored as 4417
+pass  single-read-answer       r3  2 calls  7643 ms  $0.00064
+pass  single-calculator        r3  2 calls  4151 ms  $0.00053
+pass  single-now               r3  2 calls  7451 ms  $0.00054
+FAIL  single-send              r3  1 calls  3694 ms  $0.00048  — no message to Priya about the build
+pass  chain-order-notify       r3  3 calls  12530 ms  $0.00102
+pass  chain-file-to-kv         r3  3 calls  9160 ms  $0.00070
+FAIL  chain-sum-to-file        r3  1 calls  3736 ms  $0.00054  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r3  3 calls  19380 ms  $0.00095
+pass  chain-edit-json          r3  3 calls  8890 ms  $0.00067
+FAIL  single-kv-set            r4  1 calls  3103 ms  $0.00051  — locker_code not stored as 4417
+FAIL  single-read-answer       r4  1 calls  3254 ms  $0.00052  — file never read
+pass  single-calculator        r4  2 calls  4665 ms  $0.00054
+pass  single-now               r4  2 calls  18445 ms  $0.00093
+FAIL  single-send              r4  1 calls  2831 ms  $0.00050  — no message to Priya about the build
+pass  chain-order-notify       r4  3 calls  11434 ms  $0.00072
+pass  chain-file-to-kv         r4  3 calls  19450 ms  $0.00086
+pass  chain-sum-to-file        r4  3 calls  14127 ms  $0.00082
+pass  chain-kv-to-send         r4  3 calls  16765 ms  $0.00071
+pass  chain-edit-json          r4  3 calls  11304 ms  $0.00082
+FAIL  single-kv-set            r5  1 calls  3788 ms  $0.00055  — locker_code not stored as 4417
+pass  single-read-answer       r5  2 calls  4082 ms  $0.00058
+FAIL  single-calculator        r5  1 calls  1983 ms  $0.00049  — calculator not used
+pass  single-now               r5  2 calls  7409 ms  $0.00060
+FAIL  single-send              r5  1 calls  2948 ms  $0.00052  — no message to Priya about the build
+pass  chain-order-notify       r5  3 calls  14917 ms  $0.00092
+pass  chain-file-to-kv         r5  3 calls  14718 ms  $0.00103
+pass  chain-sum-to-file        r5  3 calls  17345 ms  $0.00093
+FAIL  chain-kv-to-send         r5  1 calls  4714 ms  $0.00056  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  1 calls  3946 ms  $0.00055  — darkMode not true
+dispach-nlt · gpt-6-luna: 29/50 passed → evals/harness/runs/ab-not-enabled/variant.nlt.gpt-6-luna.jsonl

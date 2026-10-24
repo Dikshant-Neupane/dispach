@@ -237,6 +237,14 @@ describe("a past conversation reaches the model", () => {
         const { fetch, bodies } = recorder("Noted.")
         const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
         const subject = runtime.agent("test")
+        const recalled: { sessionKey?: string; sources: string[] }[] = []
+        runtime.bus.on("memory.recalled", (event) => {
+            if (event.type !== "memory.recalled") return
+            recalled.push({
+                ...(event.sessionKey === undefined ? {} : { sessionKey: event.sessionKey }),
+                sources: event.data.passages.map((passage) => passage.source),
+            })
+        })
 
         await subject?.send("the deploy pipeline waits for a manual approval gate", {
             sessionKey: "local:first0",
@@ -250,9 +258,16 @@ describe("a past conversation reaches the model", () => {
         // three excerpts of its own earlier sessions answered correctly and then added "that's what the
         // saved notes say; the actual transcripts don't carry over" — wrong about its own state, while
         // holding the evidence.
-        expect(sent.includes("From an earlier conversation")).toBe(true)
+        expect(sent.includes("From a different, earlier conversation (local:first0)")).toBe(true)
+        // And says it is not this conversation, so its task is not taken for the current one
+        // (pilot.13: a new chat re-proposed another chat's task until no_progress).
+        expect(sent.includes("It is not part of this conversation")).toBe(true)
         expect(sent.includes("local:first0")).toBe(true)
         expect(sent.includes("session:local:first0")).toBe(false)
+        // On the stream too, naming the turn's session and what it recalled (pilot.13).
+        expect(recalled).toEqual([
+            { sessionKey: "local:secnd0", sources: ["session:local:first0"] },
+        ])
         await runtime.stop()
     })
 
@@ -436,12 +451,15 @@ describe("memory_write evicts rather than growing without bound", () => {
                 messages?: { content?: unknown }[]
             }
             const messages = body.messages ?? []
-            // Key on the turn's *input*, which is the last message: `SLOT.input` is ordered after the
-            // history, so an observation is never the final message and "has this turn already been
-            // answered" cannot be read off the tail. Looking for OBSERVATION anywhere in the prompt is
-            // worse still — one stays in the history forever. Both mistakes were made here first, and
-            // both presented as "eviction does not work" rather than as a broken fixture.
-            const input = String(messages[messages.length - 1]?.content ?? "")
+            // Key on the turn's *input*, found by its own text. Not by position: since 0.2.0 the turn's
+            // trace follows the input, so after step one the last message is an observation. And not by
+            // looking for OBSERVATION anywhere in the prompt — one stays in the history forever. Each of
+            // these was made here, and each presented as "eviction does not work" rather than as a
+            // broken fixture.
+            const input = String(
+                messages.findLast((m) => String(m.content ?? "").startsWith("save fact"))
+                    ?.content ?? "",
+            )
             const first = !seen.has(input)
             if (first) seen.add(input)
             const content = first
@@ -669,6 +687,23 @@ describe("the carried file is current while the agent runs", () => {
         expect(secondSystem).toEqual(firstSystem)
         // While the volatile edit in the same turn did land.
         expect(carriedOf(bodies[1]).includes("Releases ship on thursdays only.")).toBe(true)
+        await runtime.stop()
+    })
+})
+
+describe("the agent can tell which files it was given (pilot.15)", () => {
+    test("each file arrives under its name, and slot 2 lists them by tier", async () => {
+        const { manifest } = agent({ carried: "- Moeen likes short answers." })
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        await runtime.agent("test")?.send("are your files loading?")
+        const sent = prompt(bodies[0])
+        // The bytes that went to the endpoint, at the far end of the pipeline.
+        expect(sent).toMatch(/SOUL\.md[\s\S]*A test fixture\./)
+        expect(sent).toMatch(/MEMORY\.md[\s\S]*Moeen likes short answers/)
+        expect(sent).toContain(
+            "context files  SOUL.md every turn; MEMORY.md in private conversations",
+        )
         await runtime.stop()
     })
 })

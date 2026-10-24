@@ -20,6 +20,8 @@
 
 import {
     ConfigError,
+    isHarnessError,
+    type RefusedTool,
     type Tool,
     type ToolAvailability,
     type ToolContext,
@@ -62,6 +64,12 @@ export interface ComposioProviderOptions {
     /** Which connected account to act as at execution time. */
     readonly userId?: string
     readonly baseUrl?: string
+    /**
+     * Whether every tool acts as the agent's owner, and so is offered only to turns acting for them.
+     * Default true: one Composio entity per agent is one person's connected accounts. `false` is for an
+     * entity a whole team shares on purpose.
+     */
+    readonly personal?: boolean
     readonly fetch?: FetchLike
     readonly now?: () => Date
 }
@@ -85,10 +93,13 @@ export class ComposioProvider implements ToolProvider {
     readonly #baseUrl: string
     readonly #client: ComposioClient | undefined
     readonly #keyEnv: string
+    readonly #personal: boolean
     #tools: Readonly<Record<string, ComposioTool>>
     #fetchedAt: string
     /** Recorded at resolve, reported by `describe()`. Never inferred twice. */
     #assumedMutating: readonly string[] = []
+    /** What the last `resolve` found and could not load (pilot.16). */
+    #refused: RefusedTool[] = []
     /** Opened lazily, after readiness. Backed by a file so it survives a restart. */
     #sessionId: string | undefined
 
@@ -97,6 +108,7 @@ export class ComposioProvider implements ToolProvider {
         this.#userId = options.userId ?? "default"
         this.#now = options.now ?? (() => new Date())
         this.#keyEnv = options.apiKeyEnv ?? DEFAULT_KEY_ENV
+        this.#personal = options.personal ?? true
         const apiKey = options.env[this.#keyEnv]
         this.#baseUrl = options.baseUrl ?? "https://backend.composio.dev/api/v3"
 
@@ -121,6 +133,7 @@ export class ComposioProvider implements ToolProvider {
     async resolve(slugs: readonly string[]): Promise<readonly Tool[]> {
         const out: Tool[] = []
         const assumed: string[] = []
+        const refused: RefusedTool[] = []
         const meta = metaTools(this.#metaContext())
         for (const slug of slugs) {
             // The meta tools are static: three fixed specs, resolved with no cache and no request, so
@@ -133,11 +146,30 @@ export class ComposioProvider implements ToolProvider {
             }
             const raw = this.#tools[slug]
             if (raw === undefined) continue
+            // One tool whose schema Composio changed into something unrepresentable costs that tool,
+            // never the agent (pilot.16): every reload of every agent pinning it was refused.
+            let mapped: ToolSpec
+            try {
+                mapped = mapTool(raw)
+            } catch (error) {
+                if (!isHarnessError(error)) throw error
+                refused.push({ slug, detail: error.toDetail() })
+                continue
+            }
             if (isUnannotated(raw)) assumed.push(slug)
-            out.push(this.#toTool(mapTool(raw)))
+            out.push(this.#toTool(mapped))
         }
         this.#assumedMutating = assumed
-        return out
+        this.#refused = refused
+        // Every Composio tool is the owner's (pilot.15) unless the entity is declared shared: it acts on
+        // the account connected for this agent's entity, meta tools included, since `composio_connect`
+        // would connect an app to it.
+        if (!this.#personal) return out
+        return out.map((tool) => ({ ...tool, spec: { ...tool.spec, personal: true } }))
+    }
+
+    refused(): readonly RefusedTool[] {
+        return this.#refused
     }
 
     /**
@@ -341,7 +373,7 @@ export class ComposioProvider implements ToolProvider {
 }
 
 /** Keys `tools.providers.composio` may carry. Anything else is a typo, and typos are refused. */
-const CONFIG_KEYS = ["apiKeyEnv", "userId", "baseUrl"] as const
+const CONFIG_KEYS = ["apiKeyEnv", "userId", "baseUrl", "personal"] as const
 
 function configString(
     config: Readonly<Record<string, unknown>>,
@@ -383,6 +415,15 @@ export function composioFromConfig(context: ToolProviderContext): ComposioProvid
     const apiKeyEnv = configString(context.config, "apiKeyEnv")
     const userId = configString(context.config, "userId")
     const baseUrl = configString(context.config, "baseUrl")
+    const personal = context.config.personal
+    if (personal !== undefined && typeof personal !== "boolean") {
+        throw new ConfigError({
+            code: "composio_config_invalid",
+            message: "tools.providers.composio.personal must be true or false.",
+            hint: "Leave it out to keep the default, true: every tool acts as the agent's owner. Write false only for a Composio entity a whole team shares on purpose.",
+            field: "tools.providers.composio.personal",
+        })
+    }
 
     return new ComposioProvider({
         dir: context.dir,
@@ -390,5 +431,6 @@ export function composioFromConfig(context: ToolProviderContext): ComposioProvid
         ...(apiKeyEnv === undefined ? {} : { apiKeyEnv }),
         ...(userId === undefined ? {} : { userId }),
         ...(baseUrl === undefined ? {} : { baseUrl }),
+        ...(personal === undefined ? {} : { personal }),
     })
 }

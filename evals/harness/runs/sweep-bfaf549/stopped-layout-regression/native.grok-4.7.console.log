@@ -1,0 +1,13 @@
+note: dispach-native — the registry does not know x-ai/grok-4.7; init's agent did not load, so its window (500000) and native tool support (true) were set from xai's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  4003 ms  $0.01692
+pass  single-read-answer       r1  2 calls  4123 ms  $0.01177
+pass  single-calculator        r1  2 calls  3536 ms  $0.00564
+pass  single-now               r1  2 calls  18714 ms  $0.01975
+pass  single-send              r1  2 calls  3116 ms  $0.00547
+pass  chain-order-notify       r1  3 calls  5151 ms  $0.00955
+pass  chain-file-to-kv         r1  3 calls  6199 ms  $0.00946
+pass  chain-sum-to-file        r1  4 calls  7024 ms  $0.02421
+pass  chain-kv-to-send         r1  3 calls  3895 ms  $0.00854
+pass  chain-edit-json          r1  3 calls  15101 ms  $0.01416
+pass  recall-fact              r1  4 calls  8788 ms  $0.01889
+FAIL  recall-preference        r1  2 calls  25860 ms  $0.01858  — Lee not told about the deploy

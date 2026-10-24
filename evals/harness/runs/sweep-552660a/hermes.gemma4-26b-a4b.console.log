@@ -1,0 +1,126 @@
+pass  single-kv-set            r1  2 calls  5078 ms  $0.00196
+pass  single-read-answer       r1  2 calls  4935 ms  $0.00195
+pass  single-calculator        r1  2 calls  5016 ms  $0.00194
+pass  single-now               r1  3 calls  4050 ms  $0.00293
+pass  single-send              r1  2 calls  5640 ms  $0.00193
+pass  chain-order-notify       r1  3 calls  6220 ms  $0.00296
+pass  chain-file-to-kv         r1  4 calls  9262 ms  $0.00296
+pass  chain-sum-to-file        r1  4 calls  8063 ms  $0.00399
+pass  chain-kv-to-send         r1  3 calls  6012 ms  $0.00293
+pass  chain-edit-json          r1  3 calls  6247 ms  $0.00299
+pass  recall-fact              r1  3 calls  144235 ms  $0.00299
+pass  recall-preference        r1  4 calls  9097 ms  $0.00394
+pass  recall-correction        r1  4 calls  8943 ms  $0.00395
+pass  abstain-chitchat         r1  2 calls  6932 ms  $0.00098
+pass  abstain-knowledge        r1  1 calls  2705 ms  $0.00096
+FAIL  abstain-draft-only       r1  1 calls  15694 ms  $0.00100  — no draft in the reply
+pass  abstain-cannot           r1  3 calls  13298 ms  $0.00098
+FAIL  recover-retry            r1  2 calls  5748 ms  $0.00196  — never got past the failure
+FAIL  recover-persist          r1  3 calls  7745 ms  $0.00304  — file never written
+pass  recover-bad-expression   r1  2 calls  4450 ms  $0.00194
+pass  recover-missing-file     r1  5 calls  26137 ms  $0.00508
+pass  recover-unknown-order    r1  3 calls  6591 ms  $0.00297
+pass  long-log-needle          r1  4 calls  14733 ms  $0.01428
+FAIL  long-count-orders        r1  2 calls  5601 ms  $0.00439  — count is not 58
+pass  long-handbook            r1  3 calls  7566 ms  $0.00682
+pass  single-kv-set            r2  4 calls  13084 ms  $0.00196
+pass  single-read-answer       r2  2 calls  14918 ms  $0.00195
+pass  single-calculator        r2  2 calls  4968 ms  $0.00194
+pass  single-now               r2  3 calls  7935 ms  $0.00194
+pass  single-send              r2  2 calls  4215 ms  $0.00194
+pass  chain-order-notify       r2  3 calls  5513 ms  $0.00296
+pass  chain-file-to-kv         r2  4 calls  6148 ms  $0.00398
+pass  chain-sum-to-file        r2  7 calls  15936 ms  $0.00502
+pass  chain-kv-to-send         r2  3 calls  5393 ms  $0.00293
+pass  chain-edit-json          r2  3 calls  5233 ms  $0.00297
+pass  recall-fact              r2  3 calls  7554 ms  $0.00296
+pass  recall-preference        r2  4 calls  8778 ms  $0.00394
+pass  recall-correction        r2  4 calls  8365 ms  $0.00397
+pass  abstain-chitchat         r2  1 calls  2801 ms  $0.00097
+pass  abstain-knowledge        r2  1 calls  2642 ms  $0.00096
+pass  abstain-draft-only       r2  1 calls  5012 ms  $0.00110
+pass  abstain-cannot           r2  1 calls  3951 ms  $0.00098
+FAIL  recover-retry            r2  2 calls  4256 ms  $0.00196  — never got past the failure
+FAIL  recover-persist          r2  3 calls  8448 ms  $0.00304  — file never written
+pass  recover-bad-expression   r2  2 calls  4561 ms  $0.00194
+pass  recover-missing-file     r2  5 calls  9188 ms  $0.00509
+pass  recover-unknown-order    r2  3 calls  7412 ms  $0.00297
+pass  long-log-needle          r2  3 calls  11635 ms  $0.01427
+FAIL  long-count-orders        r2  2 calls  6416 ms  $0.00439  — count is not 58
+pass  long-handbook            r2  3 calls  7161 ms  $0.00682
+pass  single-kv-set            r3  3 calls  7828 ms  $0.00196
+pass  single-read-answer       r3  2 calls  4708 ms  $0.00195
+pass  single-calculator        r3  2 calls  5310 ms  $0.00194
+pass  single-now               r3  2 calls  4122 ms  $0.00194
+pass  single-send              r3  2 calls  4489 ms  $0.00194
+pass  chain-order-notify       r3  4 calls  10372 ms  $0.00296
+pass  chain-file-to-kv         r3  5 calls  10014 ms  $0.00394
+pass  chain-sum-to-file        r3  4 calls  6953 ms  $0.00399
+pass  chain-kv-to-send         r3  4 calls  9220 ms  $0.00293
+pass  chain-edit-json          r3  4 calls  10258 ms  $0.00297
+pass  recall-fact              r3  8 calls  161795 ms  $0.00395
+pass  recall-preference        r3  5 calls  11676 ms  $0.00394
+pass  recall-correction        r3  5 calls  12509 ms  $0.00395
+pass  abstain-chitchat         r3  1 calls  4151 ms  $0.00097
+pass  abstain-knowledge        r3  1 calls  3398 ms  $0.00096
+pass  abstain-draft-only       r3  1 calls  4604 ms  $0.00109
+pass  abstain-cannot           r3  2 calls  6120 ms  $0.00098
+FAIL  recover-retry            r3  2 calls  9053 ms  $0.00196  (1 429 retries)  — never got past the failure
+FAIL  recover-persist          r3  2 calls  4991 ms  $0.00197  — file never written
+pass  recover-bad-expression   r3  2 calls  4090 ms  $0.00194
+pass  recover-missing-file     r3  5 calls  19753 ms  $0.00512
+pass  recover-unknown-order    r3  3 calls  6528 ms  $0.00298
+pass  long-log-needle          r3  3 calls  11478 ms  $0.01428
+FAIL  long-count-orders        r3  2 calls  5288 ms  $0.00439  — count is not 58
+pass  long-handbook            r3  3 calls  7347 ms  $0.00682
+pass  single-kv-set            r4  2 calls  4343 ms  $0.00196
+pass  single-read-answer       r4  2 calls  4037 ms  $0.00195
+pass  single-calculator        r4  3 calls  8228 ms  $0.00194
+pass  single-now               r4  2 calls  4532 ms  $0.00194
+pass  single-send              r4  3 calls  4512 ms  $0.00290
+pass  chain-order-notify       r4  3 calls  140317 ms  $0.00296
+pass  chain-file-to-kv         r4  4 calls  8820 ms  $0.00296
+pass  chain-sum-to-file        r4  4 calls  7426 ms  $0.00399
+pass  chain-kv-to-send         r4  3 calls  7475 ms  $0.00293  (1 429 retries)
+pass  chain-edit-json          r4  4 calls  7998 ms  $0.00398
+pass  recall-fact              r4  4 calls  14704 ms  $0.00297  (1 429 retries)
+pass  recall-preference        r4  4 calls  8750 ms  $0.00394
+pass  recall-correction        r4  4 calls  8516 ms  $0.00395
+pass  abstain-chitchat         r4  1 calls  3540 ms  $0.00097
+pass  abstain-knowledge        r4  1 calls  3485 ms  $0.00096
+FAIL  abstain-draft-only       r4  1 calls  4169 ms  $0.00100  — no draft in the reply
+pass  abstain-cannot           r4  1 calls  3996 ms  $0.00098
+FAIL  recover-retry            r4  2 calls  5008 ms  $0.00195  — never got past the failure
+FAIL  recover-persist          r4  2 calls  5137 ms  $0.00197  — file never written
+pass  recover-bad-expression   r4  2 calls  8154 ms  $0.00194  (1 429 retries)
+pass  recover-missing-file     r4  7 calls  15604 ms  $0.00512
+pass  recover-unknown-order    r4  5 calls  15795 ms  $0.00297  (1 429 retries)
+pass  long-log-needle          r4  6 calls  26162 ms  $0.01428  (4 429 retries)
+FAIL  long-count-orders        r4  2 calls  24909 ms  $0.00439  (1 429 retries)  — count is not 58
+pass  long-handbook            r4  4 calls  11414 ms  $0.00682
+pass  single-kv-set            r5  2 calls  4469 ms  $0.00196
+pass  single-read-answer       r5  2 calls  4125 ms  $0.00195
+pass  single-calculator        r5  2 calls  5152 ms  $0.00194
+pass  single-now               r5  2 calls  5526 ms  $0.00194
+pass  single-send              r5  2 calls  4897 ms  $0.00194
+pass  chain-order-notify       r5  3 calls  170324 ms  $0.00296
+pass  chain-file-to-kv         r5  3 calls  6848 ms  $0.00297
+pass  chain-sum-to-file        r5  4 calls  7470 ms  $0.00399
+pass  chain-kv-to-send         r5  4 calls  7053 ms  $0.00390
+pass  chain-edit-json          r5  3 calls  7464 ms  $0.00299
+pass  recall-fact              r5  3 calls  8717 ms  $0.00299
+pass  recall-preference        r5  4 calls  9226 ms  $0.00393
+pass  recall-correction        r5  4 calls  9234 ms  $0.00395
+pass  abstain-chitchat         r5  1 calls  2823 ms  $0.00097
+pass  abstain-knowledge        r5  1 calls  2779 ms  $0.00096
+pass  abstain-draft-only       r5  1 calls  7842 ms  $0.00111
+pass  abstain-cannot           r5  2 calls  7580 ms  $0.00098
+FAIL  recover-retry            r5  2 calls  140484 ms  $0.00197  — never got past the failure
+FAIL  recover-persist          r5  3 calls  8499 ms  $0.00304  — file never written
+pass  recover-bad-expression   r5  2 calls  5077 ms  $0.00194
+pass  recover-missing-file     r5  5 calls  11710 ms  $0.00510
+pass  recover-unknown-order    r5  3 calls  8243 ms  $0.00297
+pass  long-log-needle          r5  3 calls  27738 ms  $0.01428
+FAIL  long-count-orders        r5  2 calls  6104 ms  $0.00439  — count is not 58
+pass  long-handbook            r5  3 calls  13973 ms  $0.00682
+hermes · gemma4-26b-a4b: 108/125 passed → evals/harness/runs/sweep-552660a/hermes.gemma4-26b-a4b.jsonl

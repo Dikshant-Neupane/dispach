@@ -23,6 +23,7 @@ import type {
     ChannelInput,
     ChannelStatus,
     ChannelTransport,
+    InboundMessage,
     IssuedChannelInput,
     RawInbound,
     WebhookDelivery,
@@ -30,11 +31,13 @@ import type {
 } from "../channels/channel.ts"
 import { Inbox } from "../channels/inbox.ts"
 import { Outbox } from "../channels/outbox.ts"
-import { type ErrorDetail, GovernorError } from "../errors.ts"
+import { type ErrorDetail, GovernorError, imageRefused, isHarnessError } from "../errors.ts"
 import type { EventBus } from "../events/bus.ts"
 import { endNote } from "../loop/turn-end.ts"
 import type { EnvSource } from "../manifest/env.ts"
-import type { OutboxStore } from "../store/store.ts"
+import { imageFromBytes, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE } from "../media/image-input.ts"
+import type { ImageInput } from "../model/provider.ts"
+import type { DeliveryAttachment, OutboxStore } from "../store/store.ts"
 import type { Agent } from "./agent.ts"
 
 /**
@@ -58,6 +61,8 @@ export interface ChannelFactoryContext {
 
 /** Telegram's indicator lapses after ~5 s, so it is refreshed while a turn runs. */
 const TYPING_INTERVAL_MS = 4_000
+/** One photo's download, bounded so a stalled provider cannot hold the conversation's queue. */
+const PHOTO_FETCH_MS = 30_000
 
 export interface ChannelHubOptions {
     readonly bus: EventBus
@@ -368,7 +373,9 @@ export class ChannelHub {
         readonly turnId?: string
         readonly key?: string
         readonly thread?: string
-    }): Promise<void> {
+        /** Files the turn produced, sent after the text. See `EnqueueReply.attachments`. */
+        readonly attachments?: readonly DeliveryAttachment[]
+    }): Promise<{ readonly inserted: boolean }> {
         const bound = this.#agents.get(input.agentId)
         if (bound === undefined) {
             throw new Error(
@@ -376,7 +383,7 @@ export class ChannelHub {
                     'hint: add a channels entry to its manifest, or use deliver: "none" and read the reply from the API response.',
             )
         }
-        await bound.outbox.enqueue({
+        const { inserted } = await bound.outbox.enqueueReport({
             agentId: input.agentId,
             sessionKey: input.sessionKey,
             channelId: input.channelId,
@@ -385,8 +392,21 @@ export class ChannelHub {
             ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
             ...(input.key === undefined ? {} : { key: input.key }),
             ...(input.thread === undefined ? {} : { thread: input.thread }),
+            ...(input.attachments === undefined || input.attachments.length === 0
+                ? {}
+                : { attachments: input.attachments }),
         })
         await bound.outbox.drain(input.agentId)
+        return { inserted }
+    }
+
+    /** Whether this agent has a running channel with this id. A disabled one is never constructed. */
+    hasChannel(agentId: string, channelId: string): boolean {
+        return (
+            this.#agents
+                .get(agentId)
+                ?.bindings.some((binding) => binding.transport.id === channelId) === true
+        )
     }
 
     /**
@@ -518,15 +538,67 @@ export class ChannelHub {
     async #runTurn(
         bound: Bound,
         transport: ChannelTransport,
-        message: { sessionKey: string; peerId: string; text: string; thread?: string },
+        message: InboundMessage,
     ): Promise<void> {
         const agentId = bound.agent.id
         const stopTyping = this.#startTyping(transport, message.peerId, message.thread)
 
+        let input = message.text
+        if (message.audio !== undefined) {
+            const heard = await this.#hear(bound, transport, message)
+            if (heard === undefined) {
+                stopTyping()
+                return
+            }
+            input = heard
+        }
+        let images: readonly ImageInput[] = []
+        if ((message.images?.length ?? 0) > 0) {
+            const seen = await this.#see(bound, transport, message)
+            if (seen === undefined) {
+                stopTyping()
+                return
+            }
+            images = seen
+        }
+
         try {
-            const result = await bound.agent.send(message.text, {
+            const senderId = `${message.channelType}:${message.senderId ?? message.peerId}`
+            // The channel's own model role, when its manifest entry names one (pilot.14). Read from
+            // the agent each time, never captured at registration.
+            const role = bound.agent.manifest.channels?.find(
+                (entry) => entry.id === transport.id,
+            )?.role
+            const result = await bound.agent.send(input, {
                 sessionKey: message.sessionKey,
                 source: transport.id,
+                ...(message.audio === undefined ? {} : { inputKind: "voice" as const }),
+                ...(role === undefined ? {} : { role }),
+                ...(images.length === 0 ? {} : { images }),
+                // A remote agent is an agent sender: untrusted text and no acting participant, which
+                // `participantOf` derives from `from` — so nothing it says can act for a person.
+                ...(message.senderKind === "agent"
+                    ? {
+                          from: {
+                              id: senderId,
+                              kind: "agent" as const,
+                              ...(message.senderName === undefined
+                                  ? {}
+                                  : { name: message.senderName }),
+                          },
+                      }
+                    : {
+                          // The person the channel authenticated, never the conversation: in a group
+                          // the peer is the group. Keyed by channel *type* so an embedder maps one
+                          // namespace per provider.
+                          participant: {
+                              id: senderId,
+                              ...(message.senderName === undefined
+                                  ? {}
+                                  : { name: message.senderName }),
+                              via: "channel" as const,
+                          },
+                      }),
             })
             stopTyping()
 
@@ -542,8 +614,14 @@ export class ChannelHub {
                 steps: result.steps,
                 durationMs: result.durationMs,
             })
-            const text = result.text.trim() === "" ? (note ?? "") : result.text
-            if (text === "") return
+            // `delivery.reply: final` sends the last step's prose alone when there is one (pilot.14).
+            const reply =
+                bound.agent.manifest.delivery?.reply === "final" && result.finalText !== undefined
+                    ? result.finalText
+                    : result.text
+            const text = reply.trim() === "" ? (note ?? "") : reply
+            const attachments = result.attachments ?? []
+            if (text === "" && attachments.length === 0) return
 
             await bound.outbox.enqueue({
                 agentId,
@@ -553,8 +631,12 @@ export class ChannelHub {
                 turnId: result.turnId,
                 ...(message.thread === undefined ? {} : { thread: message.thread }),
                 text,
+                ...(attachments.length === 0 ? {} : { attachments }),
             })
             await bound.outbox.drain(agentId)
+            if (message.audio !== undefined && reply.trim() !== "") {
+                await this.#speak(bound, transport, message, reply, result.turnId)
+            }
         } catch (cause) {
             stopTyping()
             // A governor refusal ran nothing, so no loop event reports it — and the person is waiting.
@@ -590,6 +672,206 @@ export class ChannelHub {
                 { agentId, sessionKey: message.sessionKey },
             )
         }
+    }
+
+    /**
+     * The reply to a voice note, as a voice note too (pilot.15), sent after the text.
+     *
+     * After rather than instead: the text is already delivered, so a person never waits on the
+     * synthesis to read the answer, and a speech failure costs the audio alone — reported to the
+     * operator, never to the sender, who has their answer. Its own delivery key, so a retried turn
+     * does not speak twice and the text's chunks keep theirs.
+     */
+    async #speak(
+        bound: Bound,
+        transport: ChannelTransport,
+        message: InboundMessage,
+        reply: string,
+        turnId: string,
+    ): Promise<void> {
+        if (!bound.agent.canSpeak || transport.limits.voiceNotes !== true) return
+        try {
+            const files = await bound.agent.speak(reply, {
+                sessionKey: message.sessionKey,
+                turnId,
+            })
+            if (files.length === 0) return
+            await bound.outbox.enqueue({
+                agentId: bound.agent.id,
+                sessionKey: message.sessionKey,
+                channelId: transport.id,
+                recipient: message.peerId,
+                key: `voice:${turnId}`,
+                ...(message.thread === undefined ? {} : { thread: message.thread }),
+                text: "",
+                attachments: files,
+            })
+            await bound.outbox.drain(bound.agent.id)
+        } catch (cause) {
+            this.#bus.emit(
+                "agent.channel.error",
+                {
+                    channelId: transport.id,
+                    code: isHarnessError(cause) ? cause.code : "media_failed",
+                    message: `The reply to a voice note on ${transport.id} was not spoken: ${
+                        cause instanceof Error ? cause.message : String(cause)
+                    }`,
+                    hint: isHarnessError(cause)
+                        ? cause.hint
+                        : "The text reply was delivered; only the voice note is missing. Check media.speech's provider and credentials.",
+                },
+                { agentId: bound.agent.id, sessionKey: message.sessionKey },
+            )
+        }
+    }
+
+    /**
+     * A voice note as the turn's input, or `undefined` once the sender has been told why not.
+     *
+     * Framed as a transcription, because the model should know it is reading what a machine heard:
+     * a misheard name is then a thing it can ask about rather than a fact. A failure is a reply in
+     * the sender's words and an `agent.channel.error` in the operator's, carrying the hint — never
+     * silence, which is what a hung transcription used to produce for good.
+     */
+    async #hear(
+        bound: Bound,
+        transport: ChannelTransport,
+        message: InboundMessage,
+    ): Promise<string | undefined> {
+        const audio = message.audio
+        if (audio === undefined) return message.text
+        try {
+            const transcript = await bound.agent.transcribe(audio, {
+                sessionKey: message.sessionKey,
+            })
+            const caption = message.text.trim()
+            return `[Voice note, transcribed]\n${transcript}${caption === "" ? "" : `\n\n${caption}`}`
+        } catch (cause) {
+            const code = isHarnessError(cause) ? cause.code : "media_failed"
+            const reply =
+                code === "media_transcription_unconfigured"
+                    ? "I can't listen to voice notes here yet. Could you type that instead?"
+                    : code === "media_timeout"
+                      ? "I couldn't transcribe that voice note in time. Could you send it again, or type it?"
+                      : code === "media_audio_too_large"
+                        ? "That voice note is too long for me to transcribe. Could you send a shorter one, or type it?"
+                        : code === "media_transcript_empty"
+                          ? "I couldn't hear anything in that voice note. Could you try again?"
+                          : "I couldn't transcribe that voice note. Could you type it instead?"
+            await this.#unanswered(bound, transport, message, {
+                key: "unheard",
+                reply,
+                code,
+                what: "A voice note",
+                failed: "was not transcribed",
+                cause,
+            })
+            return undefined
+        }
+    }
+
+    /**
+     * A message's photos, read for the turn, or `undefined` once the sender has been told why not.
+     *
+     * Read here rather than by the transport because the checks are the API's: the model must read
+     * images (`refusesImages`, asked before anything is downloaded), each photo is size-capped and
+     * typed by its bytes. Past `MAX_IMAGES_PER_MESSAGE` the rest are not fetched — an album of ten is
+     * still a message somebody wants answered.
+     */
+    async #see(
+        bound: Bound,
+        transport: ChannelTransport,
+        message: InboundMessage,
+    ): Promise<readonly ImageInput[] | undefined> {
+        const photos = (message.images ?? []).slice(0, MAX_IMAGES_PER_MESSAGE)
+        const tell = (reply: string, code: string, cause: unknown) =>
+            this.#unanswered(bound, transport, message, {
+                key: "unseen",
+                reply,
+                code,
+                what: "A photo",
+                failed: "was not read",
+                cause,
+            })
+        const blind = bound.agent.refusesImages()
+        if (blind !== undefined) {
+            await tell(
+                "I can't see photos here yet. Could you describe it in words instead?",
+                blind.code,
+                blind,
+            )
+            return undefined
+        }
+        const images: ImageInput[] = []
+        try {
+            for (const [index, photo] of photos.entries()) {
+                const ref = photos.length === 1 ? "photo" : `photo ${index + 1}`
+                if (photo.sizeBytes !== undefined && photo.sizeBytes > MAX_IMAGE_BYTES) {
+                    // Refused from the provider's own figure, so the download never happens.
+                    throw imageRefused(
+                        "image_too_large",
+                        `"${ref}" is ${photo.sizeBytes} bytes; an image may be at most ${MAX_IMAGE_BYTES}.`,
+                        "The sender was asked for a smaller one.",
+                    )
+                }
+                const bytes = await photo.fetch(AbortSignal.timeout(PHOTO_FETCH_MS))
+                images.push(imageFromBytes(bytes, ref))
+            }
+        } catch (cause) {
+            const code = isHarnessError(cause) ? cause.code : "image_fetch_failed"
+            await tell(
+                code === "image_too_large"
+                    ? "That photo is too large for me to read. Could you send a smaller one?"
+                    : code === "image_unsupported"
+                      ? "I can only read PNG, JPEG, GIF and WebP photos. Could you send it as one of those?"
+                      : "I couldn't download that photo. Could you send it again?",
+                code,
+                cause,
+            )
+            return undefined
+        }
+        return images
+    }
+
+    /** No turn ran for this message: tell the sender in their words, the operator in the event. */
+    async #unanswered(
+        bound: Bound,
+        transport: ChannelTransport,
+        message: InboundMessage,
+        why: {
+            readonly key: string
+            readonly reply: string
+            readonly code: string
+            readonly what: string
+            readonly failed: string
+            readonly cause: unknown
+        },
+    ): Promise<void> {
+        await bound.outbox.enqueue({
+            agentId: bound.agent.id,
+            sessionKey: message.sessionKey,
+            channelId: transport.id,
+            recipient: message.peerId,
+            // No turn ran. The provider's id makes a redelivered message collide with this reply.
+            key: `${why.key}:${message.providerMessageId ?? Date.now()}`,
+            ...(message.thread === undefined ? {} : { thread: message.thread }),
+            text: why.reply,
+        })
+        await bound.outbox.drain(bound.agent.id)
+        this.#bus.emit(
+            "agent.channel.error",
+            {
+                channelId: transport.id,
+                code: why.code,
+                message: `${why.what} from ${transport.id} ${why.failed}: ${
+                    why.cause instanceof Error ? why.cause.message : String(why.cause)
+                }`,
+                hint: isHarnessError(why.cause)
+                    ? why.cause.hint
+                    : "The sender was told. The provider's own error is above.",
+            },
+            { agentId: bound.agent.id, sessionKey: message.sessionKey },
+        )
     }
 
     /** Returns a stop function. Never throws, never awaited by the turn. */

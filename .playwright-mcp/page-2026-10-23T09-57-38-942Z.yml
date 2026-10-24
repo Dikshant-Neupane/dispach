@@ -1,0 +1,51 @@
+- generic [ref=f2e2]:
+  - complementary "Colony record" [ref=f2e3]:
+    - heading "The Last Mandate" [level=1] [ref=f2e4]
+    - generic [ref=f2e5]:
+      - generic [ref=f2e6]:
+        - term [ref=f2e7]: Colony time
+        - definition [ref=f2e8]: 06:11
+      - generic [ref=f2e9]:
+        - term [ref=f2e10]: Registered
+        - definition [ref=f2e11]: "289"
+      - generic [ref=f2e12]:
+        - term [ref=f2e13]: Authority
+        - definition [ref=f2e14]: Command active
+    - button "Restart the mandate" [ref=f2e15] [cursor=pointer]
+  - main [active] [ref=f2e16]:
+    - generic [ref=f2e17]:
+      - generic [ref=f2e18]: Command quarters
+      - generic [ref=f2e19]: Atmospheric failure in 20:58
+    - article [ref=f2e20]:
+      - heading "Twenty-three minutes" [level=2] [ref=f2e21]
+      - generic [ref=f2e22]:
+        - paragraph [ref=f2e23]: Emergency lights ignite. You are standing beside an untouched bed with no memory of getting up.
+        - generic [ref=f2e24]: "COMMANDER ACTIVE DAYS UNDER EMERGENCY MANDATE: 547 REACTOR ISOLATION INCOMPLETE"
+        - paragraph [ref=f2e25]:
+          - generic [ref=f2e26]: MARA, DEPUTY COMMANDER
+          - text: Open the public channel. Tell them the reactor is failing.
+        - paragraph [ref=f2e27]:
+          - generic [ref=f2e28]: ILYAS, CHIEF ENGINEER
+          - text: Tell them it is a maintenance drill. Give me twenty minutes without a riot.
+        - paragraph [ref=f2e29]:
+          - text: "A restricted order appears under your biometric signature:"
+          - emphasis [ref=f2e30]: 23 population records removed.
+          - text: The final name is Nia Vale, age sixteen.
+        - paragraph [ref=f2e31]: Nia pushes through the doorway, alive.
+        - paragraph [ref=f2e32]:
+          - generic [ref=f2e33]: NIA
+          - text: You said that when the reactor failed, I had to open District Twelve. Before you made yourself forget.
+      - paragraph [ref=f2e34]: What do you tell the colony?
+      - generic [ref=f2e35]:
+        - button "1 Reveal the reactor failure and the twenty-three erased citizens." [ref=f2e36] [cursor=pointer]:
+          - generic [ref=f2e37]: "1"
+          - generic [ref=f2e38]: Reveal the reactor failure and the twenty-three erased citizens.
+        - button "2 Reveal only the reactor failure and order everyone to remain inside." [ref=f2e39] [cursor=pointer]:
+          - generic [ref=f2e40]: "2"
+          - generic [ref=f2e41]: Reveal only the reactor failure and order everyone to remain inside.
+        - button "3 Call it a maintenance exercise. There is no immediate danger." [ref=f2e42] [cursor=pointer]:
+          - generic [ref=f2e43]: "3"
+          - generic [ref=f2e44]: Call it a maintenance exercise. There is no immediate danger.
+        - button "4 Give Mara the public channel while retaining command authority." [ref=f2e45] [cursor=pointer]:
+          - generic [ref=f2e46]: "4"
+          - generic [ref=f2e47]: Give Mara the public channel while retaining command authority.

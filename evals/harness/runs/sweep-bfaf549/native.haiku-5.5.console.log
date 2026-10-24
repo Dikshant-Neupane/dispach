@@ -1,0 +1,126 @@
+pass  single-kv-set            r1  2 calls  7425 ms  $0.00129
+pass  single-read-answer       r1  2 calls  3299 ms  $0.00027
+pass  single-calculator        r1  2 calls  2733 ms  $0.00022
+FAIL  single-now               r1  2 calls  3112 ms  $0.00022  — clock not read (a guess)
+pass  single-send              r1  2 calls  5437 ms  $0.00049
+FAIL  chain-order-notify       r1  2 calls  5705 ms  $0.00051  — Sam not told it is delayed
+pass  chain-file-to-kv         r1  3 calls  6226 ms  $0.00050
+pass  chain-sum-to-file        r1  3 calls  6255 ms  $0.00062
+FAIL  chain-kv-to-send         r1  2 calls  4740 ms  $0.00043  — Dmitri not sent the alert
+pass  chain-edit-json          r1  3 calls  6473 ms  $0.00058
+pass  recall-fact              r1  3 calls  6690 ms  $0.00061
+pass  recall-preference        r1  3 calls  7811 ms  $0.00070
+pass  recall-correction        r1  4 calls  7981 ms  $0.00066
+pass  abstain-chitchat         r1  1 calls  2165 ms  $0.00014
+pass  abstain-knowledge        r1  1 calls  1395 ms  $0.00009
+pass  abstain-draft-only       r1  1 calls  3155 ms  $0.00026
+pass  abstain-cannot           r1  1 calls  3877 ms  $0.00032
+pass  recover-retry            r1  3 calls  4810 ms  $0.00040
+FAIL  recover-persist          r1  3 calls  4985 ms  $0.00054  — file never written
+pass  recover-bad-expression   r1  2 calls  2651 ms  $0.00022
+pass  recover-missing-file     r1  2 calls  4244 ms  $0.00039
+pass  recover-unknown-order    r1  2 calls  6724 ms  $0.00061
+pass  long-log-needle          r1  3 calls  7285 ms  $0.00495
+pass  long-count-orders        r1  2 calls  13668 ms  $0.00368
+pass  long-handbook            r1  3 calls  5943 ms  $0.00280
+pass  single-kv-set            r2  2 calls  6264 ms  $0.00050
+pass  single-read-answer       r2  2 calls  2940 ms  $0.00016
+pass  single-calculator        r2  2 calls  2713 ms  $0.00015
+FAIL  single-now               r2  2 calls  3365 ms  $0.00019  — clock not read (a guess)
+pass  single-send              r2  2 calls  5761 ms  $0.00045
+FAIL  chain-order-notify       r2  2 calls  5621 ms  $0.00046  — Sam not told it is delayed
+pass  chain-file-to-kv         r2  3 calls  5909 ms  $0.00042
+pass  chain-sum-to-file        r2  3 calls  5673 ms  $0.00042
+FAIL  chain-kv-to-send         r2  2 calls  4663 ms  $0.00034  — Dmitri not sent the alert
+pass  chain-edit-json          r2  3 calls  5534 ms  $0.00046
+pass  recall-fact              r2  3 calls  7667 ms  $0.00060
+pass  recall-preference        r2  3 calls  12390 ms  $0.00063
+pass  recall-correction        r2  4 calls  7828 ms  $0.00058
+pass  abstain-chitchat         r2  1 calls  2976 ms  $0.00011
+pass  abstain-knowledge        r2  1 calls  1333 ms  $0.00006
+pass  abstain-draft-only       r2  1 calls  2634 ms  $0.00018
+pass  abstain-cannot           r2  1 calls  3926 ms  $0.00031
+pass  recover-retry            r2  3 calls  4872 ms  $0.00030
+FAIL  recover-persist          r2  3 calls  5853 ms  $0.00048  — file never written
+pass  recover-bad-expression   r2  2 calls  2633 ms  $0.00015
+pass  recover-missing-file     r2  2 calls  4513 ms  $0.00030
+pass  recover-unknown-order    r2  2 calls  5824 ms  $0.00044
+pass  long-log-needle          r2  3 calls  6185 ms  $0.00103
+pass  long-count-orders        r2  2 calls  8079 ms  $0.00084
+pass  long-handbook            r2  3 calls  5597 ms  $0.00073
+FAIL  single-kv-set            r3  1 calls  4979 ms  $0.00030  — locker_code not stored as 4417
+pass  single-read-answer       r3  2 calls  3069 ms  $0.00016
+pass  single-calculator        r3  2 calls  2949 ms  $0.00015
+FAIL  single-now               r3  2 calls  2711 ms  $0.00019  — clock not read (a guess)
+pass  single-send              r3  2 calls  5920 ms  $0.00041
+FAIL  chain-order-notify       r3  2 calls  8152 ms  $0.00051  — Sam not told it is delayed
+pass  chain-file-to-kv         r3  3 calls  5244 ms  $0.00036
+pass  chain-sum-to-file        r3  4 calls  8533 ms  $0.00061
+FAIL  chain-kv-to-send         r3  2 calls  4586 ms  $0.00035  — Dmitri not sent the alert
+pass  chain-edit-json          r3  3 calls  6061 ms  $0.00040
+pass  recall-fact              r3  4 calls  14435 ms  $0.00150
+pass  recall-preference        r3  3 calls  9922 ms  $0.00087
+pass  recall-correction        r3  4 calls  7750 ms  $0.00064
+pass  abstain-chitchat         r3  1 calls  2120 ms  $0.00010
+pass  abstain-knowledge        r3  1 calls  1832 ms  $0.00006
+pass  abstain-draft-only       r3  1 calls  3037 ms  $0.00022
+pass  abstain-cannot           r3  1 calls  4567 ms  $0.00031
+pass  recover-retry            r3  3 calls  5614 ms  $0.00027
+FAIL  recover-persist          r3  3 calls  5329 ms  $0.00044  — file never written
+pass  recover-bad-expression   r3  2 calls  2967 ms  $0.00015
+pass  recover-missing-file     r3  2 calls  4405 ms  $0.00031
+pass  recover-unknown-order    r3  2 calls  5384 ms  $0.00040
+pass  long-log-needle          r3  3 calls  7350 ms  $0.00109
+pass  long-count-orders        r3  2 calls  8298 ms  $0.00085
+pass  long-handbook            r3  3 calls  6477 ms  $0.00071
+pass  single-kv-set            r4  2 calls  7908 ms  $0.00061
+pass  single-read-answer       r4  2 calls  2811 ms  $0.00016
+pass  single-calculator        r4  2 calls  2522 ms  $0.00015
+FAIL  single-now               r4  2 calls  2751 ms  $0.00019  — clock not read (a guess)
+pass  single-send              r4  2 calls  6037 ms  $0.00043
+FAIL  chain-order-notify       r4  2 calls  4896 ms  $0.00039  — Sam not told it is delayed
+pass  chain-file-to-kv         r4  3 calls  5780 ms  $0.00040
+pass  chain-sum-to-file        r4  3 calls  6796 ms  $0.00059
+FAIL  chain-kv-to-send         r4  2 calls  5095 ms  $0.00036  — Dmitri not sent the alert
+pass  chain-edit-json          r4  3 calls  6577 ms  $0.00044
+pass  recall-fact              r4  3 calls  8551 ms  $0.00065
+pass  recall-preference        r4  3 calls  6650 ms  $0.00061
+pass  recall-correction        r4  4 calls  8788 ms  $0.00056
+pass  abstain-chitchat         r4  1 calls  2403 ms  $0.00012
+pass  abstain-knowledge        r4  1 calls  1318 ms  $0.00006
+pass  abstain-draft-only       r4  1 calls  3099 ms  $0.00023
+pass  abstain-cannot           r4  1 calls  4674 ms  $0.00037
+pass  recover-retry            r4  3 calls  5454 ms  $0.00026
+FAIL  recover-persist          r4  3 calls  5220 ms  $0.00040  — file never written
+pass  recover-bad-expression   r4  2 calls  2514 ms  $0.00015
+pass  recover-missing-file     r4  2 calls  4214 ms  $0.00028
+pass  recover-unknown-order    r4  2 calls  5731 ms  $0.00049
+pass  long-log-needle          r4  3 calls  7960 ms  $0.00105
+pass  long-count-orders        r4  2 calls  8219 ms  $0.00102
+pass  long-handbook            r4  3 calls  5800 ms  $0.00071
+pass  single-kv-set            r5  2 calls  5167 ms  $0.00043
+pass  single-read-answer       r5  2 calls  3106 ms  $0.00016
+pass  single-calculator        r5  2 calls  3549 ms  $0.00015
+FAIL  single-now               r5  2 calls  3809 ms  $0.00019  — clock not read (a guess)
+pass  single-send              r5  2 calls  6235 ms  $0.00043
+FAIL  chain-order-notify       r5  2 calls  5596 ms  $0.00043  — Sam not told it is delayed
+pass  chain-file-to-kv         r5  3 calls  6202 ms  $0.00047
+pass  chain-sum-to-file        r5  3 calls  8360 ms  $0.00053
+FAIL  chain-kv-to-send         r5  2 calls  5057 ms  $0.00036  — Dmitri not sent the alert
+pass  chain-edit-json          r5  3 calls  8155 ms  $0.00053
+pass  recall-fact              r5  4 calls  11981 ms  $0.00106
+pass  recall-preference        r5  3 calls  7773 ms  $0.00066
+pass  recall-correction        r5  4 calls  10246 ms  $0.00087
+pass  abstain-chitchat         r5  1 calls  2188 ms  $0.00007
+pass  abstain-knowledge        r5  1 calls  2521 ms  $0.00006
+pass  abstain-draft-only       r5  1 calls  3090 ms  $0.00023
+pass  abstain-cannot           r5  1 calls  4796 ms  $0.00035
+pass  recover-retry            r5  3 calls  4719 ms  $0.00027
+FAIL  recover-persist          r5  3 calls  7201 ms  $0.00054  — file never written
+pass  recover-bad-expression   r5  2 calls  3507 ms  $0.00015
+pass  recover-missing-file     r5  2 calls  4698 ms  $0.00029
+pass  recover-unknown-order    r5  2 calls  5839 ms  $0.00044
+pass  long-log-needle          r5  3 calls  5812 ms  $0.00105
+pass  long-count-orders        r5  2 calls  6763 ms  $0.00080
+pass  long-handbook            r5  3 calls  5461 ms  $0.00070
+dispach-native · haiku-5.5: 104/125 passed → evals/harness/runs/sweep-bfaf549/native.haiku-5.5.jsonl
