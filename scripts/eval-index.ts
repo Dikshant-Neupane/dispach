@@ -104,8 +104,10 @@ function when(result: Record<string, unknown>): string | undefined {
     return undefined
 }
 
+// Sorted, because readdir order is the filesystem's: APFS returns names sorted and ext4 does not, so an
+// unsorted walk wrote an index that passed `--check` on a Mac and was stale on the Linux runner.
 function walk(dir: string, prefix = ""): string[] {
-    return readdirSync(dir).flatMap((name) => {
+    return [...readdirSync(dir)].sort().flatMap((name) => {
         const full = join(dir, name)
         const rel = prefix === "" ? name : `${prefix}/${name}`
         return statSync(full).isDirectory() ? walk(full, rel) : [rel]

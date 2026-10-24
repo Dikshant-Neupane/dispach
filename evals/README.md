@@ -12,7 +12,7 @@ comes from. Negative results are listed with the positive ones.
 | [`boot`](boot/) | Boot: process start to `runtime.ready` | [`results.json`](boot/results.json) | 2026-10-20 |
 | [`budget`](budget/) | The estimator's bias, and the weight that corrects it | [`results.json`](budget/results.json) | not recorded |
 | [`handoff`](handoff/) | evals/handoff — does delegation cost the parent fewer tokens? | none | not recorded |
-| [`harness`](harness/) | Harness benchmark | [`runs/sweep-4f3e00a/results.json`](harness/runs/sweep-4f3e00a/results.json), [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/sweep-552660a/results.json`](harness/runs/sweep-552660a/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json), [`runs/h2h-cachefix/results.json`](harness/runs/h2h-cachefix/results.json), [`runs/h2h-309fdf8/results.json`](harness/runs/h2h-309fdf8/results.json) | 2026-10-23 |
+| [`harness`](harness/) | Harness benchmark | [`runs/after-8267f61/results.json`](harness/runs/after-8267f61/results.json), [`runs/after-ac5dcc5/results.json`](harness/runs/after-ac5dcc5/results.json), [`runs/baseline-aae8fe4/results.json`](harness/runs/baseline-aae8fe4/results.json), [`runs/h2h-309fdf8/results.json`](harness/runs/h2h-309fdf8/results.json), [`runs/h2h-cachefix/results.json`](harness/runs/h2h-cachefix/results.json), [`runs/sweep-4f3e00a/results.json`](harness/runs/sweep-4f3e00a/results.json), [`runs/sweep-552660a/results.json`](harness/runs/sweep-552660a/results.json) | 2026-10-23 |
 | [`memory`](memory/) | Memory retrieval | [`results.json`](memory/results.json) | 2026-10-20 |
 | [`nlt-heredoc`](nlt-heredoc/) | evals/nlt-heredoc — multi-line values through the NLT parser | [`results.json`](nlt-heredoc/results.json) | 2026-09-13 |
 | [`phases`](phases/) | Phase-scoped tool visibility, measured — and the number is negative | [`results.json`](phases/results.json) | not recorded |
@@ -22,8 +22,8 @@ comes from. Negative results are listed with the positive ones.
 | [`skills`](skills/) | Skill indexing | [`results.json`](skills/results.json) | 2026-10-20 |
 | [`subagents`](subagents/) | evals/subagents — is routing bulk tool work to a subagent worth it? | [`results.json`](subagents/results.json) | 2026-10-03 |
 | [`tenancy`](tenancy/) | Density: what an idle silo costs | [`results.json`](tenancy/results.json) | 2026-09-24 |
-| [`tools`](tools/) | Tool dialect comparison — NLT vs native | [`results.json`](tools/results.json), [`qwen-3pass/results.json`](tools/qwen-3pass/results.json) | not recorded |
-| [`web`](web/) | evals/web — prompt injection through a fetched page | [`native/results.json`](web/native/results.json), [`results.json`](web/results.json), [`flash/results.json`](web/flash/results.json) | not recorded |
+| [`tools`](tools/) | Tool dialect comparison — NLT vs native | [`qwen-3pass/results.json`](tools/qwen-3pass/results.json), [`results.json`](tools/results.json) | not recorded |
+| [`web`](web/) | evals/web — prompt injection through a fetched page | [`flash/results.json`](web/flash/results.json), [`native/results.json`](web/native/results.json), [`results.json`](web/results.json) | not recorded |
 
 ## Claims not yet backed by a committed run
 

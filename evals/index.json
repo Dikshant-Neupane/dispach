@@ -353,13 +353,13 @@
             "name": "harness",
             "title": "Harness benchmark",
             "results": [
-                "runs/sweep-4f3e00a/results.json",
                 "runs/after-8267f61/results.json",
-                "runs/baseline-aae8fe4/results.json",
-                "runs/sweep-552660a/results.json",
                 "runs/after-ac5dcc5/results.json",
+                "runs/baseline-aae8fe4/results.json",
+                "runs/h2h-309fdf8/results.json",
                 "runs/h2h-cachefix/results.json",
-                "runs/h2h-309fdf8/results.json"
+                "runs/sweep-4f3e00a/results.json",
+                "runs/sweep-552660a/results.json"
             ],
             "measuredAt": "2026-10-23T14:28:59.470Z"
         },
@@ -437,17 +437,17 @@
             "name": "tools",
             "title": "Tool dialect comparison — NLT vs native",
             "results": [
-                "results.json",
-                "qwen-3pass/results.json"
+                "qwen-3pass/results.json",
+                "results.json"
             ]
         },
         {
             "name": "web",
             "title": "evals/web — prompt injection through a fetched page",
             "results": [
+                "flash/results.json",
                 "native/results.json",
-                "results.json",
-                "flash/results.json"
+                "results.json"
             ]
         }
     ]
