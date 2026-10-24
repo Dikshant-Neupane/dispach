@@ -1,0 +1,26 @@
+pass  single-kv-set            r4  2 calls  25074 ms  $0.00079
+pass  single-read-answer       r4  2 calls  17443 ms  $0.00079
+pass  single-calculator        r4  2 calls  13802 ms  $0.00078
+pass  single-now               r4  2 calls  23674 ms  $0.00079
+pass  single-send              r4  2 calls  73001 ms  $0.00084
+pass  chain-order-notify       r4  3 calls  25326 ms  $0.00122
+pass  chain-file-to-kv         r4  3 calls  20149 ms  $0.00119
+pass  chain-sum-to-file        r4  5 calls  54847 ms  $0.00209
+pass  chain-kv-to-send         r4  3 calls  25686 ms  $0.00120
+FAIL  chain-edit-json          r4  1 calls  27458 ms  $0.00043  — darkMode not true
+pass  recall-fact              r4  4 calls  54709 ms  $0.00162
+FAIL  recall-preference        r4  3 calls  48925 ms  $0.00120  — Lee not told about the deploy
+pass  recall-correction        r4  4 calls  38633 ms  $0.00158
+pass  abstain-chitchat         r4  1 calls  14990 ms  $0.00039
+pass  abstain-knowledge        r4  1 calls  7003 ms  $0.00039
+pass  abstain-draft-only       r4  1 calls  17873 ms  $0.00040
+pass  abstain-cannot           r4  1 calls  42855 ms  $0.00043
+pass  recover-retry            r4  4 calls  37333 ms  $0.00164
+FAIL  recover-persist          r4  1 calls  52131 ms  $0.00044  — file never written
+pass  recover-bad-expression   r4  3 calls  31561 ms  $0.00118
+pass  recover-missing-file     r4  2 calls  23900 ms  $0.00080  (1 429 retries)
+pass  recover-unknown-order    r4  5 calls  86256 ms  $0.00169  (1 429 retries)
+pass  long-log-needle          r4  3 calls  55556 ms  $0.00709
+FAIL  long-count-orders        r4  1 calls  47043 ms  $0.00042  (3 429 retries)  — file never read
+pass  long-handbook            r4  5 calls  53914 ms  $0.00373
+dispach-native · qwen3.5-9b: 21/25 passed → evals/harness/runs/remeasure-be5bb30/native.qwen3.5-9b.r4.jsonl

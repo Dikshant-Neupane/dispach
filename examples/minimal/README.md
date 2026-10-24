@@ -73,8 +73,9 @@ MODEL_ID=mock MODEL_BASE_URL=http://localhost:8787/v1 MODEL_API_KEY=x \
 Ctrl-C during a reply cancels that turn and returns the prompt; Ctrl-C at an idle prompt exits.
 The partial reply is kept, because an explicit stop is a decision rather than an accident.
 
-## What is not here yet
+## What is deliberately not here
 
-No tools, storage, channels, skills, memory, or compaction — those arrive in Phases 2–7. A
-manifest that configures them is **refused at load** rather than silently ignored, so this
-example only sets what this build actually honours.
+No tools, channels, skills, knowledge, schedules, team or server block, and no tuning of memory or
+compaction — all of those are built, and this example leaves them out so the manifest stays the
+smallest one that runs a conversation. `examples/reference/agent.yaml` carries every field, with
+what each one does.

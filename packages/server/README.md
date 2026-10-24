@@ -2,6 +2,10 @@
 
 The HTTP, SSE and WebSocket surface described in `docs/04-SPEC-WIRE.md`. Framework-free.
 
+This is a workspace package, not published on its own: the snippets below import it from a
+repository checkout. With the published `dispach` package the same server is `dispach serve`, and
+the client half is `dispach/client`.
+
 ```ts
 import { serve } from "@dispach/server"
 
@@ -81,23 +85,22 @@ then and never on disconnect. Reattaching replays the turn's buffered events and
 
 ## Known divergences from the spec
 
-Exactly one is left. This table carried four for months and **three had been fixed** — a
-divergence list that outlives the divergences is worse than none, because it is the file somebody
-checks before deciding a route is unusable.
-
-| Endpoint | Behaviour | Why |
-| --- | --- | --- |
-| `GET /v1/ws` | `501` under Node | Bun has an upgrade path in `Bun.serve`; Node needs a dependency for an endpoint the spec itself calls secondary. It answers 501 naming the reason, which beats a connection failure a client would read as a network problem. Decision 11.23 — this row cited 11.21, which is about `createHandler` being a plain function. |
+None is left. This table once carried four rows for months after **three had been fixed** — a divergence list
+that outlives the divergences is worse than none, because it is the file somebody checks before
+deciding a route is unusable.
 
 Retired, with what each actually does now:
 
+- **`GET /v1/ws`** answered `501` under Node and now **works under both runtimes**, since 0.1.3 —
+  Node became the only shipped runtime, so `ws` is the dependency, wrapped around the same
+  `attachWebSocket` bridge Bun uses.
 - **`POST /v1/agents/:id/reload`** answered `501` and now **works** — `Runtime.replace` (16.2b)
   disposes the agent and re-adopts it from its manifest, answering
   `{ id, status: "loaded", adopted: [...] }`. The reasoning behind the old `501` is intact and is
   *why* it is a replace: a catalogue resolves once per instance and the cached prefix depends on
-  that, so a changed manifest gets a **new instance** rather than a mutated one. It answers `409`
-  while a turn is in flight, because tearing one down would close its store under a turn recorded
-  as running.
+  that, so a changed manifest gets a **new instance** rather than a mutated one. While a turn is in
+  flight it answers `202 { status: "pending", running, holdAfterMs }`: the running turns finish on
+  the old settings and the swap follows, announced by `agent.reloaded`.
 - **`GET /v1/agents/:id/skills`** returns the real catalogue — `configured`, `maxActive`,
   `threshold`, `cached` and an entry per skill. The field is `configured`, never `supported`, which
   is what the table named.

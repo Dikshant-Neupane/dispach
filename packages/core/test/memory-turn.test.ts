@@ -237,6 +237,14 @@ describe("a past conversation reaches the model", () => {
         const { fetch, bodies } = recorder("Noted.")
         const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
         const subject = runtime.agent("test")
+        const recalled: { sessionKey?: string; sources: string[] }[] = []
+        runtime.bus.on("memory.recalled", (event) => {
+            if (event.type !== "memory.recalled") return
+            recalled.push({
+                ...(event.sessionKey === undefined ? {} : { sessionKey: event.sessionKey }),
+                sources: event.data.passages.map((passage) => passage.source),
+            })
+        })
 
         await subject?.send("the deploy pipeline waits for a manual approval gate", {
             sessionKey: "local:first0",
@@ -250,9 +258,16 @@ describe("a past conversation reaches the model", () => {
         // three excerpts of its own earlier sessions answered correctly and then added "that's what the
         // saved notes say; the actual transcripts don't carry over" — wrong about its own state, while
         // holding the evidence.
-        expect(sent.includes("From an earlier conversation")).toBe(true)
+        expect(sent.includes("From a different, earlier conversation (local:first0)")).toBe(true)
+        // And says it is not this conversation, so its task is not taken for the current one
+        // (pilot.13: a new chat re-proposed another chat's task until no_progress).
+        expect(sent.includes("It is not part of this conversation")).toBe(true)
         expect(sent.includes("local:first0")).toBe(true)
         expect(sent.includes("session:local:first0")).toBe(false)
+        // On the stream too, naming the turn's session and what it recalled (pilot.13).
+        expect(recalled).toEqual([
+            { sessionKey: "local:secnd0", sources: ["session:local:first0"] },
+        ])
         await runtime.stop()
     })
 
@@ -436,12 +451,15 @@ describe("memory_write evicts rather than growing without bound", () => {
                 messages?: { content?: unknown }[]
             }
             const messages = body.messages ?? []
-            // Key on the turn's *input*, which is the last message: `SLOT.input` is ordered after the
-            // history, so an observation is never the final message and "has this turn already been
-            // answered" cannot be read off the tail. Looking for OBSERVATION anywhere in the prompt is
-            // worse still — one stays in the history forever. Both mistakes were made here first, and
-            // both presented as "eviction does not work" rather than as a broken fixture.
-            const input = String(messages[messages.length - 1]?.content ?? "")
+            // Key on the turn's *input*, found by its own text. Not by position: since 0.2.0 the turn's
+            // trace follows the input, so after step one the last message is an observation. And not by
+            // looking for OBSERVATION anywhere in the prompt — one stays in the history forever. Each of
+            // these was made here, and each presented as "eviction does not work" rather than as a
+            // broken fixture.
+            const input = String(
+                messages.findLast((m) => String(m.content ?? "").startsWith("save fact"))
+                    ?.content ?? "",
+            )
             const first = !seen.has(input)
             if (first) seen.add(input)
             const content = first
@@ -484,7 +502,7 @@ describe("memory_write evicts rather than growing without bound", () => {
         await runtime.stop()
     })
 
-    test("a fact saved in one session is recalled in another", async () => {
+    test("a fact saved in one session is recalled in another, across a restart", async () => {
         // The phase's headline criterion, and the reason the two tiers exist: session A writes into the
         // carried file, the budget pushes it into the archive, and session B — whose carried file no
         // longer holds it — retrieves it from there.
@@ -515,5 +533,177 @@ describe("memory_write evicts rather than growing without bound", () => {
         expect(sent.includes("# Remembered")).toBe(true)
         expect(sent.includes("manual approval gate")).toBe(true)
         await second.stop()
+    })
+})
+
+/**
+ * The carried tier is current while the agent runs — not as it was at boot.
+ *
+ * Every test above that crosses sessions does it across a **restart**, which is exactly why this defect
+ * survived: slot 4 was the boot-time copy of `MEMORY.md`, and recall excludes that file on the grounds
+ * that slot 4 already shows it. So a note saved during a long-running process reached neither slot in any
+ * other session until the process restarted. These run in **one** runtime.
+ */
+describe("the carried file is current while the agent runs", () => {
+    /** The one system message that carries the volatile tier, found by its frame rather than its index. */
+    function carriedOf(body: Record<string, unknown> | undefined): string {
+        const messages = body?.messages
+        if (!Array.isArray(messages)) return ""
+        const found = messages
+            .map((message) => String((message as { content?: unknown }).content ?? ""))
+            .find((content) => content.startsWith("What I already know"))
+        return found ?? ""
+    }
+
+    function memoryFile(bullets: string): string {
+        return `---\ntier: volatile\neditable: replace\nbudget: 2000\neviction: oldest\n---\n\n# What I know\n\n${bullets}\n`
+    }
+
+    test("a note saved in one session is carried into another without a restart", async () => {
+        const { manifest } = agent()
+        const bodies: Record<string, unknown>[] = []
+        let call = 0
+        const fetch: FetchLike = async (_url, init) => {
+            bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>)
+            call += 1
+            const content =
+                call === 1
+                    ? "ACTION: memory_write\ntext: the staging cluster lives in frankfurt\nEND"
+                    : "Saved."
+            return sse([
+                `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+                "data: [DONE]\n\n",
+            ])
+        }
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("please keep a note of where staging is", {
+            sessionKey: "local:savea0",
+        })
+        expect(call).toBe(2)
+        await subject?.send("hello again", { sessionKey: "local:readb0" })
+
+        // In slot 4 itself — not merely somewhere in the prompt, where a "Remembered" block or a
+        // conversation excerpt could also have put it.
+        expect(carriedOf(bodies[2]).includes("the staging cluster lives in frankfurt")).toBe(true)
+        await runtime.stop()
+    })
+
+    test("an edit made outside the agent is in the next turn, and a deleted line is gone", async () => {
+        const { manifest, dir } = agent({
+            carried:
+                "- **2026-08-01T10:00:00Z** The deploy pipeline waits for a manual approval gate.",
+        })
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:edit00" })
+        expect(carriedOf(bodies[0]).includes("manual approval gate")).toBe(true)
+
+        // What a person does from a workspace editor: replace the note with a different one.
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-01T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("hello again", { sessionKey: "local:edit00" })
+
+        const carried = carriedOf(bodies[1])
+        expect(carried.includes("Releases ship on thursdays only.")).toBe(true)
+        expect(carried.includes("manual approval gate")).toBe(false)
+        await runtime.stop()
+    })
+
+    test("an over-budget edit keeps the previous version, warns once, and the agent keeps answering", async () => {
+        const { manifest, dir } = agent({
+            carried:
+                "- **2026-08-01T10:00:00Z** The deploy pipeline waits for a manual approval gate.",
+        })
+        const { fetch, bodies } = recorder("Still here.")
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const warnings: string[] = []
+        runtime.bus.on("agent.warning", (event) => {
+            if ("code" in event.data) warnings.push(event.data.code)
+        })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:over00" })
+
+        // Far past the file's own 2,000-token budget. Boot would refuse this; a running agent must not
+        // fall over because somebody saved it.
+        const huge = Array.from(
+            { length: 900 },
+            (_, i) => `- **2026-10-01T10:00:00Z** filler note number ${i} about nothing.`,
+        ).join("\n")
+        writeFileSync(join(dir, "workspace", "MEMORY.md"), memoryFile(huge))
+        const second = await subject?.send("hello again", { sessionKey: "local:over00" })
+        const third = await subject?.send("and again", { sessionKey: "local:over00" })
+
+        expect(second?.text).toBe("Still here.")
+        expect(third?.text).toBe("Still here.")
+        // The previous complete version — never a truncated slice of the new one.
+        expect(carriedOf(bodies[1]).includes("manual approval gate")).toBe(true)
+        expect(carriedOf(bodies[1]).includes("filler note")).toBe(false)
+        // Once per bad version, not once per turn.
+        expect(warnings.filter((code) => code === "workspace_reload_refused").length).toBe(1)
+
+        // Fixed: the next turn adopts it.
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-02T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("one more", { sessionKey: "local:over00" })
+        expect(carriedOf(bodies[3]).includes("Releases ship on thursdays only.")).toBe(true)
+        await runtime.stop()
+    })
+
+    test("a static file edited mid-run is not re-read, so the cached prefix stays byte-identical", async () => {
+        // The end-to-end half of the guard: slot 0 on the wire is unchanged after a static edit, while a
+        // volatile edit in the same turn lands. This cannot catch a reload that re-reads static files —
+        // slot 0 comes from `Agent.identity`, frozen at construction, so it holds either way. That half
+        // is `reloadVolatile`'s own test in `workspace.test.ts`, which does fail when static is re-read.
+        const { manifest, dir } = agent()
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        const subject = runtime.agent("test")
+
+        await subject?.send("hello", { sessionKey: "local:stat00" })
+        writeFileSync(
+            join(dir, "workspace", "SOUL.md"),
+            "---\ntier: static\n---\n\nA different fixture.",
+        )
+        writeFileSync(
+            join(dir, "workspace", "MEMORY.md"),
+            memoryFile("- **2026-10-01T10:00:00Z** Releases ship on thursdays only."),
+        )
+        await subject?.send("hello again", { sessionKey: "local:stat00" })
+
+        const firstSystem = (bodies[0]?.messages as { content?: unknown }[] | undefined)?.[0]
+            ?.content
+        const secondSystem = (bodies[1]?.messages as { content?: unknown }[] | undefined)?.[0]
+            ?.content
+        expect(String(secondSystem).includes("A test fixture.")).toBe(true)
+        expect(secondSystem).toEqual(firstSystem)
+        // While the volatile edit in the same turn did land.
+        expect(carriedOf(bodies[1]).includes("Releases ship on thursdays only.")).toBe(true)
+        await runtime.stop()
+    })
+})
+
+describe("the agent can tell which files it was given (pilot.15)", () => {
+    test("each file arrives under its name, and slot 2 lists them by tier", async () => {
+        const { manifest } = agent({ carried: "- Moeen likes short answers." })
+        const { fetch, bodies } = recorder()
+        const runtime = await Runtime.create({ agents: [manifest], env: ENV, fetch })
+        await runtime.agent("test")?.send("are your files loading?")
+        const sent = prompt(bodies[0])
+        // The bytes that went to the endpoint, at the far end of the pipeline.
+        expect(sent).toMatch(/SOUL\.md[\s\S]*A test fixture\./)
+        expect(sent).toMatch(/MEMORY\.md[\s\S]*Moeen likes short answers/)
+        expect(sent).toContain(
+            "context files  SOUL.md every turn; MEMORY.md in private conversations",
+        )
+        await runtime.stop()
     })
 })

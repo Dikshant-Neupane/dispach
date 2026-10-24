@@ -61,6 +61,32 @@ describe("the parser finds blocks", () => {
         expect(parsed.text).toBe("Nothing to do here — the answer is 4.")
     })
 
+    test("a field holding objects names their fields, so a model is not left to guess the keys", () => {
+        const entry = renderNltEntry({
+            ...SPEC,
+            slug: "plan_day",
+            parameters: {
+                type: "object",
+                properties: {
+                    tasks: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                title: { type: "string" },
+                                minutes: { type: "integer" },
+                            },
+                            required: ["title"],
+                        },
+                    },
+                },
+            },
+        })
+        expect(entry).toContain(
+            'write it as a JSON list of objects, each with "title" (required), "minutes" (optional, integer)',
+        )
+    })
+
     test("one block, one field", () => {
         const parsed = parseNlt("ACTION: now\ntimezone: UTC\nEND")
         expect(parsed.intents).toEqual([{ callId: "c1", slug: "now", args: { timezone: "UTC" } }])
@@ -696,6 +722,21 @@ describe("a tool call in some other protocol's format", () => {
         expect(parsed.malformed?.[0]?.hint).toContain("ACTION:")
     })
 
+    test("an unclosed call tag naming a tool counts, and prose about markup does not", () => {
+        // deepseek-v4-pro wrote this and stopped, in eval:subagents; it was delivered as the reply.
+        for (const text of [
+            '<invoke name="incident_list">',
+            'Let me pull up the incident list.\n\n<invoke name="incident_list">',
+        ]) {
+            const parsed = parseNlt(text)
+            expect(parsed.intents).toEqual([])
+            expect(parsed.malformed?.length).toBe(1)
+        }
+        expect(
+            parseNlt('An `<invoke name="x">` element is how some APIs spell a call.').malformed,
+        ).toBeUndefined()
+    })
+
     test("a vendor's own tool tokens count too", () => {
         // Matched on the bare `DSML` marker rather than its delimiters: those are full-width pipes,
         // and a pattern written with the ASCII one looks right and matches nothing — which it did.
@@ -898,7 +939,10 @@ describe("a value damaged on the way in", () => {
         // A new `ACTION` clears the pending verdict: whatever the prose was, it sat between two
         // calls rather than inside one.
         const parsed = parseNlt(
-            ["ACTION: now", "", "Let me also check the time.", "", "ACTION: now", "END"].join("\n"),
+            // Two different calls: two identical ones in a row are one call since 0.2.0.
+            ["ACTION: now", "", "Let me also check the date.", "", "ACTION: today", "END"].join(
+                "\n",
+            ),
         )
         expect(parsed.malformed).toBeUndefined()
         expect(parsed.intents.length).toBe(2)
@@ -933,6 +977,46 @@ describe("a value damaged on the way in", () => {
                 "END",
             ].join("\n"),
         )
+        expect(parsed.malformed).toBeUndefined()
+    })
+})
+
+describe("shapes measured in the harness benchmark (evals/harness/runs/baseline-aae8fe4)", () => {
+    const block = "ACTION: lookup_order\norder_id: A-1001\nEND"
+
+    test("the same block written several times in a row is one call", () => {
+        // GPT-6 Luna wrote this six times in one reply and all six ran; a write would have run six times.
+        const parsed = parseNlt(["I'll check.", block, block, block].join("\n\n"))
+        expect(parsed.intents.map((i) => [i.callId, i.slug, i.args])).toEqual([
+            ["c1", "lookup_order", { order_id: "A-1001" }],
+        ])
+    })
+
+    test("a repeat after a different call, or with different arguments, still runs", () => {
+        const other = "ACTION: now\nEND"
+        const second = "ACTION: lookup_order\norder_id: A-2002\nEND"
+        const parsed = parseNlt([block, other, block, second].join("\n\n"))
+        expect(parsed.intents.map((i) => i.callId)).toEqual(["c1", "c2", "c3", "c4"])
+    })
+
+    test("a block glued onto a sentence earns a repair instead of becoming the reply", () => {
+        // GLM 5.3: "…then store the error code.ACTION: bench__read_file" — delivered as the answer.
+        const parsed = parseNlt(
+            "I'll read the log file first, then store the error code.ACTION: read_file\npath: logs/app.log\nEND",
+        )
+        expect(parsed.intents).toEqual([])
+        expect(parsed.malformed?.[0]?.message).toContain("middle of a line")
+    })
+
+    test("a long line with no block is read in linear time", () => {
+        // The old single pattern restarted at every character: quadratic on 200,000 of them.
+        const parsed = parseNlt("!".repeat(200_000))
+        expect(parsed.intents).toEqual([])
+        expect(parsed.malformed).toBeUndefined()
+    })
+
+    test("prose that merely mentions ACTION: is still prose", () => {
+        const parsed = parseNlt("Write ACTION: and the tool name to call a tool.")
         expect(parsed.malformed).toBeUndefined()
     })
 })

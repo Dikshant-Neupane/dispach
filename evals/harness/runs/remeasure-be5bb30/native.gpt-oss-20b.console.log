@@ -1,0 +1,130 @@
+note: dispach-native — the registry does not know openai/gpt-oss-20b; init's agent did not load, so its window (131072) and native tool support (true) were set from deepinfra/bf16's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  4433 ms  $0.00023
+pass  single-read-answer       r1  2 calls  3490 ms  $0.00022
+pass  single-calculator        r1  2 calls  4098 ms  $0.00022
+pass  single-now               r1  2 calls  51510 ms  $0.00113
+pass  single-send              r1  2 calls  5457 ms  $0.00026
+pass  chain-order-notify       r1  3 calls  9643 ms  $0.00041
+FAIL  chain-file-to-kv         r1  1 calls  2916 ms  $0.00012  (4 429 retries)  — region not stored as eu-west-2
+pass  chain-sum-to-file        r1  3 calls  9894 ms  $0.00042
+pass  chain-kv-to-send         r1  3 calls  9255 ms  $0.00039
+FAIL  chain-edit-json          r1  1 calls  3435 ms  $0.00012  — darkMode not true
+pass  recall-fact              r1  3 calls  5762 ms  $0.00033
+FAIL  recall-preference        r1  2 calls  4460 ms  $0.00023  — Lee not told about the deploy
+pass  recall-correction        r1  4 calls  5912 ms  $0.00041
+pass  abstain-chitchat         r1  1 calls  1548 ms  $0.00010
+pass  abstain-knowledge        r1  1 calls  1216 ms  $0.00010
+FAIL  abstain-draft-only       r1  1 calls  2777 ms  $0.00012  — no draft in the reply
+pass  abstain-cannot           r1  1 calls  2805 ms  $0.00012
+pass  recover-retry            r1  3 calls  5344 ms  $0.00033
+FAIL  recover-persist          r1  3 calls  4952 ms  $0.00032  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r1  2 calls  3178 ms  $0.00021
+pass  recover-missing-file     r1  2 calls  5313 ms  $0.00025
+FAIL  recover-unknown-order    r1  1 calls  3927 ms  $0.00015  — never looked the order up
+FAIL  long-log-needle          r1  2 calls  4975 ms  $0.00055  — error code not stored
+FAIL  long-count-orders        r1  2 calls  5010 ms  $0.00056  — count is not 58
+FAIL  long-handbook            r1  2 calls  5765 ms  $0.00045  — meal_limit is not 75
+pass  single-kv-set            r2  2 calls  4463 ms  $0.00022
+pass  single-read-answer       r2  2 calls  2785 ms  $0.00020
+pass  single-calculator        r2  2 calls  5124 ms  $0.00023
+pass  single-now               r2  2 calls  5702 ms  $0.00024
+pass  single-send              r2  2 calls  2896 ms  $0.00020
+pass  chain-order-notify       r2  3 calls  7056 ms  $0.00036
+pass  chain-file-to-kv         r2  3 calls  8230 ms  $0.00034
+pass  chain-sum-to-file        r2  3 calls  7841 ms  $0.00036
+pass  chain-kv-to-send         r2  4 calls  13162 ms  $0.00055
+FAIL  chain-edit-json          r2  1 calls  3629 ms  $0.00014  — darkMode not true
+pass  recall-fact              r2  5 calls  12553 ms  $0.00061
+pass  recall-preference        r2  3 calls  6164 ms  $0.00034
+pass  recall-correction        r2  4 calls  6487 ms  $0.00043
+pass  abstain-chitchat         r2  1 calls  1577 ms  $0.00010
+pass  abstain-knowledge        r2  1 calls  2152 ms  $0.00010
+pass  abstain-draft-only       r2  1 calls  1966 ms  $0.00011
+pass  abstain-cannot           r2  1 calls  3863 ms  $0.00015
+pass  recover-retry            r2  4 calls  8038 ms  $0.00046
+FAIL  recover-persist          r2  3 calls  4586 ms  $0.00033  — file never written
+FAIL  recover-bad-expression   r2  2 calls  2870 ms  $0.00020  — calculator never succeeded
+pass  recover-missing-file     r2  2 calls  4125 ms  $0.00022
+FAIL  recover-unknown-order    r2  1 calls  2991 ms  $0.00013  — never looked the order up
+FAIL  long-log-needle          r2  6 calls  17999 ms  $0.00335  — error code not stored
+FAIL  long-count-orders        r2  2 calls  5654 ms  $0.00058  — count is not 58
+FAIL  long-handbook            r2  2 calls  6236 ms  $0.00046  — meal_limit is not 75
+FAIL  single-kv-set            r3  1 calls  5507 ms  $0.00017  — locker_code not stored as 4417
+pass  single-read-answer       r3  2 calls  4168 ms  $0.00023
+pass  single-calculator        r3  2 calls  4374 ms  $0.00022
+FAIL  single-now               r3  2 calls  4142 ms  $0.00023  — wrong weekday
+pass  single-send              r3  2 calls  5459 ms  $0.00026
+FAIL  chain-order-notify       r3  1 calls  4123 ms  $0.00016  — order never looked up
+pass  chain-file-to-kv         r3  3 calls  6379 ms  $0.00035
+pass  chain-sum-to-file        r3  3 calls  6109 ms  $0.00035
+pass  chain-kv-to-send         r3  3 calls  7047 ms  $0.00035
+FAIL  chain-edit-json          r3  1 calls  2759 ms  $0.00012  — darkMode not true
+pass  recall-fact              r3  3 calls  4737 ms  $0.00031
+pass  recall-preference        r3  4 calls  7763 ms  $0.00045
+pass  recall-correction        r3  4 calls  7905 ms  $0.00045
+pass  abstain-chitchat         r3  1 calls  1662 ms  $0.00011
+pass  abstain-knowledge        r3  1 calls  2285 ms  $0.00009
+FAIL  abstain-draft-only       r3  1 calls  2124 ms  $0.00011  — no draft in the reply
+pass  abstain-cannot           r3  1 calls  4224 ms  $0.00015
+pass  recover-retry            r3  3 calls  4655 ms  $0.00032
+FAIL  recover-persist          r3  3 calls  4703 ms  $0.00032  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r3  2 calls  2817 ms  $0.00020
+pass  recover-missing-file     r3  2 calls  5561 ms  $0.00026
+FAIL  recover-unknown-order    r3  2 calls  8479 ms  $0.00032  — never looked the order up
+FAIL  long-log-needle          r3  4 calls  13528 ms  $0.00178  — error code not stored
+FAIL  long-count-orders        r3  3 calls  10107 ms  $0.00110  — count is not 58
+FAIL  long-handbook            r3  2 calls  5436 ms  $0.00044  — meal_limit is not 75
+pass  single-kv-set            r4  2 calls  3145 ms  $0.00020
+pass  single-read-answer       r4  2 calls  3579 ms  $0.00022
+pass  single-calculator        r4  2 calls  3427 ms  $0.00020
+pass  single-now               r4  2 calls  5466 ms  $0.00026
+pass  single-send              r4  2 calls  5783 ms  $0.00026
+pass  chain-order-notify       r4  3 calls  5541 ms  $0.00033
+pass  chain-file-to-kv         r4  3 calls  6571 ms  $0.00036
+FAIL  chain-sum-to-file        r4  1 calls  5942 ms  $0.00016  — reports/total.txt is not 499.75
+pass  chain-kv-to-send         r4  3 calls  6794 ms  $0.00035
+FAIL  chain-edit-json          r4  2 calls  7848 ms  $0.00030  — darkMode not true
+pass  recall-fact              r4  3 calls  6234 ms  $0.00033
+pass  recall-preference        r4  4 calls  11421 ms  $0.00051
+pass  recall-correction        r4  4 calls  7499 ms  $0.00043
+pass  abstain-chitchat         r4  1 calls  1836 ms  $0.00010
+pass  abstain-knowledge        r4  1 calls  1431 ms  $0.00010
+FAIL  abstain-draft-only       r4  1 calls  1876 ms  $0.00010  — no draft in the reply
+pass  abstain-cannot           r4  1 calls  5179 ms  $0.00017
+pass  recover-retry            r4  3 calls  8711 ms  $0.00039
+FAIL  recover-persist          r4  3 calls  5373 ms  $0.00034  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r4  2 calls  3078 ms  $0.00020
+FAIL  recover-missing-file     r4  1 calls  5601 ms  $0.00017  — never tried to read the file
+pass  recover-unknown-order    r4  2 calls  6569 ms  $0.00026
+FAIL  long-log-needle          r4  2 calls  3569 ms  $0.00053  — error code not stored
+FAIL  long-count-orders        r4  2 calls  21776 ms  $0.00088  — count is not 58
+FAIL  long-handbook            r4  2 calls  6621 ms  $0.00046  — meal_limit is not 75
+pass  single-kv-set            r5  2 calls  4293 ms  $0.00021
+pass  single-read-answer       r5  2 calls  3604 ms  $0.00022
+pass  single-calculator        r5  2 calls  2796 ms  $0.00020
+FAIL  single-now               r5  2 calls  2695 ms  $0.00020  — wrong weekday
+pass  single-send              r5  2 calls  5601 ms  $0.00025
+pass  chain-order-notify       r5  3 calls  14839 ms  $0.00049
+pass  chain-file-to-kv         r5  3 calls  5357 ms  $0.00033
+pass  chain-sum-to-file        r5  3 calls  8232 ms  $0.00038
+pass  chain-kv-to-send         r5  3 calls  7775 ms  $0.00038
+FAIL  chain-edit-json          r5  1 calls  5983 ms  $0.00018  — darkMode not true
+pass  recall-fact              r5  4 calls  8740 ms  $0.00045
+pass  recall-preference        r5  4 calls  10236 ms  $0.00048
+pass  recall-correction        r5  4 calls  5428 ms  $0.00041
+pass  abstain-chitchat         r5  1 calls  1742 ms  $0.00010
+pass  abstain-knowledge        r5  1 calls  1686 ms  $0.00010
+pass  abstain-draft-only       r5  1 calls  2205 ms  $0.00011
+pass  abstain-cannot           r5  1 calls  2724 ms  $0.00013
+pass  recover-retry            r5  3 calls  6026 ms  $0.00033
+FAIL  recover-persist          r5  4 calls  6983 ms  $0.00045  — harness error: I tried to write “ship it on Monday” to `notes/decision.md`, but the `bench__write_file` tool reported that the underlying file‑write service is temporarily unavailable. I’ll wait a little and try again; if it remains unavailable, let me know and I’ll inform you that I’m unable to store the note at 
+pass  recover-bad-expression   r5  2 calls  5153 ms  $0.00022
+pass  recover-missing-file     r5  2 calls  5351 ms  $0.00025
+pass  recover-unknown-order    r5  3 calls  9958 ms  $0.00040
+FAIL  long-log-needle          r5  3 calls  17487 ms  $0.00116  — error code not stored
+FAIL  long-count-orders        r5  2 calls  41049 ms  $0.00127  — count is not 58
+FAIL  long-handbook            r5  5 calls  14105 ms  $0.00170  — meal_limit is not 75
+dispach-native · gpt-oss-20b: 85/125 passed → evals/harness/runs/remeasure-be5bb30/native.gpt-oss-20b.jsonl

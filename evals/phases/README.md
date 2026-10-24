@@ -1,7 +1,7 @@
 # Phase-scoped tool visibility, measured — and the number is negative
 
 Decision 4.8 puts phase scoping in **core** rather than in a plugin on the strength of a striking
-published figure: constraining the tool space per phase took local models from 2/10 to 10/10 on a
+reported figure whose source was never recorded here: constraining the tool space per phase took local models from 2/10 to 10/10 on a
 benchmark subset with no model change. This repo had never measured it. `CLAUDE.md` is explicit —
 never claim a performance property without a number in `evals/` — so here is the number, and it does
 not say what the feature's rationale says.

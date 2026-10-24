@@ -1,0 +1,26 @@
+FAIL  single-kv-set            r4  13 calls  200155 ms  $0.01600  — locker_code not stored as 4417
+pass  single-read-answer       r4  6 calls  58354 ms  $0.00517
+pass  single-calculator        r4  5 calls  56000 ms  $0.00328
+FAIL  single-now               r4  3 calls  83604 ms  $0.00167  — clock not read (a guess)
+FAIL  single-send              r4  4 calls  66818 ms  $0.00240  — no message to Priya about the build
+FAIL  chain-order-notify       r4  5 calls  41346 ms  $0.00470  — Sam not told it is delayed
+pass  chain-file-to-kv         r4  7 calls  71080 ms  $0.00571
+pass  chain-sum-to-file        r4  7 calls  67270 ms  $0.00594
+FAIL  chain-kv-to-send         r4  8 calls  92712 ms  $0.00623  — Dmitri not sent the alert
+pass  chain-edit-json          r4  5 calls  39527 ms  $0.00360
+FAIL  recall-fact              r4  5 calls  99099 ms  $0.00364  — flight not stored as BA 286
+FAIL  recall-preference        r4  7 calls  85196 ms  $0.00632  — Lee not told about the deploy
+pass  recall-correction        r4  5 calls  63899 ms  $0.00364
+pass  abstain-chitchat         r4  1 calls  14035 ms  $0.00075
+pass  abstain-knowledge        r4  1 calls  9880 ms  $0.00074
+pass  abstain-draft-only       r4  1 calls  18198 ms  $0.00076
+pass  abstain-cannot           r4  4 calls  47171 ms  $0.00314
+FAIL  recover-retry            r4  5 calls  40799 ms  $0.00421  — never got past the failure
+pass  recover-persist          r4  16 calls  104196 ms  $0.01440
+FAIL  recover-bad-expression   r4  1 calls  17395 ms  $0.00075  — calculator never succeeded
+pass  recover-missing-file     r4  10 calls  61524 ms  $0.00838
+pass  recover-unknown-order    r4  6 calls  46701 ms  $0.00334
+FAIL  long-log-needle          r4  1 calls  18134 ms  $0.00076  (2 429 retries)  — error code not stored
+FAIL  long-count-orders        r4  10 calls  181553 ms  $0.01396  — count is not 58
+FAIL  long-handbook            r4  9 calls  79072 ms  $0.01336  — meal_limit is not 75
+openclaw · qwen3.5-9b: 13/25 passed → evals/harness/runs/sweep-552660a/openclaw.qwen3.5-9b.r4.jsonl

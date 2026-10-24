@@ -81,7 +81,7 @@ export const SETTINGS: readonly Setting[] = [
         // description that did not mention it — the cheapest kind of wrong documentation to find and
         // the easiest to leave.
         path: "tools.local",
-        means: "built-in tools: now, memory_write, artifact_read",
+        means: "built-in tools: now, memory_write, memory_forget, artifact_read",
         agentListed: true,
     },
     {
@@ -129,16 +129,97 @@ export const SETTINGS: readonly Setting[] = [
     },
     { path: "model.main.id", means: "the model this agent runs on", agentListed: true },
     { path: "model.main.temperature", means: "0 to 2", agentListed: true },
+    // Cost decisions, so a person's (pilot.4): the agent raising its own output or thinking budget is
+    // the agent spending its owner's money.
+    {
+        path: "model.main.maxTokens",
+        means: "the most one reply may generate; unset lets the endpoint decide",
+        agentListed: false,
+    },
+    {
+        path: "tools.budget.max",
+        means: "how many tools the model is shown at once, built-ins included",
+        agentListed: false,
+    },
+    {
+        path: "model.main.reasoningEffort",
+        means: "none | minimal | low | medium | high | xhigh | max — how hard a reasoning model thinks",
+        agentListed: false,
+    },
+    // The main role whole (pilot.16, bring-your-own key): a provider switch changes the
+    // transport, endpoint, key variable and capabilities together, and field by field the steps in
+    // between are configurations that do not load. A person's, like `model.<role>`: the agent's
+    // `config_set` cannot reach it, so an agent cannot move itself onto a different bill.
+    {
+        path: "model.main",
+        means: "the main model as a whole role, {api, id, baseUrl or options, apiKeyEnv, capabilities, ...}; replaces it in one write",
+        agentListed: false,
+    },
+    // A whole named role, which a schedule (`role:`) or a message (`role`) runs on (pilot.7). A
+    // person's, like every other cost decision: an agent choosing its own model is its owner's money.
+    {
+        path: "model.<role>",
+        means: "a named model role, {id, api or baseUrl, apiKeyEnv, ...}; a schedule or message runs on it with role: <name>",
+        agentListed: false,
+    },
     { path: "limits.maxSteps", means: "tool calls allowed in one turn", agentListed: true },
     {
         path: "limits.toolTimeoutMs",
         means: "how long any single tool may take",
         agentListed: true,
     },
+    // Person-only (pilot.15): the loop guard is what stops a turn that is going nowhere,
+    // so the agent loosening its own is the agent widening its containment. `sameTool` has its own
+    // row so a template's leftover value can be removed without restating `identicalCalls`.
+    // Person-only (pilot.15): a workspace file over its tier's budget stops the agent loading, and
+    // raising the budget over the API is one of the two ways back without a shell.
+    ...(["static", "volatile", "reminder", "total"] as const).map((tier) => ({
+        path: `context.budgets.${tier}`,
+        means: `token budget for the ${tier === "total" ? "whole workspace" : `${tier} tier`}; a file over it stops the agent loading`,
+        agentListed: false,
+    })),
+    {
+        path: "limits.noProgress",
+        means: "when a turn is stopped for going nowhere, as a map: {identicalCalls: <n, default 3>, sameTool: <n, off when absent>}",
+        agentListed: false,
+    },
+    {
+        path: "limits.noProgress.sameTool",
+        means: "stop a turn after this many calls in a row to one tool, whatever the arguments. Absent, off",
+        agentListed: false,
+    },
+    // Person-only (pilot.15): an agent that could set this back to `shown` could un-hide itself.
+    {
+        path: "context.modelIdentity",
+        means: "shown or hidden: whether the agent can see which model it runs on (hidden keeps tuning settable)",
+        agentListed: false,
+    },
+    // Person-only: a window the agent could raise past the endpoint's is a request the endpoint
+    // refuses. Settable at all because the reserveOutput error tells a person to set it, and until
+    // 0.2.0 `config set` answered that it was not a setting.
+    {
+        path: "context.window",
+        means: "the token budget for a whole request; unset uses the model's known window",
+        agentListed: false,
+    },
     {
         path: "context.observationMaxTokens",
         means: "how much of a tool's output reaches the model",
         agentListed: true,
+    },
+    // Person-only: the agent can't relax a guard on its own instructions. An embedder needs it because
+    // the rule count is a heuristic, and a misread line otherwise refuses every reload and every
+    // PATCH (pilot.4).
+    // Person-only: it decides what every event subscriber and webhook receives about a tool call.
+    {
+        path: "tools.eventDetail",
+        means: "none | redacted — whether tool events carry the call's arguments and output",
+        agentListed: false,
+    },
+    {
+        path: "context.rules.onExceed",
+        means: "fail | warn — whether too many counted rules in the workspace refuses the load",
+        agentListed: false,
     },
     {
         path: "channels",
@@ -150,6 +231,11 @@ export const SETTINGS: readonly Setting[] = [
     {
         path: "delivery",
         means: "where a reply goes when a turn has no origin — {default: tg}. Names a channel id, not a channel type",
+        agentListed: true,
+    },
+    {
+        path: "delivery.reply",
+        means: "channel replies: all (every step's text, default) or final (the last step's only)",
         agentListed: true,
     },
     {
@@ -175,6 +261,17 @@ export const SETTINGS: readonly Setting[] = [
         // one leaves the wrong one looking equally plausible.
         toAgent:
             "Only `serve` fires these; under `run` they are validated and listed and no timer starts. deliver.to is the address a reply is *sent* to — on Telegram the numeric chat id, never an @handle, which addresses a channel and not a person. It is the id inbound messages arrive on, so read it off your own session keys (tg:<id>); allowFrom holds handles and confers nothing here. Set role to name a model other than main. The whole list is replaced, so read it first",
+        agentListed: true,
+    },
+    {
+        // Settable for the reason `channels` is: turning on voice notes or image generation is a
+        // capability request, and init asks nothing about it (like MCP, it is a setting). The key is
+        // an env var *name*; `.env` is protected, so the agent can enable a provider and cannot
+        // supply its secret — which is the person's by construction.
+        path: "media",
+        means: "voice notes, spoken replies and images: {transcription, speech, image}, each {provider: openai|aws, model, apiKeyEnv, options}",
+        toAgent:
+            "image adds image_generate after a restart; filling in the key variable is the person's",
         agentListed: true,
     },
     {
@@ -207,6 +304,29 @@ export const SETTINGS: readonly Setting[] = [
         agentListed: false,
     },
     {
+        path: "delegation.offer",
+        means: 'what this agent takes on when another member\'s agent asks it, as a map: {task: "<one line>", artifact: {type: object, properties: {...}, required: [...]}}. The agents whose delegation.to names this one are reloaded so their roster shows it',
+        agentListed: false,
+    },
+    {
+        path: "delegation.to",
+        means: 'the other members\' agents this one may ask, by id, or "*" for every agent that offers. A peer ask is one hop: the asked agent answers, and cannot ask onward',
+        agentListed: false,
+    },
+    // Person- or engine-only (pilot.15), written as a whole list. A child narrows its parent's
+    // tools by construction, but which work leaves the parent's context is the operator's design, and
+    // an agent able to route its own calls could route a gated write through a child it wrote.
+    {
+        path: "subagents",
+        means: "children that run routed tool calls in their own context, as a list of {name, task, tools, route: {tools}, model?, maxSteps?, timeoutMs?}. Each tool must be pinned, and each routed slug belongs to one child",
+        agentListed: false,
+    },
+    {
+        path: "skills.trusted",
+        means: "the skills whose scripts may run, by name. A skill not listed is still used for its steps, and its scripts are documentation only. Absent, every skill's scripts run",
+        agentListed: false,
+    },
+    {
         path: "tools.providers.<id>.writeRoots",
         means: "the directories a file tool may write to, for that provider. Nothing outside them is writable — and this binds file tools only, never exec, which carries its target inside a shell string",
         agentListed: false,
@@ -216,6 +336,21 @@ export const SETTINGS: readonly Setting[] = [
 /** Exact-path lookup. `undefined` for anything no surface may set. */
 export function settingByPath(path: string): Setting | undefined {
     return SETTINGS.find((entry) => entry.path === path)
+}
+
+/** `model.fast` is the `model.<role>` row; `model.main` has its own exact row (pilot.16). */
+const ROLE_PATH = /^model\.([A-Za-z][\w-]*)$/
+
+/**
+ * The row a person may set at this concrete path, or `undefined`. Exact paths first, then the one
+ * placeholder a person fills in themselves: `model.<role>`. The server and the CLI both ask this, so
+ * they cannot disagree about what is settable.
+ */
+export function personSetting(path: string): Setting | undefined {
+    const exact = settingByPath(path)
+    if (exact !== undefined) return PERSON_SETTABLE_PATHS.includes(exact.path) ? exact : undefined
+    const role = ROLE_PATH.exec(path)?.[1]
+    return role === undefined || role === "main" ? undefined : settingByPath("model.<role>")
 }
 
 /**

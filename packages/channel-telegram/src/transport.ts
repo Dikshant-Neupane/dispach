@@ -12,16 +12,20 @@
  * `stop()`.
  */
 
+import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
 import type {
     ChannelHost,
     ChannelLimits,
     ChannelTransport,
+    InboundImage,
     OutboundMessage,
     RawInbound,
     SendResult,
     WebhookDelivery,
     WebhookOutcome,
 } from "@dispach/core"
+import { MAX_IMAGE_BYTES } from "@dispach/core"
 import { TelegramApi, TelegramApiError, type TelegramMessage, type TelegramUpdate } from "./api.ts"
 
 /** Telegram's own cap, in UTF-16 code units — the unit `String.length` counts in. */
@@ -74,6 +78,8 @@ export class TelegramTransport implements ChannelTransport {
         // would convert the outbox's visible `uncertain` flag into a silent duplicate.
         idempotentSend: false,
         minSendIntervalMs: MIN_SEND_INTERVAL_MS,
+        attachments: true,
+        voiceNotes: true,
     }
 
     readonly #api: TelegramApi
@@ -154,14 +160,41 @@ export class TelegramTransport implements ChannelTransport {
     async send(message: OutboundMessage, signal?: AbortSignal): Promise<SendResult> {
         const threadId = threadIdOf(message.thread)
         try {
-            const sent = await this.#api.sendMessage(
-                {
-                    chatId: message.recipient,
-                    text: message.text,
-                    ...(threadId === undefined ? {} : { threadId }),
-                },
-                signal,
-            )
+            const attachment = message.attachment
+            const sent =
+                attachment === undefined
+                    ? await this.#api.sendMessage(
+                          {
+                              chatId: message.recipient,
+                              text: message.text,
+                              ...(threadId === undefined ? {} : { threadId }),
+                          },
+                          signal,
+                      )
+                    : attachment.mimeType.startsWith("audio/")
+                      ? await this.#api.sendVoice(
+                            {
+                                chatId: message.recipient,
+                                voice: new Blob([await readFile(attachment.path)], {
+                                    type: "audio/ogg",
+                                }),
+                                filename: basename(attachment.path),
+                                ...(threadId === undefined ? {} : { threadId }),
+                            },
+                            signal,
+                        )
+                      : await this.#api.sendPhoto(
+                            {
+                                chatId: message.recipient,
+                                photo: new Blob([await readFile(attachment.path)], {
+                                    type: attachment.mimeType,
+                                }),
+                                filename: basename(attachment.path),
+                                caption: message.text,
+                                ...(threadId === undefined ? {} : { threadId }),
+                            },
+                            signal,
+                        )
             return { ok: true, providerMessageId: String(sent.message_id) }
         } catch (cause) {
             if (cause instanceof TelegramApiError) {
@@ -303,13 +336,64 @@ export class TelegramTransport implements ChannelTransport {
         if (message === undefined) return
 
         // `caption` covers a photo or document sent with text. A media message with no caption
-        // produces nothing — answering "" would be a turn with no input.
+        // produces nothing — answering "" would be a turn with no input — unless it is a voice note,
+        // which the runtime transcribes into one, or a photo, which the model is shown.
         const text = message.text ?? message.caption ?? ""
-        if (text.trim() === "") return
+        const heard = message.voice ?? message.audio
+        const seen = photoOf(message)
+        if (text.trim() === "" && heard === undefined && seen === undefined) return
         if (message.from?.is_bot === true) return
 
-        host.receive(toInbound(message, text))
+        const raw = toInbound(message, text)
+        const images: InboundImage[] =
+            seen === undefined
+                ? []
+                : [
+                      {
+                          ...(seen.file_size === undefined ? {} : { sizeBytes: seen.file_size }),
+                          fetch: (signal) => this.#download(seen.file_id, "photo", signal),
+                      },
+                  ]
+        host.receive({
+            ...raw,
+            ...(images.length === 0 ? {} : { images }),
+            ...(heard === undefined
+                ? {}
+                : {
+                      audio: {
+                          // A voice note is OGG/Opus whether or not Telegram says so.
+                          mimeType: heard.mime_type ?? "audio/ogg",
+                          ...(heard.duration === undefined ? {} : { durationS: heard.duration }),
+                          ...(heard.file_size === undefined ? {} : { sizeBytes: heard.file_size }),
+                          fetch: (signal: AbortSignal) =>
+                              this.#download(heard.file_id, "voice note", signal),
+                      },
+                  }),
+        })
     }
+
+    async #download(fileId: string, what: string, signal: AbortSignal): Promise<Uint8Array> {
+        const file = await this.#api.getFile(fileId, signal)
+        if (file.file_path === undefined) {
+            throw new Error(`Telegram returned no file path for the ${what}`)
+        }
+        return this.#api.download(file.file_path, signal)
+    }
+}
+
+/**
+ * The one image a message carried: the largest size of a photo that fits the runtime's cap — the
+ * sizes come smallest first, and the biggest is what a person saw — or an image sent as a file.
+ */
+export function photoOf(
+    message: TelegramMessage,
+): { readonly file_id: string; readonly file_size?: number } | undefined {
+    const sizes = message.photo ?? []
+    if (sizes.length > 0) {
+        return sizes.findLast((size) => (size.file_size ?? 0) <= MAX_IMAGE_BYTES) ?? sizes[0]
+    }
+    const document = message.document
+    return document?.mime_type?.startsWith("image/") === true ? document : undefined
 }
 
 /** Exported for the transport test, which asserts on the mapping rather than on a live bot. */
@@ -322,6 +406,7 @@ export function toInbound(message: TelegramMessage, text: string): RawInbound {
         // look like one replayed update.
         providerMessageId: `${message.chat.id}:${message.message_id}`,
         peerId: String(message.chat.id),
+        ...(message.from === undefined ? {} : { senderId: String(message.from.id) }),
         ...(username === undefined ? {} : { senderHandle: `@${username}` }),
         ...(name === "" ? {} : { senderName: name }),
         ...(message.message_thread_id === undefined

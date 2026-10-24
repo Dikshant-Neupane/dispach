@@ -48,9 +48,11 @@
 # ─── builder ──────────────────────────────────────────────────────────────────────────────
 #
 # Bun is the dev toolchain — install, bundle, pack — and appears in this stage only. The tarball it
-# writes is architecture-independent, so buildx runs this stage once per platform and produces the
-# same bytes on both.
-FROM oven/bun:1 AS builder
+# writes is architecture-independent, so this stage runs once, on the builder's own platform, and both
+# runtime stages copy the same tarball. Without `--platform` buildx ran it once per platform, and the
+# arm64 copy under QEMU on an amd64 runner: `bun run build` measured 795 s there against 115 s native,
+# thirteen of the release job's seventeen minutes spent producing bytes it already had.
+FROM --platform=$BUILDPLATFORM oven/bun:1 AS builder
 WORKDIR /build
 
 # The lockfile and every workspace manifest first, so a source-only change reuses this layer.
@@ -62,8 +64,14 @@ COPY packages/server/package.json ./packages/server/
 COPY packages/web/package.json ./packages/web/
 COPY packages/channel-telegram/package.json ./packages/channel-telegram/
 COPY packages/channel-whatsapp/package.json ./packages/channel-whatsapp/
+COPY packages/channel-teams/package.json ./packages/channel-teams/
+COPY packages/channel-a2a/package.json ./packages/channel-a2a/
+COPY packages/channel-slack/package.json ./packages/channel-slack/
+COPY packages/media-aws/package.json ./packages/media-aws/
+COPY packages/model-bedrock/package.json ./packages/model-bedrock/
 COPY packages/tools-system/package.json ./packages/tools-system/
 COPY packages/tools-composio/package.json ./packages/tools-composio/
+COPY packages/tools-mcp/package.json ./packages/tools-mcp/
 COPY packages/tools-web/package.json ./packages/tools-web/
 # The control plane is a workspace too, so the lockfile names it. Only its manifest matters here:
 # the runtime stage installs the CLI tarball and nothing else, so no FSL code reaches the image.
@@ -114,6 +122,11 @@ FROM node:24-trixie-slim AS runtime
 #   deliberately absent so there is one obvious HTTP client rather than two.
 # - **`ca-certificates`** so an HTTPS call from the shell verifies rather than failing oddly.
 # - **`jq`** because a model pipes JSON constantly and it costs about a megabyte.
+# - **`ffmpeg`** for **voice notes** that are not Ogg/Opus or FLAC (pilot.15). Amazon Transcribe
+#   streaming reads only those and PCM, so a Slack clip (WebM) or a Teams memo (M4A) is decoded to
+#   16 kHz PCM by `media-aws` first. Without it those notes are refused with a hint naming it.
+#   A static build copied in below, not Debian's package: `apt-get install ffmpeg` pulled ~570 MB of
+#   codec, GPU and X libraries into a 711 MB image; the static binary is ~100 MB.
 # - **`tzdata`** for **schedules**. `zone.ts` walks local calendar fields through `Intl`; with no zone
 #   database a named zone cannot resolve, and a cron silently running in UTC is exactly the failure
 #   the DST handling exists to prevent.
@@ -137,6 +150,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 # build makes no network call of its own. It is a statically linked musl binary, which runs fine on
 # glibc — that is what static linking is for.
 COPY --from=ghcr.io/astral-sh/uv:0.12.15 /uv /uvx /usr/local/bin/
+
+# `ffmpeg` the same way and for the same reasons: pinned (by digest, multi-arch), statically linked
+# against musl, no package manager involved. Only `ffmpeg`; `ffprobe` is never called.
+COPY --from=mwader/static-ffmpeg:7.1.1@sha256:11a44711684c0b9f754c047dcd64235b8b52deab251bd0e0a86f22faa160749c /ffmpeg /usr/local/bin/
 
 # The application: the published package, installed the way a laptop installs it. `npm i -g` puts
 # `dispach` on `/usr/local/bin` and the package under `/usr/local/lib/node_modules`. `--omit=dev`

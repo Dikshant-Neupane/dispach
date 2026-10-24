@@ -20,7 +20,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs"
-import { isAbsolute, resolve } from "node:path"
+import { basename, isAbsolute, resolve } from "node:path"
 import { estimateTokens } from "../context/tokens.ts"
 import {
     type ConfigError,
@@ -146,12 +146,78 @@ export interface LoadWorkspaceOptions {
 export function loadWorkspace(options: LoadWorkspaceOptions): Workspace {
     const budgets = options.budgets ?? DEFAULT_WORKSPACE_BUDGETS
     const style = options.style ?? DEFAULT_PROMPT_STYLE
-    const files: WorkspaceFile[] = []
+    return assemble(
+        options.refs.map((ref) => readOne(ref, budgets, style)),
+        budgets,
+        style,
+    )
+}
 
-    for (const ref of options.refs) {
-        files.push(readOne(ref, budgets, style))
-    }
+/**
+ * Re-read the `volatile` tier and nothing else, under the same checks a load applies.
+ *
+ * The volatile tier is the one place the workspace changes while an agent runs — `memory_write` appends
+ * to it, eviction trims it, and a person edits it — and it sits after cache breakpoint A precisely so it
+ * can. Holding the boot-time copy instead was a real defect rather than a staleness nuisance, because
+ * recall *excludes* the carried file on the grounds that slot 4 already shows it: a note saved during a
+ * long-running process reached neither slot until a restart, in every session but the one that saved it.
+ *
+ * `static` and `reminder` files are carried over as the same objects, so slot 0 stays byte-identical
+ * and the cached prefix survives a reload by construction rather than by care. Throws exactly what a
+ * load would throw — budget, tier mismatch, a missing file — and the caller decides what that means for
+ * a running agent.
+ */
+export function reloadVolatile(
+    workspace: Workspace,
+    options: ReloadVolatileOptions = {},
+): Workspace {
+    const budgets = options.budgets ?? DEFAULT_WORKSPACE_BUDGETS
+    const style = options.style ?? DEFAULT_PROMPT_STYLE
+    return assemble(
+        workspace.files.map((file) =>
+            file.tier === "volatile"
+                ? readOne(
+                      { name: file.name, path: file.path, tier: file.tier, field: file.field },
+                      budgets,
+                      style,
+                  )
+                : file,
+        ),
+        budgets,
+        style,
+    )
+}
 
+export type ReloadVolatileOptions = Omit<LoadWorkspaceOptions, "refs">
+
+/**
+ * What the volatile tier looks like on disk right now: modification time and size per file.
+ *
+ * The same staleness witness `memory/fts5.ts` uses for the index, and with the same blind spot — an edit
+ * that preserves both — which is stated rather than papered over. A file that cannot be stat'd
+ * contributes a marker instead of throwing, so a deleted file reads as a change and the reload is what
+ * reports it.
+ */
+export function volatileFingerprint(workspace: Workspace): string {
+    return workspace.files
+        .filter((file) => file.tier === "volatile")
+        .map((file) => {
+            try {
+                const stat = statSync(file.path)
+                return `${file.path}\t${stat.mtimeMs}\t${stat.size}`
+            } catch {
+                return `${file.path}\tmissing`
+            }
+        })
+        .join("\n")
+}
+
+/** Budget, then concatenate. Shared by a load and a volatile reload so the two cannot disagree. */
+function assemble(
+    files: readonly WorkspaceFile[],
+    budgets: WorkspaceBudgets,
+    style: PromptStyle,
+): Workspace {
     for (const file of files) {
         if (file.tokens <= file.budget) continue
         throw workspaceBudgetExceeded({
@@ -192,10 +258,14 @@ export function loadWorkspace(options: LoadWorkspaceOptions): Workspace {
         })
     }
 
+    // Each file is labelled with its name in the active delimiter style (pilot.15). With the
+    // contents joined bare, a model asked whether SOUL.md was loaded had no way to tie the text it was
+    // reading to that name, answered that it was not, and re-read every file until `no_progress`.
+    // A label is structure, never a rewrite of the author's prose.
     const join = (tier: Tier): string =>
         byTier(tier)
-            .map((file) => file.content)
-            .filter((content) => content !== "")
+            .filter((file) => file.content !== "")
+            .map((file) => labelled(basename(file.path), tier, file.content, style.delimiters))
             .join("\n\n")
 
     return {
@@ -237,25 +307,36 @@ export function ruleBudgetFailure(
     workspace: Workspace,
     rules: RulesConfig,
 ): ConfigError | undefined {
-    const counted = workspace.files
+    const parts = workspace.files
         .filter((file) => file.tier === "static" || file.tier === "reminder")
         // The full soul document is exempt from the prose heuristic: it ships only to a model its
         // author declared capable of deriving rules from explanation, and counting a constitution's
         // sentences as rules would fail every soul-bearing manifest. Its <rules> blocks still count
         // — they survive distillation and hold everywhere. The distilled file counts in full, like
         // any static file: it ships to small models, where the budget is the point.
-        .map((file) =>
-            file.field === "context.soul.file" ? rulesBlocksOnly(file.authored) : file.authored,
-        )
-        .join("\n")
-    const check = checkRules(counted, rules)
+        .map((file) => ({
+            name: file.name,
+            text:
+                file.field === "context.soul.file" ? rulesBlocksOnly(file.authored) : file.authored,
+        }))
+    const check = checkRules(parts.map((part) => part.text).join("\n"), rules)
     if (check.withinBudget) return undefined
+    // Counted over the joined text, as it always was, so no agent's verdict changes; each line is
+    // then attributed to the file it sits in. Without the file, "I never…" names a line somebody
+    // has to grep five files for (pilot.4).
+    const starts: { readonly name: string; readonly from: number }[] = []
+    let from = 1
+    for (const part of parts) {
+        starts.push({ name: part.name, from })
+        from += part.text.split("\n").length
+    }
+    const fileOf = (line: number) => starts.findLast((start) => start.from <= line)?.name ?? "?"
     return workspaceRuleBudget({
         counted: check.counted.length,
         allowed: check.allowed,
         perRuleSuccess: rules.perRuleSuccess,
         reliabilityTarget: rules.reliabilityTarget,
-        lines: check.counted.map((rule) => rule.text),
+        lines: check.counted.map((rule) => `${fileOf(rule.line)}: ${rule.text.trim()}`),
     })
 }
 
@@ -487,4 +568,16 @@ function largest(files: readonly WorkspaceFile[]): string {
         if (biggest === undefined || file.tokens > biggest.tokens) biggest = file
     }
     return biggest?.name ?? "(none)"
+}
+
+/** One workspace file's text under its own name, in the delimiter style the model is rendered for. */
+export function labelled(
+    name: string,
+    tier: Tier,
+    content: string,
+    delimiters: PromptStyle["delimiters"],
+): string {
+    if (delimiters === "xml") return `<file name="${name}" tier="${tier}">\n${content}\n</file>`
+    if (delimiters === "markdown") return `## ${name}\n\n${content}`
+    return `${name}:\n${content}`
 }

@@ -29,12 +29,20 @@ import type { EnvSource } from "../manifest/env.ts"
 import { type ManifestHeader, readManifestHeader } from "../manifest/header.ts"
 import { type LoadedManifest, loadManifest, loadManifestFromObject } from "../manifest/load.ts"
 import { resolveProviders } from "../manifest/providers.ts"
-import type { TeamMemberConfig } from "../manifest/schema.ts"
+import type { AgentManifest, TeamMemberConfig } from "../manifest/schema.ts"
+import type { MediaProviderFactory } from "../media/provider.ts"
 import type { FetchLike } from "../model/provider.ts"
-import { agentPluginSupply, type BuiltInPlugins, type LoadedPlugin } from "../plugins/loader.ts"
+import { BUILT_IN_TRANSPORTS, type ModelTransport } from "../model/transport.ts"
+import {
+    agentPluginSupply,
+    type BuiltInPlugins,
+    type LoadedPlugin,
+    type MountedRoute,
+} from "../plugins/loader.ts"
 import { type Middleware, notify } from "../plugins/middleware.ts"
 import { Scheduler } from "../schedule/scheduler.ts"
 import { TurnStreams, type TurnStreamsOptions } from "../store/buffer.ts"
+import { networkStoreRefusal } from "../store/filesystem.ts"
 import { SqliteStore } from "../store/sqlite/store.ts"
 import type { DeliveryBacklog, LeaseRecord, RuntimeMode, Store } from "../store/store.ts"
 import { expandTeams } from "../team/expand.ts"
@@ -52,6 +60,7 @@ import {
 } from "../webhooks/webhooks.ts"
 import { Agent } from "./agent.ts"
 import { type ChannelFactory, ChannelHub } from "./channels.ts"
+import { ConversationHub } from "./conversations.ts"
 import { claimLeases, LEASE_BEAT_MS, markRuntimeLive } from "./lease.ts"
 import { reconcileSchedules, scheduleRunner, scheduleRunOfSession } from "./schedules.ts"
 
@@ -67,6 +76,46 @@ export type AgentSource = string | Record<string, unknown>
  * a shipped union is the expensive version of this.
  */
 export type DisposeReason = "requested" | "replaced" | "stopped"
+
+/** What `Runtime.reload` did: applied now, or waiting for the running turns. */
+/** What `refreshTools` found, per provider and in total, and whether it reloaded the agent. */
+export interface ToolsRefreshOutcome {
+    readonly providers: readonly {
+        readonly provider: string
+        readonly ok: boolean
+        readonly fetched: number
+        readonly error?: string
+    }[]
+    /** Pinned slugs the agent lacked and a provider can now resolve. */
+    readonly added: readonly string[]
+    /** Slugs the agent serves that a provider no longer has. */
+    readonly removed: readonly string[]
+    /** Slugs the agent serves whose schema moved. */
+    readonly changed: readonly string[]
+    /** `none` when nothing moved; otherwise the reload's own status. */
+    readonly reload: "none" | "loaded" | "pending"
+}
+
+/** How long one provider's refresh may take before it is reported as failed. */
+const TOOLS_REFRESH_TIMEOUT_MS = 60_000
+
+export type ReloadOutcome =
+    | { readonly status: "loaded"; readonly adopted: readonly Agent[] }
+    | { readonly status: "pending"; readonly running: number; readonly holdAfterMs: number }
+
+interface PendingReload {
+    readonly outcome: () => ReloadOutcome
+    /** Fail every held turn: the runtime is stopping, or the agent was disposed under the reload. */
+    readonly abandon: (error: HarnessError) => void
+}
+
+function agentNotHosted(id: string): HarnessError {
+    return new HarnessError({
+        code: "reload_agent_gone",
+        message: `The reload of "${id}" did not bring it back, so a turn that waited for it has nothing to run on.`,
+        hint: "The new manifest no longer declares this agent (a team member removed, or the id changed). Send the message again to the agent that replaced it.",
+    })
+}
 
 /**
  * Where sessions live.
@@ -129,6 +178,17 @@ export interface RuntimeOptions {
      * nothing and blaming the slugs.
      */
     readonly toolProviders?: Readonly<Record<string, ToolProviderFactory>>
+    /**
+     * Model transports beyond the built-in `chat-completions`, by the name `model.<role>.api`
+     * selects. Same reasoning as `toolProviders`: a protocol needing a dependency core may not carry
+     * (Bedrock's SDK) is supplied by the host, or by a plugin through `defineModelTransport`.
+     */
+    readonly modelTransports?: Readonly<Record<string, ModelTransport>>
+    /**
+     * Media providers beyond the built-in `openai`, by the name `media.*.provider` selects. Supplied
+     * by the host or by a plugin through `defineMediaProvider` — `aws` from media-aws.
+     */
+    readonly mediaProviders?: Readonly<Record<string, MediaProviderFactory>>
     /**
      * How a skill's script runs. Same shape and same reasoning as `toolProviders`: core starts no
      * processes, so the one package allowed to supplies this.
@@ -213,9 +273,12 @@ export interface RuntimeOptions {
  */
 export interface AgentSupply {
     readonly toolProviders: Readonly<Record<string, ToolProviderFactory>>
+    readonly modelTransports: Readonly<Record<string, ModelTransport>>
+    readonly mediaProviders: Readonly<Record<string, MediaProviderFactory>>
     readonly channels: Readonly<Record<string, ChannelFactory>>
     readonly scriptRunner: ScriptRunner | undefined
     readonly middleware: readonly Middleware[]
+    readonly routes?: readonly MountedRoute[]
     /** Plugins this agent named that did not load, carried so they reach `agent.warnings`. */
     readonly failedPlugins?: readonly ErrorDetail[]
 }
@@ -251,6 +314,8 @@ export class Runtime {
     readonly streams: TurnStreams
     /** Channel bindings and the delivery queue. Empty when no agent configures a channel. */
     readonly channels: ChannelHub
+    /** Rooms and DMs among participants and agents (Phase 27). */
+    readonly conversations: ConversationHub
     /**
      * What each agent's `plugins:` loaded, by agent id, in manifest order.
      *
@@ -317,6 +382,7 @@ export class Runtime {
     /** A supervisor's declared members, by supervisor id. Empty for an agent with no team. */
     #teams = new Map<string, readonly TeamMemberConfig[]>()
     #stopped = false
+    #draining = false
     /** False when the caller passed an already-open store, which stays theirs to close. */
     #ownsStore: boolean
     /** Agent ids this runtime holds a lease for — released on stop, refreshed while alive. */
@@ -363,6 +429,7 @@ export class Runtime {
         store: Store
         streams: TurnStreams
         channels: ChannelHub
+        conversations: ConversationHub
         plugins: ReadonlyMap<string, readonly LoadedPlugin[]>
         scheduler: Scheduler
         webhooks: WebhookDispatcher
@@ -380,6 +447,7 @@ export class Runtime {
         this.store = init.store
         this.streams = init.streams
         this.channels = init.channels
+        this.conversations = init.conversations
         this.plugins = init.plugins
         this.scheduler = init.scheduler
         this.webhooks = init.webhooks
@@ -549,12 +617,21 @@ export class Runtime {
             hosted.map((entry: LoadedManifest, index) =>
                 instantiateAgent({
                     entry,
+                    peers: peersAmong(
+                        prepared.loaded
+                            .filter((loaded) => !prepared.memberIds.has(loaded.manifest.id))
+                            .map((loaded) => loaded.manifest),
+                    ),
                     supply: prepared.supplyFor(entry.manifest.id),
                     registry: registries[index],
                     team: prepared.teams.get(entry.manifest.id),
                     // Resolved per call. `runtime` is assigned below this block, so this
                     // closure cannot be evaluated eagerly either.
                     resolveMember: (id) => runtime.agent(id),
+                    // Same laziness. A refused reload reports itself on `agent.reloaded`.
+                    requestReload: () => {
+                        runtime.reload(entry.manifest.id).catch(() => {})
+                    },
                     // Channels and plugins together: both are optional capabilities whose failure
                     // is a warning, and `agent.warnings` is the one array every surface reads.
                     warnings: [
@@ -570,6 +647,13 @@ export class Runtime {
         )
 
         const hub = new ChannelHub({ bus, outboxStore: store.outbox })
+        // Reads the runtime's own map lazily, for the reason the scheduler's closures below do: the
+        // agents hosted now, not the ones this boot loaded.
+        const conversations: ConversationHub = new ConversationHub({
+            store: store.conversations,
+            bus,
+            agent: (id) => runtime.all().find((agent) => agent.id === id),
+        })
 
         /**
          * Built before the runtime so it can be handed in, and it arms nothing until `start()`.
@@ -630,6 +714,7 @@ export class Runtime {
             store,
             streams,
             channels: hub,
+            conversations,
             plugins: prepared.plugins,
             scheduler,
             webhooks,
@@ -781,14 +866,54 @@ export class Runtime {
                 providers,
                 slugs: entry?.manifest.tools.pinned ?? [],
                 bus,
+                heal: (slugs) => runtime.#heal(agentId, slugs),
+                providerOf: (slug) => runtime.#agents.get(agentId)?.tools.providerOf(slug),
             })
         }
 
         return runtime
     }
 
+    /**
+     * The tool provider factories this runtime builds agents with, so a surface editing
+     * `tools.providers` can ask the providers themselves whether a config is valid before writing it.
+     */
+    get toolProviderFactories(): Readonly<Record<string, ToolProviderFactory>> {
+        return this.#options.toolProviders ?? {}
+    }
+
+    /** The media provider factories beyond the built-in `openai`, for the same reason. */
+    get mediaProviderFactories(): Readonly<Record<string, MediaProviderFactory>> {
+        return this.#options.mediaProviders ?? {}
+    }
+
     get ready(): boolean {
-        return !this.#stopped
+        return !this.#stopped && !this.#draining
+    }
+
+    /** True from `drain()` until the process stops: `/v1/ready` answers 503 so traffic moves away. */
+    get draining(): boolean {
+        return this.#draining
+    }
+
+    /**
+     * Wait up to `ms` for running turns to finish, before `stop()` — a pod's SIGTERM, where the
+     * orchestrator allows a grace period and SIGKILLs after it. New turns are not refused: a message
+     * a channel already received is better answered than dropped, and the wait is bounded either
+     * way. Resolves with the turns still running at the deadline, which `stop()` then leaves for the
+     * next boot to reap, exactly as without a drain.
+     */
+    async drain(ms: number): Promise<number> {
+        this.#draining = true
+        const running = () => this.all().reduce((sum, agent) => sum + agent.inFlight, 0)
+        const deadline = Date.now() + ms
+        // ponytail: 100 ms poll; an inFlight change event is the upgrade if a drain ever needs precision.
+        while (running() > 0 && Date.now() < deadline) {
+            await new Promise((resolve) =>
+                setTimeout(resolve, Math.min(100, deadline - Date.now())),
+            )
+        }
+        return running()
     }
 
     agent(id: string): Agent {
@@ -1052,6 +1177,15 @@ export class Runtime {
             const bindings = buildChannels(entry, supply)
             const agent = instantiateAgent({
                 entry,
+                peers: peersAmong(
+                    this.all().map((hosted) => hosted.manifest),
+                    prepared.loaded
+                        .filter((loaded) => !prepared.memberIds.has(loaded.manifest.id))
+                        .map((loaded) => loaded.manifest),
+                ),
+                requestReload: () => {
+                    this.reload(entry.manifest.id).catch(() => {})
+                },
                 warnings: [
                     ...(supply.failedPlugins ?? []),
                     ...built.warnings,
@@ -1107,6 +1241,8 @@ export class Runtime {
                 providers: this.#providersByAgent.get(agent.id) ?? [],
                 slugs: entry.manifest.tools.pinned,
                 bus: this.bus,
+                heal: (slugs) => this.#heal(agent.id, slugs),
+                providerOf: (slug) => agent.tools.providerOf(slug),
             })
         }
 
@@ -1185,9 +1321,382 @@ export class Runtime {
                     : `This runtime hosts: ${[...this.#agents.keys()].join(", ") || "(none)"}.`,
             })
         }
+        // Loaded in full before the old instance goes, so a manifest broken on disk refuses the
+        // reload and leaves the agent serving. It used to dispose first, and a typo took the agent
+        // down with nothing left to answer.
+        await this.#trial(source)
         await this.dispose(agentId, "replaced")
         return await this.adopt(source)
     }
+
+    /**
+     * Everything `adopt` would check before hosting — manifest, plugins, the tool registry — run and
+     * thrown away. On a bus of its own, so a trial's `plugin.loaded` and warnings are not reported
+     * as if they happened, and with every provider it built stopped again.
+     */
+    /**
+     * Why an agent on disk would not load, or `undefined` when it would (pilot.15). The reload trial,
+     * run on its own and discarded: nothing is hosted, disposed or adopted. For an agent this runtime
+     * is not hosting, so a surface can say what is wrong with it instead of answering 404.
+     */
+    async diagnose(source: AgentSource): Promise<ErrorDetail | undefined> {
+        try {
+            await this.#trial(source)
+            return undefined
+        } catch (error) {
+            return isHarnessError(error)
+                ? error.toDetail()
+                : {
+                      code: "agent_load_failed",
+                      message: String(error),
+                      hint: "See the runtime log for the stack.",
+                  }
+        }
+    }
+
+    async #trial(source: AgentSource): Promise<void> {
+        const prepared = await prepareAgents({
+            sources: [source],
+            options: this.#options,
+            bus: new EventBus({ runtimeId: this.runtimeId }),
+            mark: (_name, work) => work(),
+            markAsync: async (_name, work) => await work(),
+        })
+        try {
+            for (const entry of prepared.loaded) {
+                const supply = prepared.supplyFor(entry.manifest.id)
+                const built = await buildRegistry(entry, supply)
+                for (const provider of built.providers) await provider.stop?.()
+                // The agent itself, built and discarded, because `Agent.create` refuses things the
+                // manifest's schema accepts — a media provider that does not exist, a workspace file
+                // over its budget. Trialling only the registry let those through; the swap then
+                // disposed the old instance, the rebuild threw, and the agent was simply gone.
+                instantiateAgent({
+                    entry,
+                    peers: peersAmong(
+                        this.all().map((hosted) => hosted.manifest),
+                        prepared.loaded
+                            .filter((loaded) => !prepared.memberIds.has(loaded.manifest.id))
+                            .map((loaded) => loaded.manifest),
+                    ),
+                    supply,
+                    registry: built.registry,
+                    team: prepared.teams.get(entry.manifest.id),
+                    resolveMember: (id) => this.agent(id),
+                    options: this.#options,
+                    bus: new EventBus({ runtimeId: this.runtimeId }),
+                    store: this.store,
+                })
+            }
+        } finally {
+            for (const off of prepared.unwatch.values()) off()
+        }
+    }
+
+    /**
+     * Apply an agent's manifest again without refusing a running turn (doc 16 R4, decision 14.23).
+     *
+     * Idle: the same as `replace`. Busy: the reload is **pending** — the running turns finish on the
+     * configuration they started with, and the swap happens the moment none is left. New turns keep
+     * running on the old configuration for `limits.reloadHoldMs`, then wait for the swap and start on
+     * the new one, so a constantly busy agent cannot postpone a reload forever. A held turn reaches
+     * the new instance through the admission it was given, whichever surface holds it.
+     *
+     * A second reload while one is pending joins it: the swap reads the manifest as it is then.
+     */
+    /**
+     * Fetch the providers' catalogues and schemas now, and reload the agent only if what it serves
+     * changed (pilot.5).
+     *
+     * The refresh after boot already does the fetch; this is the same call on demand, for a
+     * connection made or a work MCP's schema changed while the agent runs. It reloads rather than
+     * swapping the catalogue in place, because slot 1 is the cache-stable prefix and fixed for an
+     * agent's lifetime: the reload is the one path that rebuilds it, and it already waits for a
+     * running turn, so the change takes effect at the next turn. Nothing moved, nothing reloads.
+     */
+    async refreshTools(
+        agentId: string,
+        options: { readonly providers?: readonly string[] } = {},
+    ): Promise<ToolsRefreshOutcome> {
+        const agent = this.agent(agentId)
+        if (agent === undefined) throw agentNotHosted(agentId)
+        const all = this.#providersByAgent.get(agentId) ?? []
+        const unknown = (options.providers ?? []).filter(
+            (id) => !all.some((provider) => provider.id === id),
+        )
+        if (unknown.length > 0) {
+            throw new HarnessError({
+                code: "tools_refresh_provider_unknown",
+                message: `${agentId} has no tool provider ${unknown.join(", ")}.`,
+                hint: `Name providers from its tools.providers: ${all.map((provider) => provider.id).join(", ") || "none"}. Omit providers to refresh all of them.`,
+                field: "providers",
+            })
+        }
+        const chosen = all.filter(
+            (provider) =>
+                provider.refresh !== undefined &&
+                (options.providers === undefined || options.providers.includes(provider.id)),
+        )
+        const pinned = agent.manifest.tools.pinned
+        const serving = new Set(agent.tools.specs().map((spec) => spec.slug))
+
+        const results = await Promise.all(
+            chosen.map(async (provider) => {
+                const from = performance.now()
+                try {
+                    // Only slugs no other provider resolved, as in `refreshProviders`.
+                    const own = pinned.filter((slug) => {
+                        const owner = agent.tools.providerOf(slug)
+                        return owner === undefined || owner === provider.id
+                    })
+                    const result = await (provider.refresh?.(
+                        own,
+                        AbortSignal.timeout(TOOLS_REFRESH_TIMEOUT_MS),
+                    ) ?? Promise.resolve({ fetched: 0, changed: [], missing: [] }))
+                    this.bus.emit(
+                        "tools.refreshed",
+                        {
+                            provider: provider.id,
+                            ok: true,
+                            fetched: result.fetched,
+                            changed: [...result.changed],
+                            missing: [...result.missing],
+                            latencyMs: Math.round(performance.now() - from),
+                        },
+                        { agentId },
+                    )
+                    const listed = new Set((await provider.list?.()) ?? [])
+                    return { provider: provider.id, ok: true, result, listed }
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error)
+                    this.bus.emit(
+                        "tools.refreshed",
+                        {
+                            provider: provider.id,
+                            ok: false,
+                            fetched: 0,
+                            changed: [],
+                            missing: [],
+                            latencyMs: Math.round(performance.now() - from),
+                            error: message,
+                        },
+                        { agentId },
+                    )
+                    return { provider: provider.id, ok: false, error: message }
+                }
+            }),
+        )
+
+        const added = pinned.filter(
+            (slug) =>
+                !serving.has(slug) && results.some((entry) => entry.listed?.has(slug) === true),
+        )
+        const removed = [
+            ...new Set(results.flatMap((entry) => entry.result?.missing ?? [])),
+        ].filter((slug) => serving.has(slug))
+        const changed = [
+            ...new Set(results.flatMap((entry) => entry.result?.changed ?? [])),
+        ].filter((slug) => serving.has(slug))
+        const moved = added.length + removed.length + changed.length > 0
+        const reload = moved ? (await this.reload(agentId)).status : "none"
+
+        this.bus.emit("agent.tools.refreshed", { added, removed, changed, reload }, { agentId })
+        return {
+            providers: results.map((entry) => ({
+                provider: entry.provider,
+                ok: entry.ok,
+                fetched: entry.result?.fetched ?? 0,
+                ...(entry.error === undefined ? {} : { error: entry.error }),
+            })),
+            added,
+            removed,
+            changed,
+            reload,
+        }
+    }
+
+    async reload(agentId: string): Promise<ReloadOutcome> {
+        const source = this.#sources.get(agentId)
+        if (source === undefined) return { status: "loaded", adopted: await this.replace(agentId) }
+        const already = this.#reloads.get(agentId)
+        if (already !== undefined) return already.outcome()
+
+        const ids = [agentId, ...(this.#teams.get(agentId) ?? []).map((member) => member.id)]
+        const agents = ids.flatMap((id) => {
+            const agent = this.#agents.get(id)
+            return agent === undefined ? [] : [agent]
+        })
+        const running = () => agents.reduce((sum, agent) => sum + agent.inFlight, 0)
+        // A refusal before anything waited is announced too (pilot.14): it used to throw
+        // with no event, so a webhook watching `agent.reloaded` never heard that a skill installed
+        // mid-turn had left the agent unable to reload.
+        const refused = (error: unknown): never => {
+            this.bus.emit(
+                "agent.reloaded",
+                {
+                    ok: false,
+                    adopted: [],
+                    waitedMs: 0,
+                    held: 0,
+                    disposed: false,
+                    error: isHarnessError(error)
+                        ? error.toDetail()
+                        : {
+                              code: "reload_failed",
+                              message: String(error),
+                              hint: "See the runtime log.",
+                          },
+                },
+                { agentId },
+            )
+            throw error
+        }
+        if (running() === 0) {
+            const adopted = await this.replace(agentId).catch(refused)
+            // Announced here too, so a surface watching for a reload it did not ask for — the
+            // runtime's own, after a cache warmed — sees it the same way it sees a waited one.
+            this.bus.emit(
+                "agent.reloaded",
+                {
+                    ok: true,
+                    adopted: adopted.map((agent) => agent.id),
+                    waitedMs: 0,
+                    held: 0,
+                    disposed: true,
+                },
+                { agentId },
+            )
+            return { status: "loaded", adopted }
+        }
+
+        // Refused now rather than after the wait: the person asking should hear about a typo while
+        // they are still looking at it, not when the last turn ends.
+        await this.#trial(source).catch(refused)
+
+        const holdMs = this.#agents.get(agentId)?.manifest.limits.reloadHoldMs ?? 30_000
+        const startedAt = Date.now()
+        const settle = new Map<
+            string,
+            { resolve: (agent: Agent) => void; reject: (error: unknown) => void }
+        >()
+        for (const agent of agents) {
+            const successor = new Promise<Agent>((resolve, reject) => {
+                settle.set(agent.id, { resolve, reject })
+            })
+            // A held turn that is never resolved is a hang, so a rejection is always observed.
+            successor.catch(() => {})
+            agent.retireInto(successor, () => {
+                if (running() === 0) void complete()
+            })
+        }
+        const hold = () => {
+            for (const agent of agents) agent.holdNewTurns()
+        }
+        const timer = holdMs === 0 ? undefined : setTimeout(hold, holdMs)
+        timer?.unref?.()
+        if (holdMs === 0) hold()
+
+        const pending: PendingReload = {
+            outcome: () => ({ status: "pending", running: running(), holdAfterMs: holdMs }),
+            abandon: (error) => {
+                if (timer !== undefined) clearTimeout(timer)
+                this.#reloads.delete(agentId)
+                for (const entry of settle.values()) entry.reject(error)
+            },
+        }
+        this.#reloads.set(agentId, pending)
+
+        const complete = async (): Promise<void> => {
+            if (this.#reloads.get(agentId) !== pending) return
+            this.#reloads.delete(agentId)
+            if (timer !== undefined) clearTimeout(timer)
+            // Nothing new may start on the old instance between here and the dispose, or the
+            // dispose would refuse the turn it just admitted.
+            hold()
+            const held = agents.reduce((sum, agent) => sum + agent.heldTurns, 0)
+            const waitedMs = Date.now() - startedAt
+            try {
+                const adopted = await this.replace(agentId)
+                for (const [id, entry] of settle) {
+                    const next = this.#agents.get(id)
+                    if (next === undefined) entry.reject(agentNotHosted(id))
+                    else entry.resolve(next)
+                }
+                this.bus.emit(
+                    "agent.reloaded",
+                    {
+                        ok: true,
+                        adopted: adopted.map((agent) => agent.id),
+                        waitedMs,
+                        held,
+                        disposed: true,
+                    },
+                    { agentId },
+                )
+            } catch (error) {
+                const detail = isHarnessError(error)
+                    ? error.toDetail()
+                    : {
+                          code: "reload_failed",
+                          message: String(error),
+                          hint: "See the runtime log.",
+                      }
+                // A trial that failed leaves the old instance hosted: it resumes, and the held turns
+                // run on it. A failure after the dispose leaves nothing to run them on.
+                const disposed = this.#agents.get(agentId) !== agents[0]
+                for (const agent of agents) {
+                    if (!disposed) agent.cancelRetire()
+                    const entry = settle.get(agent.id)
+                    if (disposed) entry?.reject(error)
+                    else entry?.resolve(agent)
+                }
+                this.bus.emit(
+                    "agent.reloaded",
+                    { ok: false, adopted: [], waitedMs, held, disposed, error: detail },
+                    { agentId },
+                )
+            }
+        }
+        return pending.outcome()
+    }
+
+    #reloads = new Map<string, PendingReload>()
+
+    /**
+     * A refresh has fetched pinned tools this agent loaded without — a server added through settings,
+     * with nothing cached yet. Tools resolve once per instance, so they stay missing until the next
+     * load; this is that load, queued like any reload so it waits for running turns (decision 14.24).
+     *
+     * Once per agent per slug: a slug the provider lists and the registry still cannot resolve (a
+     * schema it refuses) would otherwise reload forever.
+     */
+    #heal(agentId: string, listed: readonly string[]): void {
+        const agent = this.#agents.get(agentId)
+        if (agent === undefined) return
+        const done = this.#healed.get(agentId) ?? new Set<string>()
+        const missing = listed.filter((slug) => !agent.tools.has(slug) && !done.has(slug))
+        if (missing.length === 0) return
+        for (const slug of missing) done.add(slug)
+        this.#healed.set(agentId, done)
+        const root =
+            [...this.#teams].find(([, members]) => members.some((m) => m.id === agentId))?.[0] ??
+            agentId
+        this.reload(root).catch((error: unknown) => {
+            this.bus.emit(
+                "agent.warning",
+                {
+                    code: "tools_heal_failed",
+                    message: `${missing.join(", ")} became available and the reload that would pick them up failed: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                    hint: `Reload the agent once the manifest loads (POST /v1/agents/${root}/reload), or restart it.`,
+                },
+                { agentId },
+            )
+        })
+    }
+
+    #healed = new Map<string, Set<string>>()
 
     /**
      * Stop hosting one agent — leases, channels, schedules, providers, plugin watchers.
@@ -1220,6 +1729,13 @@ export class Runtime {
         if (!this.#agents.has(agentId)) return
 
         const ids = [agentId, ...(this.#teams.get(agentId) ?? []).map((member) => member.id)]
+        this.#reloads.get(agentId)?.abandon(
+            new HarnessError({
+                code: "reload_abandoned",
+                message: `"${agentId}" was disposed while a reload was waiting for it.`,
+                hint: "A turn held for the reload has nothing to run on. Adopt the agent again and resend it.",
+            }),
+        )
 
         const busy = ids
             .map((id) => this.#agents.get(id))
@@ -1301,6 +1817,15 @@ export class Runtime {
         this.#stopped = true
         markRuntimeLive(this.runtimeId, false)
         this.bus.emit("runtime.stopping", { reason })
+        for (const pending of [...this.#reloads.values()]) {
+            pending.abandon(
+                new HarnessError({
+                    code: "reload_abandoned",
+                    message: "The runtime stopped while a reload was waiting for running turns.",
+                    hint: "A turn held for the reload did not run. The next start loads the manifest as it is on disk.",
+                }),
+            )
+        }
 
         // In-flight turns are deliberately not cancelled here — a turn ends because it finished or
         // because someone stopped it, never because the process was asked to wind down politely.
@@ -1540,6 +2065,12 @@ async function prepareAgents(input: {
                     ...(options.toolProviders === undefined
                         ? {}
                         : { toolProviders: options.toolProviders }),
+                    ...(options.modelTransports === undefined
+                        ? {}
+                        : { modelTransports: options.modelTransports }),
+                    ...(options.mediaProviders === undefined
+                        ? {}
+                        : { mediaProviders: options.mediaProviders }),
                     ...(options.channels === undefined ? {} : { channels: options.channels }),
                     ...(options.scriptRunner === undefined
                         ? {}
@@ -1548,9 +2079,12 @@ async function prepareAgents(input: {
             })
             supplyByAgent.set(agentId, {
                 toolProviders: supply.toolProviders,
+                modelTransports: supply.modelTransports,
+                mediaProviders: supply.mediaProviders,
                 channels: supply.channels,
                 scriptRunner: supply.scriptRunner,
                 middleware: supply.middleware,
+                routes: supply.routes,
                 failedPlugins: supply.failed,
             })
             pluginsByAgent.set(agentId, supply.loaded)
@@ -1596,6 +2130,8 @@ async function prepareAgents(input: {
     const supplyFor = (agentId: string): AgentSupply =>
         supplyByAgent.get(agentId) ?? {
             toolProviders: options.toolProviders ?? {},
+            modelTransports: options.modelTransports ?? {},
+            mediaProviders: options.mediaProviders ?? {},
             channels: options.channels ?? {},
             scriptRunner: options.scriptRunner,
             middleware: [],
@@ -1703,7 +2239,36 @@ export async function buildRegistry(
  * turn time — see the comment on `teamTools`. Under `adopt` it reads the runtime, so a supervisor
  * adopted into a live process reaches members adopted in the same call.
  */
+/** What an agent knows of the others in its silo, for delegation (Phase 28). */
+export interface DelegationPeer {
+    readonly id: string
+    readonly offer?: NonNullable<AgentManifest["delegation"]>["offer"]
+    readonly to?: NonNullable<AgentManifest["delegation"]>["to"]
+    /** Its in-process team, for the cycle walk. */
+    readonly team?: readonly string[]
+}
+
+function peerOf(manifest: AgentManifest): DelegationPeer {
+    return {
+        id: manifest.id,
+        ...(manifest.delegation?.offer === undefined ? {} : { offer: manifest.delegation.offer }),
+        ...(manifest.delegation?.to === undefined ? {} : { to: manifest.delegation.to }),
+        ...(manifest.team === undefined
+            ? {}
+            : { team: manifest.team.members.map((member) => member.id) }),
+    }
+}
+
+/** Every agent this boot loaded or this runtime hosts, by id, the newer manifest winning. */
+function peersAmong(...lists: readonly (readonly AgentManifest[])[]): readonly DelegationPeer[] {
+    const byId = new Map<string, DelegationPeer>()
+    for (const list of lists) for (const manifest of list) byId.set(manifest.id, peerOf(manifest))
+    return [...byId.values()]
+}
+
 function instantiateAgent(input: {
+    /** Other agents in the silo, for `delegation.to`. */
+    readonly peers: readonly DelegationPeer[]
     /** Findings made before the agent existed — a channel that could not be built. */
     readonly warnings?: readonly ErrorDetail[]
     readonly entry: LoadedManifest
@@ -1711,6 +2276,8 @@ function instantiateAgent(input: {
     readonly registry: ToolRegistry | undefined
     readonly team: readonly TeamMemberConfig[] | undefined
     readonly resolveMember: (id: string) => HandoffTarget
+    /** Queue a reload of this agent once its turns end (a tool pinned mid-turn, pilot.14). */
+    readonly requestReload?: () => void
     readonly options: RuntimeOptions
     readonly bus: EventBus
     readonly store: Store
@@ -1734,21 +2301,54 @@ function instantiateAgent(input: {
     // initialised from this function's own results, so every inferred type in the chain
     // becomes circular and TypeScript gives up with six `implicitly has type any` errors.
     // One explicit return type on the getter breaks the cycle; the other follows from it.
+    // Other members' agents this one may delegate to (Phase 28): peers that offer, filtered by this
+    // agent's `delegation.to`. Fixed at load like the team, because the handoff tool renders into
+    // slot 1 once; an agent adopted later is reachable after this one reloads.
+    const wants = entry.manifest.delegation?.to
+    const offered: TeamMemberConfig[] =
+        wants === undefined
+            ? []
+            : input.peers
+                  .filter(
+                      (peer) =>
+                          peer.id !== entry.manifest.id &&
+                          peer.offer !== undefined &&
+                          (wants === "*" || wants.includes(peer.id)) &&
+                          !(team ?? []).some((member) => member.id === peer.id),
+                  )
+                  .map((peer) => ({
+                      id: peer.id,
+                      manifest: "",
+                      task: peer.offer?.task ?? "",
+                      artifact: peer.offer?.artifact ?? { type: "object", properties: {} },
+                  }))
+    // No cycle walk over these edges, unlike the team's (`expand.ts`): a peer-asked turn has no
+    // `handoff` at all (`AgentSendOptions.peerAsk`), so a delegation is one hop and `A ↔ B` is two
+    // agents asking each other, not a loop (decision 14.80).
     const teamTools: readonly Tool[] =
-        team === undefined
+        team === undefined && offered.length === 0
             ? []
             : [
                   handoffTool({
                       bus,
                       store: store.handoffs,
-                      members: team.map((config) => ({
-                          config,
-                          // Resolved per call. `runtime` is assigned below this block,
-                          // so this closure cannot be evaluated eagerly either.
-                          get agent(): HandoffTarget {
-                              return resolveMember(config.id)
-                          },
-                      })),
+                      members: [
+                          ...(team ?? []).map((config) => ({
+                              config,
+                              // Resolved per call. `runtime` is assigned below this block,
+                              // so this closure cannot be evaluated eagerly either.
+                              get agent(): HandoffTarget {
+                                  return resolveMember(config.id)
+                              },
+                          })),
+                          ...offered.map((config) => ({
+                              config,
+                              crossMember: true as const,
+                              get agent(): HandoffTarget {
+                                  return resolveMember(config.id)
+                              },
+                          })),
+                      ],
                   }),
               ]
     const withTeam: ToolRegistry | undefined =
@@ -1773,7 +2373,14 @@ function instantiateAgent(input: {
         // plugin-supplied runner — the conditional-spread shape that has cost this repo
         // six debugging rounds.
         ...(runner === undefined ? {} : { scriptRunner: runner }),
+        ...(input.requestReload === undefined ? {} : { onPinned: input.requestReload }),
         ...(supply.middleware.length === 0 ? {} : { middleware: supply.middleware }),
+        ...(supply.routes === undefined || supply.routes.length === 0
+            ? {}
+            : { pluginRoutes: supply.routes }),
+        // Built-in first, so a plugin may replace `chat-completions` — the manifest named it.
+        transports: new Map([...BUILT_IN_TRANSPORTS, ...Object.entries(supply.modelTransports)]),
+        mediaProviders: new Map(Object.entries(supply.mediaProviders)),
         // The manifest's live env, not the ambient one: it layers the real environment
         // over any `.env` beside the manifest, which is what the load-time key check
         // validated against. Passing `process.env` here instead is how `validate` and
@@ -1782,6 +2389,9 @@ function instantiateAgent(input: {
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         onRetry: (info) => {
             bus.emit("model.retry", info, { agentId: entry.manifest.id })
+        },
+        onFallback: (info) => {
+            bus.emit("model.fallback", info, { agentId: entry.manifest.id })
         },
         // A warning rather than a log line, because the agent keeps working and the only
         // visible consequence is that every pressure figure stays `estimated` — carrying
@@ -1818,9 +2428,21 @@ function refreshProviders(input: {
     readonly providers: readonly ToolProvider[]
     readonly slugs: readonly string[]
     readonly bus: EventBus
+    /** Told which pinned slugs the provider can now resolve; the runtime decides whether to reload. */
+    readonly heal?: (slugs: readonly string[]) => void
+    /** Which provider resolved each pinned slug at load, so one is never asked about another's. */
+    readonly providerOf?: (slug: string) => string | undefined
 }): void {
-    const { agentId, providers, slugs, bus } = input
+    const { agentId, providers, bus, heal, providerOf } = input
     for (const provider of providers) {
+        // A slug another provider already answers for is not this one's to fetch. Composio was
+        // handed every pinned MCP tool and asked `GET /tools/<slug>` for each, on every reload: a 404
+        // apiece, 176 in four minutes on one pilot silo (pilot.12). Unresolved slugs still go to
+        // everyone, which is what lets a refresh heal a tool the cache did not have yet.
+        const slugs = input.slugs.filter((slug) => {
+            const owner = providerOf?.(slug)
+            return owner === undefined || owner === provider.id
+        })
         // Most providers have nothing to fetch — `system` and `web` resolve from module
         // constants — so this skips them rather than requiring an empty implementation. With
         // several configured, each reports its own `tools.refreshed` and one failing leaves
@@ -1829,7 +2451,7 @@ function refreshProviders(input: {
         const from = performance.now()
         void provider
             .refresh(slugs)
-            .then((result) => {
+            .then(async (result) => {
                 bus.emit(
                     "tools.refreshed",
                     {
@@ -1842,6 +2464,19 @@ function refreshProviders(input: {
                     },
                     { agentId },
                 )
+                if (heal === undefined) return
+                // What the provider can resolve *now*, against what the agent pinned: the difference
+                // between the two is a tool the agent loaded without and could have.
+                // Guarded: a throw here would reach the `.catch` below and report a refresh that
+                // succeeded as one that failed.
+                let listed: Set<string>
+                try {
+                    listed = new Set((await provider.list?.()) ?? [])
+                } catch {
+                    return
+                }
+                const available = slugs.filter((slug) => listed.has(slug))
+                if (available.length > 0) heal(available)
             })
             .catch((error: unknown) => {
                 bus.emit(
@@ -1918,6 +2553,8 @@ function buildProviders(
                     env: entry.env,
                     config: selection.config,
                     agentId: entry.manifest.id,
+                    providers: factories,
+                    mediaProviders: supply.mediaProviders,
                 }),
             )
         } catch (cause) {
@@ -2097,6 +2734,8 @@ async function openStore(options: RuntimeOptions): Promise<{ store: Store; ownsS
                 cause,
             })
         }
+        const refusal = networkStoreRefusal(path, options.env ?? process.env)
+        if (refusal !== undefined) throw refusal
     }
 
     return { store: await SqliteStore.open({ path }), ownsStore: true }

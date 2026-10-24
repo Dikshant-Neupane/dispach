@@ -1,0 +1,26 @@
+pass  single-kv-set            r5  5 calls  28091 ms  $0.00122
+pass  single-read-answer       r5  2 calls  6087 ms  $0.00079
+pass  single-calculator        r5  3 calls  9095 ms  $0.00117
+pass  single-now               r5  3 calls  20426 ms  $0.00121
+FAIL  single-send              r5  1 calls  12983 ms  $0.00040  — no message to Priya about the build
+pass  chain-order-notify       r5  7 calls  20030 ms  $0.00121  (1 429 retries)
+pass  chain-file-to-kv         r5  4 calls  10270 ms  $0.00119
+pass  chain-sum-to-file        r5  5 calls  35152 ms  $0.00210
+pass  chain-kv-to-send         r5  6 calls  26809 ms  $0.00161
+pass  chain-edit-json          r5  5 calls  39431 ms  $0.00205  (1 429 retries)
+pass  recall-fact              r5  4 calls  22043 ms  $0.00121
+pass  recall-preference        r5  4 calls  19172 ms  $0.00161
+pass  recall-correction        r5  5 calls  18581 ms  $0.00200
+pass  abstain-chitchat         r5  1 calls  6385 ms  $0.00039
+pass  abstain-knowledge        r5  1 calls  3105 ms  $0.00038
+pass  abstain-draft-only       r5  1 calls  9232 ms  $0.00040
+pass  abstain-cannot           r5  1 calls  35664 ms  $0.00046
+FAIL  recover-retry            r5  2 calls  9777 ms  $0.00080  — never got past the failure
+pass  recover-persist          r5  4 calls  36008 ms  $0.00172
+pass  recover-bad-expression   r5  3 calls  11149 ms  $0.00118
+pass  recover-missing-file     r5  2 calls  12960 ms  $0.00082
+pass  recover-unknown-order    r5  2 calls  8909 ms  $0.00080
+FAIL  long-log-needle          r5  2 calls  16122 ms  $0.00447  — error code not stored
+FAIL  long-count-orders        r5  2 calls  5746 ms  $0.00226  — count is not 58
+pass  long-handbook            r5  3 calls  11118 ms  $0.00371
+dispach-native · qwen3.5-9b: 21/25 passed → evals/harness/runs/sweep-4f3e00a/native.qwen3.5-9b.r5.jsonl

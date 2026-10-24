@@ -24,7 +24,8 @@ Write this list somewhere you'll see it during code review:
 | VelaOps concern | Where it stays | Why |
 | --- | --- | --- |
 | Per-agent RSA-3072 `.pem` challenge | `lib/agent-keys.ts` | VelaOps' isolation model, not a runtime concern |
-| LiteLLM virtual keys, budgets, 25% markup | `lib/litellm.ts` | Dispach sees a base URL and a token |
+| LiteLLM virtual keys, budgets, 25% markup | `lib/litellm.ts` | Dispach sees a base URL and a token. **Being replaced by AWS Bedrock** (doc 16): then Dispach sees `api: bedrock-converse` and a region |
+| The container-credentials endpoint that vends each silo's AWS credentials | the engine | Dispach reads the AWS default chain and never a key; who is allowed to spend is IAM's |
 | Traefik labels, subdomain routing | `docker.ts` | Deployment topology |
 | MinIO backup envelopes | `lib/backup.ts` | Storage policy |
 | `velaops-net` DNS assumptions | compose | Network topology |
@@ -78,7 +79,7 @@ good enough to act on, and why the sequence below moves one agent at a time.
 ```
 Step 1   One agent — yours. `runtime: dispach`, new image, `agent.yaml` mounted.
 Step 2   Every row in the gotchas table below, checked against it.
-Step 3   The engine's OpenClaw client replaced by @dispach/client behind the same
+Step 3   The engine's OpenClaw client replaced by dispach/client behind the same
          internal interface, so the UI does not change in the same commit.
 Step 4   Opt-in for new agents. Existing agents untouched.
 Step 5   Default for new agents. Existing agents migrate on request, one redeploy each.
@@ -108,6 +109,7 @@ Call by call. This is the table to work from in step 3.
 | `[boot-phase]` stdout markers | `runtime.ready` event, `phases` breakdown | Subscribe to `GET /v1/events` and format. Or delete the stepper: boot is ~55 ms. |
 | Model hot-patch of `openclaw.json` | `agent.yaml` `model.main.id` + a restart | **Not a live reload** — see the warning below. |
 | `mcp.update()` to rebind tools | — | No MCP in this path. Composio is called directly; a pinned slug resolves at boot. |
+| The Huly MCP server (VelaCrew) | `tools.providers.mcp.servers.huly` | Streamable HTTP to loopback, tools pinned as `huly__<tool>`, the member forwarded as `participantHeader`. **Run Huly in `HULY_TOOL_MODE=native` with `TOOLS`** if the allowlist is meant to hold: measured on 0.52.6, proxy mode dispatches a tool outside `TOOLS` through `invoke_tool`. In proxy mode, pair `policyArgs: { invoke_tool: toolName }` with a `policy.deny`. See `02-SPEC-MANIFEST.md`. |
 | Nothing equivalent | `GET /v1/agents/:id/context` | The assembled prompt with per-slot token counts. "Why did it do that?" is almost always a context question. |
 | Nothing equivalent | `GET /v1/events` | Every lifecycle event, filterable. This is where `sub_agent_invocations` and `tool_calls` come from. |
 
@@ -119,13 +121,15 @@ Call by call. This is the table to work from in step 3.
 > place, because an agent's configuration is fixed for the lifetime of its instance: the catalogue
 > resolves once and the cached prompt prefix depends on it staying fixed.
 >
-> Two consequences for engine code. A reload **during a turn** answers `409 agent_turn_in_flight`
-> rather than aborting it, so a caller applying a config change has to retry rather than assume
-> success. And the *sessions* survive — they are the store's, not the instance's — so this is not a
+> Two consequences for engine code. A reload **during a turn** answers
+> `202 { status: "pending", running, holdAfterMs }` rather than aborting it: the running turn
+> finishes on the old settings and the swap follows, announced by `agent.reloaded`, so a caller
+> applying a config change should read the status rather than assume the change is in force. And
+> the *sessions* survive — they are the store's, not the instance's — so this is not a
 > container restart and does not need to be: at a ~55 ms boot either is cheap, but a reload leaves
 > every other agent in the process untouched, which a restart does not. This document previously
-> said reload "answers 409 and always will"; that sentence is withdrawn, and 409 is now the
-> in-flight case only.
+> said reload "answers 409 and always will"; that sentence is withdrawn, and so is the later
+> "409 while a turn is in flight" — that case is now `202 pending`.
 
 ### Config translation
 
@@ -135,12 +139,14 @@ format, so this is a generator change rather than a translation layer.
 ```
 openclaw.json                        agent.yaml
 ─────────────────────────────────    ─────────────────────────────
-model: "openclaw/main"            →  model.main.{id,baseUrl,apiKeyEnv}   (LiteLLM base URL)
-modelByChannel: {telegram: X}     →  channels[].modelOverride
+model: "openclaw/main"            →  model.main.{id,baseUrl,apiKeyEnv}   (LiteLLM base URL, today)
+                                  →  model.main.{id,api: bedrock-converse,options.region}   (Bedrock)
+agents.defaults.model.fallbacks   →  model.main.fallbacks
+modelByChannel: {telegram: X}     →  channels[].role   (a role declared under model:)
 delivery.channel + to             →  delivery.default + targets
 agents.defaults.bootstrapMaxChars →  context.observationMaxTokens (converted)
 bootstrapTotalMaxChars            →  context.window budgeting
-memorySearch                      →  memory.{retriever,k}
+memorySearch                      →  memory.{retriever,maxActive,threshold}
 subagents                         →  team
 cron jobs (SQLite)                →  schedules
 ```
@@ -150,16 +156,19 @@ Two things to get right. The **bootstrap caps**: in OpenClaw, raising only the p
 in the direction of correctness — verify `MEMORY.md` actually lands via `GET /v1/agents/:id/context`
 rather than assuming it. And **secrets are env var names, never values**: a manifest carrying a
 literal key fails validation, so the LiteLLM virtual key reaches the container through the
-environment exactly as it does today.
+environment exactly as it does today. On Bedrock there is no key at all: the SDK's default chain
+reads the container-credentials endpoint the engine vends (`AWS_CONTAINER_CREDENTIALS_FULL_URI` +
+`AWS_CONTAINER_AUTHORIZATION_TOKEN`), and a revoked credential ends a turn with a terminal 403 that
+no fallback bypasses, which is what makes it usable as the budget stop.
 
 ### What the engine actually changes
 
 | File | Change |
 | --- | --- |
-| `openclaw-ws.ts` | Deleted. Replaced by `@dispach/client`, which owns reconnect, SSE parsing and typed errors. |
+| `openclaw-ws.ts` | Deleted. Replaced by `dispach/client`, which owns reconnect, SSE parsing and typed errors. |
 | `openclaw-sync.ts` | Deleted. The config generator writes `agent.yaml`. |
 | `stream-hub.ts` | Kept, and simplified: reattach is now a server-side guarantee rather than something the hub reconstructs. |
-| `docker.ts` | The image tag, the `/agent` and `/state` mounts, and `DISPACH_API_TOKEN`. |
+| `docker.ts` | The image tag, the `/agent` mount and a home volume at `/home/dispach`, and `DISPACH_API_TOKEN`. |
 | `composio-proxy` | Deleted. Composio is called directly, never through MCP. |
 | the embed-service | Deleted. Memory is FTS5. |
 | `use-boot-progress.ts` | Deletable. Boot is ~55 ms; the stepper exists because boot was slow. |
@@ -178,7 +187,7 @@ makes the right-hand column a claim about the runtime rather than about a transl
 | Model field only accepts `openclaw/main` | `model.main.id` is the real model id, written literally — only secrets go behind `${VAR}` | ✓ `validate` prints `main=deepseek-v4-pro`, and `env MODEL_API_KEY — from the environment` |
 | Config silently rolls back on version skew | `apiVersion` mismatch fails loudly at boot | ✓ `manifest_api_version: Unsupported apiVersion "dispach/v2" — expected "dispach/v1"`, `field: apiVersion` |
 | Two bootstrap caps truncate `MEMORY.md` | One budget; `/context` shows `MEMORY.md` present with a token count | ✓ `/v1/agents/probe/context` → `workspace-volatile: 97 tokens`; `validate` → `volatile=USER.md,MEMORY.md (27/3500)` |
-| Channel change needs external gateway restart | A restart of **this** process, not an external gateway. `POST /reload` re-creates the agent; `409` is the in-flight case only | ✓ `POST /reload` → `200` on an idle agent. The 409 path is `server.test.ts`, which can hold a turn open |
+| Channel change needs external gateway restart | A restart of **this** process, not an external gateway. `POST /reload` re-creates the agent; during a turn it answers `202 pending` and swaps when the turn ends | ✓ `POST /reload` → `200` on an idle agent. The `202 pending` path is `server.test.ts`, which can hold a turn open |
 | Plugin crash-loop from install-record trust gate | No runtime install, no trust gate; a version mismatch fails by name | ✓ `dispach plugins` lists what this binary can resolve by name and nothing else; there is no install path to crash-loop |
 | `dmPolicy: "open"` boots healthy, drops every DM | An incoherent channel config fails validation, not a warning | ✓ `channels[0] declares type "nosuchtransport", which is not registered here. Available: telegram`, `field: channels[0].type` |
 | OpenAI-compat HTTP drops tool + thinking streams | One transport; thinking blocks replayed per capabilities | ✓ `validate` → `capabilities thinking=deepseek`; a live turn streamed 108 chunks over the one transport |
@@ -217,7 +226,7 @@ at `tools`, where the cache state is known. Carried in `05-PLAN.md` rather than 
 
 Step 2 is not done until each of these has been checked against a real agent, or has a recorded
 and justified deviation. Several already have automated coverage in this repo — detached turns and
-reattach, `resolve()` throwing on a dead slug, the reasoning-budget fix, disabled schedules being
+reattach, an unresolved slug reported through `explainUnresolved()`, the reasoning-budget fix, disabled schedules being
 listed — and those are the rows to spend the least time on.
 
 ---
@@ -253,9 +262,14 @@ runtime you don't control. That constant disappears.
 Dispach does not replace these, and requests to make it do so should be declined:
 
 - **Identity and auth.** No user model. Better Auth stays authoritative.
-- **Cost control.** No budgets, no markup, no quotas. LiteLLM stays.
+- **Cost control.** No budgets, no markup, no prices. LiteLLM stays until the Bedrock cutover, and
+  after it the budget stop is a revoked credential and per-agent `limits`. Dispach reports usage
+  per call (`callId`, cache read and write) and prices nothing.
 - **Isolation.** No opinion on containers. The `.pem` model stays.
-- **Provisioning.** No agent lifecycle management. That is literally VelaOps.
+- **Provisioning policy.** The runtime has lifecycle routes — `POST /v1/agents`, `/v1/templates`,
+  `/v1/provision`, `start`/`stop`, `DELETE /v1/agents/:id` — and `packages/control` places and
+  routes one runtime per user. Deciding who gets an agent, on which plan, and when one is torn down
+  stays VelaOps', which calls those routes like any other client.
 - **Persistence beyond its own tables.** Core emits events; the engine subscribes and writes
   `sub_agent_invocations` and `tool_calls`. Dispach never writes to the `velaops` database.
 
@@ -281,7 +295,7 @@ that the boundary between them is now a container rather than an adapter, so a c
 belongs to one of them rather than to the seam.
 
 **The thing to watch during step 3.** The engine's OpenClaw client handles reconnect, and
-`@dispach/client` handles it differently: a dropped stream is reattached by turn id rather than
+`dispach/client` handles it differently: a dropped stream is reattached by turn id rather than
 replayed from a socket buffer, because the turn never stopped. Code written against the old model
 will look like it works — the reply arrives — and then differ on exactly the case the old model
 got wrong, which is a refresh mid-generation. Test that case first.

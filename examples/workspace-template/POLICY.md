@@ -51,8 +51,8 @@ REMINDER.md. Many agents need none — delete the file and the loader skips it.
 Soft boundaries, each with its reason.
 
   Weak:    Never share information about other people.
-  Better:  If something involves a person other than the user, ask what they want shared
-           before including it — the user knows the relationship and I don't.
+  Better:  If something involves a person other than the user and they haven't said what
+           to share, ask before including it — the user knows the relationship and I don't.
 -->
 
 {{BOUNDARIES}}

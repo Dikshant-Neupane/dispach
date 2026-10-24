@@ -91,19 +91,19 @@ describe("the target", () => {
 
     test("private is refused unless the operator lists the host or the range", async () => {
         const docker = resolvesTo("172.18.0.5")
-        expect(await codeOf("http://velacrew-api:3000/hooks", docker)).toBe(
+        expect(await codeOf("http://internal-api:3000/hooks", docker)).toBe(
             "webhook_target_refused",
         )
         expect(
             await codeOf(
-                "http://velacrew-api:3000/hooks",
+                "http://internal-api:3000/hooks",
                 docker,
-                parseWebhookAllowlist("velacrew-api", "t"),
+                parseWebhookAllowlist("internal-api", "t"),
             ),
         ).toBe("ok")
         expect(
             await codeOf(
-                "http://velacrew-api:3000/hooks",
+                "http://internal-api:3000/hooks",
                 docker,
                 parseWebhookAllowlist("172.16.0.0/12", "t"),
             ),
@@ -237,6 +237,39 @@ describe("delivery", () => {
         await t.store.close()
     })
 
+    test("forgetting scrubs the agent's own delivery log, envelope kept (pilot.15)", async () => {
+        const t = await setup()
+        const fact = "my dentist is Dr Rahman"
+        const enqueue = (agentId: string) => {
+            const body = JSON.stringify({
+                type: "turn.end",
+                agentId,
+                data: { finalText: `Noted: ${fact}` },
+            })
+            return t.store.webhooks.enqueue({
+                subscriptionId: "wh_1",
+                messageId: webhookMessageId("wh_1", body),
+                agentId,
+                eventType: "turn.end",
+                body,
+                at: new Date().toISOString(),
+            })
+        }
+        await enqueue("a")
+        await enqueue("b")
+        expect(await t.store.webhooks.scrubBodies("a", [fact], "[forgotten]")).toBe(1)
+        const rows = await t.store.webhooks.claimDue(["a", "b"], "9999-01-01T00:00:00Z", 10)
+        const byAgent = Object.fromEntries(rows.map((row) => [row.agentId, JSON.parse(row.body)]))
+        expect(byAgent.a).toEqual({
+            type: "turn.end",
+            agentId: "a",
+            data: { finalText: "[forgotten]" },
+        })
+        // Another agent's log is not this forget's to touch.
+        expect(byAgent.b.data.finalText).toContain("Rahman")
+        await t.store.close()
+    })
+
     test("the same event enqueued twice is one delivery", async () => {
         const t = await setup()
         const body = '{"same":true}'
@@ -353,6 +386,59 @@ describe("delivery", () => {
         const [sub] = await store.webhooks.list()
         expect(sub?.lastError).toContain("webhook_target_refused")
         expect(sub?.pending).toBe(0)
+        await store.close()
+    })
+
+    test("a name that does not resolve for a moment is retried, not lost", async () => {
+        // A receiver container restarting drops out of Docker's DNS for seconds. That is not a
+        // refusal: nothing was sent, and the event must still arrive once it is back.
+        const store = await openMemoryStore()
+        const bus = new EventBus({ runtimeId: "rt" })
+        const sent: string[] = []
+        let resolvable = false
+        let now = Date.parse("2026-09-24T12:00:00Z")
+        const dispatcher = new WebhookDispatcher({
+            store: store.webhooks,
+            bus,
+            fetch: async (_url, init) => {
+                sent.push(
+                    String((init?.headers as Record<string, string> | undefined)?.["webhook-id"]),
+                )
+                return new Response("")
+            },
+            allow: EMPTY_ALLOWLIST,
+            lookup: async () => (resolvable ? [{ address: "93.184.215.14" }] : []),
+            agents: () => ["a"],
+            now: () => now,
+            backoffMs: [1_000],
+            userAgent: "test",
+        })
+        await store.webhooks.create({
+            subscriptionId: "wh",
+            url: "https://restarting.example/",
+            secret: "whsec_c2VjcmV0",
+            types: ["turn.end"],
+            createdAt: new Date(now).toISOString(),
+        })
+        await dispatcher.attach()
+        bus.emit(
+            "turn.end",
+            { reason: "final", steps: 1, tokens: { prompt: 1, output: 1 }, durationMs: 1 },
+            { agentId: "a" },
+        )
+        await settle()
+        await dispatcher.drain()
+        expect(sent).toEqual([])
+        const [down] = await store.webhooks.list()
+        expect(down?.lastError).toContain("webhook_target_unresolved")
+        expect(down?.pending).toBe(1)
+
+        resolvable = true
+        now += 1_000
+        await dispatcher.drain()
+        expect(sent.length).toBe(1)
+        const [up] = await store.webhooks.list()
+        expect(up?.pending).toBe(0)
         await store.close()
     })
 

@@ -1,0 +1,26 @@
+pass  single-kv-set            r5  5 calls  37706 ms  $0.00080
+pass  single-read-answer       r5  2 calls  17226 ms  $0.00079  (1 429 retries)
+FAIL  single-calculator        r5  3 calls  4381 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  single-now               r5  5 calls  11299 ms  $0.00039  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  single-send              r5  2 calls  23489 ms  $0.00078  (2 429 retries)
+pass  chain-order-notify       r5  3 calls  41559 ms  $0.00121
+pass  chain-file-to-kv         r5  6 calls  37887 ms  $0.00120
+FAIL  chain-sum-to-file        r5  3 calls  3164 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  chain-kv-to-send         r5  3 calls  2945 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  chain-edit-json          r5  1 calls  40783 ms  $0.00042  (2 429 retries)  — darkMode not true
+FAIL  recall-fact              r5  7 calls  29594 ms  $0.00079  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  recall-preference        r5  3 calls  3104 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  recall-correction        r5  3 calls  311849 ms  $0.00078  (4 429 retries)
+pass  abstain-chitchat         r5  2 calls  18510 ms  $0.00040
+pass  abstain-knowledge        r5  3 calls  10711 ms  $0.00039  (1 429 retries)
+pass  abstain-draft-only       r5  1 calls  36485 ms  $0.00042
+pass  abstain-cannot           r5  3 calls  42247 ms  $0.00042  (1 429 retries)
+FAIL  recover-retry            r5  3 calls  4253 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  recover-persist          r5  1 calls  27849 ms  $0.00042  (2 429 retries)  — file never written
+FAIL  recover-bad-expression   r5  3 calls  33753 ms  $0.00121  (1 429 retries)  — wrong answer
+pass  recover-missing-file     r5  2 calls  15036 ms  $0.00080
+pass  recover-unknown-order    r5  4 calls  46116 ms  $0.00125
+FAIL  long-log-needle          r5  1 calls  22851 ms  $0.00041  — error code not stored
+FAIL  long-count-orders        r5  4 calls  12086 ms  $0.00039  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:54721/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+FAIL  long-handbook            r5  4 calls  21898 ms  $0.00164  (4 429 retries)  — meal_limit is not 75
+dispach-native · qwen3.5-9b: 12/25 passed → evals/harness/runs/ab-not-enabled-small/as-is/native.qwen3.5-9b.r5.jsonl

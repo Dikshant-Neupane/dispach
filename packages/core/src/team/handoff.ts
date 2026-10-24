@@ -48,6 +48,8 @@ export interface HandoffTarget {
             readonly source?: string
             readonly signal?: AbortSignal
             readonly turnTools?: readonly import("../tools/types.ts").Tool[]
+            readonly participant?: import("../loop/sender.ts").ActingParticipant
+            readonly peerAsk?: { readonly askedBy: string }
         },
     ): Promise<{
         readonly text: string
@@ -126,15 +128,31 @@ export async function runHandoff(init: {
     readonly store?: HandoffStore
     readonly now?: () => Date
     readonly signal?: AbortSignal
+    /** Who the member's turn acts for: the delegating person, for a cross-member delegation. */
+    readonly participant?: import("../loop/sender.ts").ActingParticipant
+    /** Another member's agent is being asked (`delegation`), not a team member. See `peerAsk`. */
+    readonly peerAsk?: { readonly askedBy: string }
+    /** The child session's prefix and the turn's source. `handoff` for both unless a subagent runs. */
+    readonly sessionPrefix?: string
+    readonly source?: string
+    /** For the events: `self` and the subagent's name, or a team member; and the parent's call. */
+    readonly kind?: "member" | "self"
+    readonly name?: string
+    readonly callId?: string
 }): Promise<HandoffOutcome> {
+    const link = {
+        kind: init.kind ?? "member",
+        ...(init.name === undefined ? {} : { name: init.name }),
+        ...(init.callId === undefined ? {} : { callId: init.callId }),
+    }
     const now = init.now ?? (() => new Date())
     const handoffId = newHandoffId()
-    const sessionKey = `handoff:${newRunId()}`
+    const sessionKey = `${init.sessionPrefix ?? "handoff"}:${newRunId()}`
     const sink: ArtifactSink = { artifact: undefined }
 
     init.bus.emit(
         "handoff.start",
-        { member: init.member.id, task: init.task, sessionKey },
+        { member: init.member.id, task: init.task, sessionKey, ...link },
         init.eventContext,
     )
 
@@ -160,6 +178,7 @@ export async function runHandoff(init: {
             {
                 member: init.member.id,
                 sessionKey,
+                ...link,
                 outcome: outcome.kind,
                 steps: outcome.cost.steps,
                 tokens: {
@@ -196,8 +215,10 @@ export async function runHandoff(init: {
             // Its own source, not `"api"` or the supervisor's. A member's turns are a different kind
             // of thing from a person's and every surface reading `turns.source` should be able to
             // tell them apart without joining against the handoffs table.
-            source: "handoff",
+            source: init.source ?? "handoff",
             ...(init.signal === undefined ? {} : { signal: init.signal }),
+            ...(init.participant === undefined ? {} : { participant: init.participant }),
+            ...(init.peerAsk === undefined ? {} : { peerAsk: init.peerAsk }),
             turnTools: [
                 submitArtifactTool({
                     parameters: init.artifact,

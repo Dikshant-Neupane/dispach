@@ -1,0 +1,51 @@
+pass  single-kv-set            r1  2 calls  30132 ms  $0.00000
+pass  single-read-answer       r1  2 calls  21854 ms  $0.00000
+pass  single-calculator        r1  2 calls  20967 ms  $0.00000
+FAIL  single-now               r1  2 calls  33328 ms  $0.00000  — wrong weekday
+pass  single-send              r1  2 calls  23497 ms  $0.00000
+pass  chain-order-notify       r1  3 calls  19309 ms  $0.00000
+pass  chain-file-to-kv         r1  3 calls  28030 ms  $0.00000
+pass  chain-sum-to-file        r1  4 calls  62142 ms  $0.00000
+FAIL  chain-kv-to-send         r1  2 calls  19467 ms  $0.00000  — Dmitri not sent the alert
+FAIL  chain-edit-json          r1  1 calls  35024 ms  $0.00000  — darkMode not true
+pass  recall-fact              r1  3 calls  33574 ms  $0.00000
+FAIL  recall-preference        r1  4 calls  68373 ms  $0.00000  — not signed Captain
+pass  recall-correction        r1  4 calls  79259 ms  $0.00000
+pass  abstain-chitchat         r1  1 calls  34167 ms  $0.00000
+pass  abstain-knowledge        r1  1 calls  13229 ms  $0.00000
+pass  abstain-draft-only       r1  1 calls  9522 ms  $0.00000
+pass  abstain-cannot           r1  1 calls  25423 ms  $0.00000
+pass  recover-retry            r1  3 calls  25939 ms  $0.00000
+FAIL  recover-persist          r1  3 calls  30485 ms  $0.00000  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r1  2 calls  19353 ms  $0.00000
+pass  recover-missing-file     r1  2 calls  17120 ms  $0.00000
+FAIL  recover-unknown-order    r1  2 calls  29225 ms  $0.00000  — never looked the order up
+FAIL  long-log-needle          r1  5 calls  98444 ms  $0.00000  — error code not stored
+FAIL  long-count-orders        r1  3 calls  221550 ms  $0.00000  — count is not 58
+pass  long-handbook            r1  11 calls  204516 ms  $0.00000
+pass  single-kv-set            r2  2 calls  33305 ms  $0.00000
+pass  single-read-answer       r2  2 calls  31109 ms  $0.00000
+pass  single-calculator        r2  2 calls  20645 ms  $0.00000
+pass  single-now               r2  2 calls  118181 ms  $0.00000
+pass  single-send              r2  2 calls  19077 ms  $0.00000
+FAIL  chain-order-notify       r2  2 calls  18778 ms  $0.00000  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r2  1 calls  43702 ms  $0.00000  — region not stored as eu-west-2
+pass  chain-sum-to-file        r2  4 calls  60670 ms  $0.00000
+pass  chain-kv-to-send         r2  3 calls  84345 ms  $0.00000
+FAIL  chain-edit-json          r2  2 calls  267538 ms  $0.00000  — config/flags.json is no longer valid JSON
+FAIL  recall-fact              r2  3 calls  57458 ms  $0.00000  — flight not stored as BA 286
+pass  recall-preference        r2  4 calls  28814 ms  $0.00000
+pass  recall-correction        r2  4 calls  30511 ms  $0.00000
+pass  abstain-chitchat         r2  1 calls  9075 ms  $0.00000
+pass  abstain-knowledge        r2  1 calls  12025 ms  $0.00000
+pass  abstain-draft-only       r2  1 calls  11265 ms  $0.00000
+pass  abstain-cannot           r2  1 calls  17407 ms  $0.00000
+pass  recover-retry            r2  3 calls  21911 ms  $0.00000
+FAIL  recover-persist          r2  3 calls  28518 ms  $0.00000  — harness error: · The model called bench__write_file 3 times in a row with identical arguments, so the turn was stopped.
+    The same call with the same arguments cannot produce a different result, so the remaining steps would have been spent repeating it. Usually the observation does not say what the model needs —
+pass  recover-bad-expression   r2  2 calls  29503 ms  $0.00000
+pass  recover-missing-file     r2  2 calls  14885 ms  $0.00000
+pass  recover-unknown-order    r2  2 calls  264743 ms  $0.00000
+FAIL  long-log-needle          r2  3 calls  80688 ms  $0.00000  — error code not stored
+FAIL  long-count-orders        r2  2 calls  58931 ms  $0.00000  — count is not 58

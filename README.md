@@ -10,8 +10,12 @@ hosts many agents, and scoped keys fence each one off. TypeScript, shipped on No
 
 **Where it is going: the multiplayer agent runtime.** 0.2.0 gives every user and every team in your
 product their own isolated runtime of agents. Those agents share rooms and memory with the people
-they work for, and stand in for them, openly, when they are away. That half is being built. Every
-other feature described in this README runs today.
+they work for, and stand in for them, openly, when they are away. That half ships in 0.2.0 as
+**experimental**: on the HTTP API, with no TUI or web screens yet, and it may change within 0.2.x.
+Everything else described in this README is stable.
+
+**Docs:** [dispach.blivius.com/docs](https://dispach.blivius.com/docs) ·
+**New in 0.2.0:** [what changed and how to upgrade](developer-docs/runtime/whats-new-0-2-0.md)
 
 > To dispatch is to send a thing on its way with the authority to see it done — to decide
 > what handles it, hand it over, and answer for the result.
@@ -42,9 +46,35 @@ streaming, reattaching after a dropped connection, approvals and keys. The refer
 `dispach/client` is the typed client. The CLI and the full-screen terminal UI below are the same
 runtime from a terminal.
 
+## Benchmarks
+
+The same 25 multi-turn tool tasks, run 5 times each, through three agent harnesses on identical tools
+and pinned model providers, every harness in its own container. Graded on what the tools were left
+holding, never on the reply's wording. Tasks passed out of 125, and the OpenRouter bill for the 125 runs:
+
+<!-- benchmark:start -->
+| Model | Dispach | Hermes 0.19.0 | OpenClaw 2026.10.5 |
+| --- | --- | --- | --- |
+| Claude Opus 5.5 | 125/125 (100%) · $2.05 | 119/125 (95%) · $2.24 | 105/125 (84%) · $7.10 |
+| Claude Sonnet 5.5 | 125/125 (100%) · $0.80 | 120/125 (96%) · $1.76 | 105/125 (84%) · $4.21 |
+| Claude Haiku 5.5 | 124/125 (99%) · $0.06 | 120/125 (96%) · $0.07 | 102/125 (82%) · $0.21 |
+| GPT-6.1 Sol | 125/125 (100%) · $0.54 | 120/125 (96%) · $0.53 | 95/125 (76%) · $1.73 |
+| Gemini 4 Argon | 119/125 (95%) · $2.29 | 123/125 (98%) · $2.79 | 108/125 (86%) · $5.47 |
+| GLM 5.3 | 125/125 (100%) · $0.80 | 123/125 (98%) · $1.18 | 98/125 (78%) · $4.86 |
+| DeepSeek V4 Pro | 125/125 (100%) · $0.31 | 120/125 (96%) · $0.50 | 96/125 (77%) · $2.83 |
+| Kimi K3 | 115/125 (92%) · $2.24 | 115/125 (92%) · $2.36 | 98/125 (78%) · $10.27 |
+| Gemma 4 26B-A4B | 112/125 (90%) · $0.24 | 108/125 (86%) · $0.41 | 91/125 (73%) · $2.95 |
+| qwen3.5-9b | 104/125 (83%) · $0.18 | 112/125 (90%) · $0.42 | 60/125 (48%) · $0.78 |
+| gpt-oss-20b | 97/125 (78%) · $0.05 | 111/125 (89%) · $0.10 | 51/125 (41%) · $0.12 |
+<!-- benchmark:end -->
+
+One benchmark of our own design, each harness on its own documented defaults; with 125 runs an arm a
+gap of a few runs is noise. Hermes leads on Gemini 4 Argon and the two small open models, and the
+[benchmark README](evals/harness/README.md) says why, with every run and reply committed.
+
 ## Status
 
-**Pre-release, and it runs: 0.1.3**, from npm, Homebrew or the container image. Every install runs
+**0.2.0**, from npm, Homebrew or the container image. Every install runs
 under Node. [`CHANGELOG.md`](CHANGELOG.md) has what landed in each release.
 
 Built and in use:
@@ -54,17 +84,22 @@ Built and in use:
   with two catalogues, and scheduling (cron, interval and one-shot, DST-correct).
 - **Serving and API:** the HTTP/SSE/WS server with detached turns, the typed client, scoped operator
   keys, approvals over the wire, and provisioning an agent over HTTP with no restart.
+- **Models:** any OpenAI-compatible endpoint, AWS Bedrock through a pluggable transport, fallback
+  models, vision input, and replayed signed thinking.
 - **Channels and tools:** Telegram and WhatsApp (the latter a bundled plugin, with a warning;
-  [see below](#whatsapp)), the plugin API with all four middleware wrap points, and system and web
-  tool providers under a policy engine.
+  [see below](#whatsapp)), the plugin API with all four middleware wrap points, system and web
+  tool providers under a policy engine, remote MCP servers, and subagents.
 - **Coordination and delivery:** supervisor delegation with typed handoffs, and an idempotent
   outbox.
 - **Front ends and hosting:** a browser UI on the same origin as the API, the TUI, launchd
-  services, and the Docker image with a compose front door.
+  services, the Docker image with a compose front door, Kubernetes, and `GET /v1/backup` for the
+  whole sandbox.
 
-Not built: **MCP as a tool provider.** It is planned, not refused. Decision 4.7 keeps it as *one
-tool provider among several, never the substrate* (Composio is called directly for that reason),
-so a `tools-mcp` provider is something that could be written and has not been.
+**Experimental in 0.2.0**, on the HTTP API only: rooms, stand-ins and team memory; the Slack,
+Microsoft Teams and A2A channels; and media (transcription, image generation, spoken replies).
+
+**MCP is a tool provider, never the substrate** (decision 4.7): remote servers over Streamable HTTP,
+their tools pinned by name like any other provider's. Composio is still called directly.
 
 `docs/05-PLAN.md` has every 0.1.x phase with its acceptance criteria and what is ticked.
 
@@ -84,9 +119,13 @@ a workflow engine, a RAG pipeline, a vector database, or a model gateway.
 
 The ones that would otherwise look like mistakes:
 
-- **Natural-language tool calling is the default dialect**, not native function calling.
-  Published replication across 14 models: +14.9pp accuracy, 93% fewer critical errors, −25%
-  tokens; +24 to +43pp on small models specifically. `native` is an explicit opt-in.
+- **`init` writes native function calling where the model supports it, and natural-language tool
+  calling (NLT) otherwise.** On the multi-turn harness benchmark native tied or beat NLT on every
+  model; NLT fell to 50–68% on four, by announcing a call and not making it
+  ([`evals/harness`](evals/harness/)). NLT still wins a single-call test (37 fixtures, no tool
+  executed, [`evals/tools`](evals/tools/)), and a 14-model replication reports +14.9pp for it
+  ([arXiv 2607.03953](https://arxiv.org/abs/2607.03953)) that did not reproduce on multi-turn work here.
+  A manifest without a `dialect` line keeps NLT, as it always has.
 - **The tool dialect is config and never auto-detected.** Behaviour must not change silently
   when the model changes.
 - **Tools are pinned at load, not searched at runtime.** Search-then-execute is two-hop
@@ -110,7 +149,7 @@ Full rationale for every decision, including the negative ones, is in `docs/00-D
 
 ```bash
 npm i -g dispach          # the `dispach` command
-dispach --version         # 0.1.2
+dispach --version         # 0.2.0
 ```
 
 and in an application that talks to a running server:
@@ -149,7 +188,7 @@ until `brew trust moeen-mahmud/tap` is run, because a bare name carries no such 
 ### Or the container
 
 ```bash
-docker pull ghcr.io/moeen-mahmud/dispach:0.1.3
+docker pull ghcr.io/moeen-mahmud/dispach:0.2.0
 ```
 
 The [Docker](#docker) and [Compose](#hosting-with-compose) sections below have the run lines and
@@ -168,7 +207,7 @@ bun run build                       # builds every package the binary imports
 cd packages/cli && bun link         # puts `dispach` on your PATH
 cd ../..
 
-dispach --version                   # 0.1.2
+dispach --version                   # 0.2.0
 dispach --help
 ```
 
@@ -515,13 +554,13 @@ consequence: run it on a laptop and the policy is the only boundary there is.
 ## Docker
 
 ```bash
-docker pull ghcr.io/moeen-mahmud/dispach:0.1.3          # or build it: docker build -f docker/Dockerfile -t dispach .
+docker pull ghcr.io/moeen-mahmud/dispach:0.2.0          # or build it: docker build -f docker/Dockerfile -t dispach .
 docker run --rm -p 7420:7420 \
   --env-file examples/minimal/.env \
   -e DISPACH_API_TOKEN=pick-something \
   -v "$PWD/examples/minimal:/agent" \
   -v dispach-home:/home/dispach \
-  ghcr.io/moeen-mahmud/dispach:0.1.3
+  ghcr.io/moeen-mahmud/dispach:0.2.0
 ```
 
 The token is not optional and is not boilerplate. The image binds `0.0.0.0`, because a process
@@ -550,8 +589,8 @@ deliberately. A Telegram outage must not read as an unhealthy container and get 
 the same outage, so the probe answers "can it serve a turn" rather than "is everything connected".
 Channel state lives on the agent resource instead.
 
-Measured on an arm64 Docker Desktop at 0.1.3: the image is **701 MB** against an 800 MB ceiling,
-and `docker compose up -d --wait` reaches healthy in about six seconds — readiness is tens of
+Measured on an arm64 Docker Desktop at 0.2.0: the image is **867 MB** (701 MB at 0.1.3; the static
+`ffmpeg` for voice notes is 104 MB of the difference), and `docker compose up -d --wait` reaches healthy in about six seconds — readiness is tens of
 milliseconds in-process and almost all of that is waiting for the first healthcheck probe. Where the
 size goes: 110 MB Debian, 160 MB of Node (with npm and corepack, kept so the agent's shell has a
 Node toolchain), 158 MB of apt packages (of which `git` alone is **92 MB**, because Debian's git
@@ -564,9 +603,9 @@ and a real streaming turn against DeepSeek reconstructs from 26 `model.chunk` fr
 about one afternoon.
 
 Two notes on reading those numbers. The size is `docker image inspect --format '{{.Size}}'`, which
-is what the CI gate uses; `docker images` prints **180 MB** for the same image on the same machine,
-a different accounting, so check which one a figure came from before treating it as a regression.
-And the boot happened with a **deliberately invalid** model key — no network I/O before
+is what CI reports on every push. Older Docker releases printed a much smaller figure under
+`docker images`, a different accounting, so check which one a figure came from before treating it as
+a regression. And the boot happened with a **deliberately invalid** model key — no network I/O before
 `runtime.ready` is the rule this project exists for, and a container reaching healthy on a fake
 credential is that rule visible from outside.
 
@@ -584,7 +623,7 @@ bun run bench:boot   # must stay under 1000 ms
 bun run bench:schedule  # 100 schedules on one timer — reports drift, does not assert it
 ```
 
-Requires Bun. Node 24+ is supported as a soft goal, tested in CI, never a merge blocker.
+Bun is the development toolchain: install, build and test. Everything shipped runs under Node 24+.
 
 A few house rules that bite first, all enforced by tests rather than review:
 
@@ -601,26 +640,30 @@ A few house rules that bite first, all enforced by tests rather than review:
 `CLAUDE.md` is the standing brief — it is written for coding agents and is the fastest way to learn
 the hazards this codebase has already paid for. `docs/00-DECISIONS.md` has the rationale for every
 locked decision, including the negative ones, which are the ones most likely to look like mistakes.
+Public pull requests are welcome; [`CONTRIBUTING.md`](CONTRIBUTING.md) is the contributor entry point.
 
 ## Boot budget
 
-Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms.
+Process start → `runtime.ready` in under **1000 ms**, enforced in CI at 1200 ms. Every number in this
+README has a row in [`evals/CLAIMS.md`](evals/CLAIMS.md) naming the file it comes from.
 
-Measured at **~53 ms** — 37 ms of interpreter and imports, 16 ms inside `Runtime.create` — and
-checked on every phase rather than at the end:
+Measured at **~65 ms** at 0.2.0 — 45 ms of interpreter and imports, 21 ms inside `Runtime.create` —
+and checked on every phase rather than at the end (it was ~53 ms at 0.1.3; the 0.2.0 packages
+account for the difference):
 
 ```bash
 bun run bench:boot
 ```
 
 Reported with the machine state it was taken on, because without that a boot number is a number
-about somebody's afternoon: the figure above is a 7-run median on an M-series laptop at a load
-average of ~5, and the same tree measured 58 ms with four builds running beside it. The budget has
+about somebody's afternoon: the figure above is a 7-run median on an Apple M4 Pro at a load
+average of ~3.4, and an earlier run of the same tree at a load average of ~5 measured 91 ms. The budget has
 three orders of magnitude of headroom, so the reason to say this is not the arithmetic — it is that
 a regression is only visible against a figure you can reproduce.
 
-This single number is why the project exists: the runtime it replaces spends roughly four minutes on
-network calls during hook initialisation. Nothing here touches the network before readiness.
+This single number is why the project exists: the gateway it replaced blocked for minutes on
+network calls during hook initialisation, observed on our own deployment and not measured in
+[`evals/`](evals/). Nothing here touches the network before readiness.
 
 If you ever see a boot in the tens of seconds, check `uptime` before profiling. Twice it has been the
 machine being saturated — once by orphaned shells this runtime had itself failed to reap — and not the
@@ -758,6 +801,9 @@ hand-written, and was missing five commands at once. `dispach <command> --help` 
 | `docs/12-OPENCLAW-CUTOVER.md` | Moving off the runtime this one replaces |
 | `RELEASING.md` | How a release is cut: the changelog, `bun run release`, and what the tag publishes |
 | `CHANGELOG.md` | What changed in each release, in bullets |
+| `developer-docs/` | Source of the public docs at `/docs`, for integrators and contributors |
+| `site/` | The landing page and docs site, built with Next.js and Fumadocs |
+| `CONTRIBUTING.md` | Public contribution policy and workflow entry point |
 | `CLAUDE.md` | The standing brief: hard rules and the hazards already paid for |
 | `evals/` | Every performance claim, with the number and a script to reproduce it |
 

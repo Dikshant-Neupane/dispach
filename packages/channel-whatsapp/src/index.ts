@@ -1,9 +1,7 @@
 /**
- * `@dispach/channel-whatsapp` — WhatsApp through Baileys, as an **opt-in plugin**.
+ * `@dispach/channel-whatsapp` — WhatsApp through Baileys, bundled and **opt-in by configuration**.
  *
  * ```yaml
- * plugins:
- *   - "dispach-whatsapp"       # installed with `dispach plugins add <agent> <repo>`
  * channels:
  *   - type: whatsapp
  *     id: wa
@@ -17,14 +15,14 @@
  * pairing falls back to a QR.
  *
  *
- * ## Why this package is not in the binary
+ * ## Bundled, and nothing connects until a manifest names it
  *
  * **Baileys reverse-engineers WhatsApp Web, which WhatsApp's terms do not permit, and there is no
  * appeal path when a number is banned** — including during development. That is a risk an operator
  * takes deliberately for an account they chose; it is not one a runtime should take on behalf of
- * everybody who installs it. So the tarball and the container image carry none of this: it is
- * built, typechecked, linted and tested here, imported by nothing, and reaches an agent only
- * through `plugins add`.
+ * everybody who installs it. The code ships in the binary and the container image (registered in
+ * `packages/cli/src/lib/providers.ts`), so the opt-in is configuring the channel rather than
+ * obtaining the code: no socket opens to WhatsApp until `channels:` names `type: whatsapp`.
  *
  * **Pair a spare number.** Not advice — the recorded position (decision 8.4), and the reason this
  * sentence is in the package README as well as here.
@@ -34,7 +32,7 @@
  * One self-contained ES module. Baileys is bundled in — no runtime install, hard rule 5 — which is
  * what makes the same directory work in a checkout, under the npm install and in the container.
  * Three of Baileys' optional media dependencies stay external (`sharp`, `jimp`,
- * `link-preview-js`); it loads each inside a `catch` and this channel is text, so their absence
+ * `link-preview-js`); it loads each inside a `catch`, so their absence
  * costs image thumbnails and link previews and nothing else.
  */
 
@@ -165,7 +163,7 @@ export const VERSION = "0.1.0"
 export default {
     name: "whatsapp",
     version: VERSION,
-    dispachApi: "^0.1",
+    dispachApi: "^0.2",
     permissions: [
         // Baileys talks to WhatsApp's own infrastructure. The hosts are the ones it dials; they are
         // recorded because `permissions` is the vocabulary decision 7.5 promised, and advisory

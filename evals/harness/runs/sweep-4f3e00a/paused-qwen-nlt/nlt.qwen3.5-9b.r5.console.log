@@ -1,0 +1,8 @@
+pass  single-kv-set            r5  3 calls  35608 ms  $0.00074
+pass  single-read-answer       r5  2 calls  15120 ms  $0.00070
+pass  single-calculator        r5  2 calls  16701 ms  $0.00070
+pass  single-now               r5  2 calls  284155 ms  $0.00169  (1 429 retries)
+pass  single-send              r5  3 calls  33499 ms  $0.00076
+FAIL  chain-order-notify       r5  2 calls  15762 ms  $0.00073  (1 429 retries)  — Sam not told it is delayed
+pass  chain-kv-to-send         r5  5 calls  37423 ms  $0.00107  (1 429 retries)
+FAIL  chain-edit-json          r5  2 calls  352008 ms  $0.00000  — harness error: 

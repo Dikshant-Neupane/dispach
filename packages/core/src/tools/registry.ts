@@ -74,12 +74,15 @@ export class ToolRegistry {
      * question they asked the agent precisely because they did not want to read the manifest.
      */
     readonly notEnabled: readonly ToolAvailability[]
+    /** The providers it resolved from, kept for `resolveMore`. Never the built-in one. */
+    readonly #providers: readonly ToolProvider[]
 
     private constructor(init: {
         tools: readonly Tool[]
         dropped: readonly DroppedTool[]
         warnings: readonly ErrorDetail[]
         notEnabled?: readonly ToolAvailability[]
+        providers?: readonly ToolProvider[]
     }) {
         const bySlug = new Map<string, Tool>()
         const byNormalised = new Map<string, Tool>()
@@ -93,6 +96,33 @@ export class ToolRegistry {
         this.dropped = init.dropped
         this.warnings = init.warnings
         this.notEnabled = init.notEnabled ?? []
+        this.#providers = init.providers ?? []
+    }
+
+    /**
+     * Tools for slugs pinned after load, from what the providers can answer **without the network**
+     * (pilot.14): a slug `composio_search` just cached. `resolve()` is cache-only by contract, so this
+     * is too. Trust defaults the way it does at load, a provider tool `untrusted` unless it says
+     * otherwise, and a slug already here is not resolved twice. Returns what resolved; the rest wait
+     * for the reload.
+     */
+    async resolveMore(slugs: readonly string[]): Promise<readonly Tool[]> {
+        const wanted = slugs.filter((slug) => !this.has(slug))
+        if (wanted.length === 0) return []
+        const found = new Map<string, Tool>()
+        for (const provider of this.#providers) {
+            for (const tool of await provider.resolve(wanted)) {
+                const key = normalise(tool.spec.slug)
+                if (found.has(key) || this.has(tool.spec.slug)) continue
+                found.set(
+                    key,
+                    tool.spec.trust === undefined
+                        ? { ...tool, spec: { ...tool.spec, trust: "untrusted" } }
+                        : tool,
+                )
+            }
+        }
+        return [...found.values()]
     }
 
     /** An agent with no tools configured. Distinct from one whose resolution produced nothing. */
@@ -130,6 +160,7 @@ export class ToolRegistry {
         // is chosen by whoever registered the factory — nothing stops an embedder registering one
         // under the id "local". Position is the fact; the strings are claims.
         const trustOverrides: string[] = []
+        const builtins = new Set<string>()
         for (const [provider, slugs, fallback] of [
             [localProvider(), requested, "trusted"] as const,
             ...providers.map((provider) => [provider, pinned, "untrusted"] as const),
@@ -159,6 +190,7 @@ export class ToolRegistry {
                 }
                 // Normalised once, here, so every consumer downstream reads a settled value and no
                 // provider package can ship a trusted email body by forgetting a field.
+                if (fallback === "trusted") builtins.add(key)
                 found.set(
                     key,
                     resolved.spec.trust === undefined
@@ -168,7 +200,23 @@ export class ToolRegistry {
             }
         }
 
-        const missing = requested.filter((slug) => !found.has(normalise(slug)))
+        // Found and not loadable (pilot.16): named for what it is, and not reported as missing.
+        const refused = providers
+            .flatMap((provider) => provider.refused?.() ?? [])
+            .filter((entry) => !found.has(normalise(entry.slug)))
+        const refusedSlugs = new Set(refused.map((entry) => normalise(entry.slug)))
+        for (const entry of refused) {
+            const index = pinned.findIndex((slug) => normalise(slug) === normalise(entry.slug))
+            warnings.push({
+                code: "tool_schema_unsupported",
+                message: `${entry.slug} is pinned and was left out: ${entry.detail.message}`,
+                hint: `The rest of the agent loads without it. ${entry.detail.hint}`,
+                ...(index >= 0 ? { field: `tools.pinned[${index}]` } : {}),
+            })
+        }
+        const missing = requested.filter(
+            (slug) => !found.has(normalise(slug)) && !refusedSlugs.has(normalise(slug)),
+        )
         if (missing.length > 0) {
             /**
              * **Warned and omitted, never fatal.** A pinned slug nothing can resolve is almost
@@ -221,7 +269,44 @@ export class ToolRegistry {
             claimed.add(tool)
             ordered.push(tool)
         }
-        const all = [...ordered, ...[...found.values()].filter((tool) => !claimed.has(tool))]
+        const resolvedAll = [
+            ...ordered,
+            ...[...found.values()].filter((tool) => !claimed.has(tool)),
+        ]
+
+        // A built-in the person also pinned under a namespace — `now` beside `bench__now` — is one tool
+        // offered twice under two names, and the model picks either. Measured: Sonnet 5.5 and Gemini 4
+        // Argon read the built-in clock instead of the pinned server's, every time. Pinning the
+        // namespaced one is the more specific choice, so it wins and the built-in leaves the catalogue.
+        const bare = (slug: string) => normalise(slug.slice(slug.lastIndexOf("__") + 2))
+        const pinnedNames = new Set(
+            resolvedAll
+                .filter((tool) => !builtins.has(normalise(tool.spec.slug)))
+                .filter((tool) => tool.spec.slug.includes("__"))
+                .map((tool) => bare(tool.spec.slug)),
+        )
+        const shadowed = resolvedAll.filter(
+            (tool) =>
+                builtins.has(normalise(tool.spec.slug)) &&
+                pinnedNames.has(normalise(tool.spec.slug)),
+        )
+        if (shadowed.length > 0) {
+            const names = shadowed.map((tool) => tool.spec.slug)
+            warnings.push({
+                code: "tool_builtin_shadowed",
+                message: `Left out of the catalogue: ${names.join(", ")}, because a pinned tool has the same name (${resolvedAll
+                    .filter(
+                        (tool) =>
+                            !builtins.has(normalise(tool.spec.slug)) &&
+                            names.some((n) => bare(tool.spec.slug) === normalise(n)),
+                    )
+                    .map((tool) => tool.spec.slug)
+                    .join(", ")}).`,
+                hint: "Two tools with one name make the model choose between them at random, so the pinned one is kept. Remove the built-in from tools.local to silence this, or unpin the other to keep the built-in.",
+                field: "tools.local",
+            })
+        }
+        const all = resolvedAll.filter((tool) => !shadowed.includes(tool))
 
         // Honoured — the embedder chose to run that provider's code — but never silent. Declaring a
         // provider tool trusted opts it out of the delimiter *and* out of the write gate, which is
@@ -248,7 +333,17 @@ export class ToolRegistry {
             if (provider.available === undefined) continue
             offered.push(...(await provider.available()))
         }
-        const notEnabled = offered.filter((entry) => !found.has(normalise(entry.slug)))
+        const notEnabled = [
+            ...offered.filter(
+                (entry) =>
+                    !found.has(normalise(entry.slug)) && !refusedSlugs.has(normalise(entry.slug)),
+            ),
+            ...refused.map((entry) => ({
+                slug: entry.slug,
+                summary: "pinned, but it could not be loaded",
+                unavailable: true,
+            })),
+        ]
 
         const { kept, dropped } = applyBudget(all, budget)
         if (dropped.length > 0) {
@@ -274,7 +369,7 @@ export class ToolRegistry {
             })
         }
 
-        return new ToolRegistry({ tools: kept, dropped, warnings, notEnabled })
+        return new ToolRegistry({ tools: kept, dropped, warnings, notEnabled, providers })
     }
 
     get size(): number {
@@ -317,6 +412,26 @@ export class ToolRegistry {
             dropped: this.dropped,
             warnings: this.warnings,
             notEnabled: this.notEnabled,
+            providers: this.#providers,
+        })
+    }
+
+    /**
+     * The same registry, order and specs unchanged, with some tools replaced by `swap`.
+     *
+     * For a routed subagent: the spec is what slot 1 renders and what the policy matches, so keeping
+     * it is what keeps the cached prefix and the call's policy identity; only the handler differs.
+     */
+    withSwapped(swap: (tool: Tool) => Tool | undefined): ToolRegistry {
+        const tools = this.#order
+            .map((spec) => this.#bySlug.get(spec.slug))
+            .filter((tool): tool is Tool => tool !== undefined)
+        return new ToolRegistry({
+            tools: tools.map((tool) => swap(tool) ?? tool),
+            dropped: this.dropped,
+            warnings: this.warnings,
+            notEnabled: this.notEnabled,
+            providers: this.#providers,
         })
     }
 
@@ -339,6 +454,7 @@ export class ToolRegistry {
             dropped: this.dropped,
             warnings: this.warnings,
             notEnabled: this.notEnabled,
+            providers: this.#providers,
         })
     }
 
@@ -349,6 +465,11 @@ export class ToolRegistry {
 
     has(slug: string): boolean {
         return this.#bySlug.has(slug) || this.#byNormalised.has(normalise(slug))
+    }
+
+    /** Which provider resolved a slug, or `undefined` when nothing did. */
+    providerOf(slug: string): string | undefined {
+        return (this.#bySlug.get(slug) ?? this.#byNormalised.get(normalise(slug)))?.spec.provider
     }
 
     /**

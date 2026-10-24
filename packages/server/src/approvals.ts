@@ -42,6 +42,8 @@ export interface PendingApproval {
     readonly approvalId: string
     /** Which agent is asking. See `pending` for why this is not optional. */
     readonly agentId: string
+    /** Which conversation is asking, so a key narrowed to some sessions lists only theirs. */
+    readonly sessionKey: string
     readonly slug: string
     readonly callId: string
     readonly match: string | undefined
@@ -98,6 +100,7 @@ export function createApprovalRegistry(
                 pending: {
                     approvalId: request.approvalId,
                     agentId: request.agentId,
+                    sessionKey: request.sessionKey,
                     slug: request.slug,
                     callId: request.callId,
                     match: request.match,

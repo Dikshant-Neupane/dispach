@@ -1,0 +1,11 @@
+pass  single-kv-set            r4  2 calls  13239 ms  $0.00070
+pass  single-read-answer       r4  2 calls  11877 ms  $0.00072
+pass  single-calculator        r4  2 calls  30774 ms  $0.00073
+pass  single-now               r4  2 calls  26206 ms  $0.00077  (1 429 retries)
+pass  single-send              r4  4 calls  19697 ms  $0.00070
+pass  chain-order-notify       r4  5 calls  188098 ms  $0.00166
+pass  chain-file-to-kv         r4  3 calls  23962 ms  $0.00112
+pass  chain-sum-to-file        r4  4 calls  23164 ms  $0.00112  (2 429 retries)
+pass  chain-kv-to-send         r4  6 calls  330827 ms  $0.00183  (2 429 retries)
+FAIL  chain-edit-json          r4  2 calls  109047 ms  $0.00091  (5 429 retries)  — config/flags.json is no longer valid JSON
+pass  recall-fact              r4  8 calls  245757 ms  $0.00179

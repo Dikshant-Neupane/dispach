@@ -8,7 +8,13 @@
  */
 
 import { assembleContext, slotReport } from "../src/context/assemble.ts"
-import { SLOT, VOLATILE_HEADER } from "../src/context/blocks.ts"
+import {
+    MEMORY_END,
+    REMINDER_END,
+    SLOT,
+    VOLATILE_END,
+    VOLATILE_HEADER,
+} from "../src/context/blocks.ts"
 import { renderConfigSummary } from "../src/context/config-summary.ts"
 import { estimateTokens } from "../src/context/tokens.ts"
 import { describe, expect, test } from "./_harness.ts"
@@ -143,6 +149,60 @@ describe("workspace tiers in the assembled prompt", () => {
         expect(before.blocks.some((b) => b.slot === SLOT.volatile)).toBe(true)
     })
 
+    test("nothing that varies is in the leading run of system messages", () => {
+        // The test above compared slot contents and stayed green while the cache was broken. OpenAI
+        // through OpenRouter treats the leading system messages as one block and reuses none of it if
+        // any byte changes: measured on GPT-6.1 Sol, a session's first request cached 0 of 3,331
+        // tokens with the recall block as a system message, and 3,225 with it as a user message.
+        // The volatile tier, the reminder and recall vary between sessions, so they are user turns.
+        const leading = (volatile: string, recalled: string): string => {
+            const { messages } = assembleContext({
+                identity: "You are a test fixture.",
+                volatile,
+                reminder: "Answer in prose.",
+                memory: [{ source: "2026-08.md", at: "2026-08-01T10:00:00Z", text: recalled }],
+                history: [],
+                input: "what now",
+                window: 8192,
+                reserveOutput: 1024,
+            })
+            const end = messages.findIndex((m) => m.role !== "system")
+            return JSON.stringify(messages.slice(0, end))
+        }
+        expect(leading("Known: metric units.", "staging is in frankfurt")).toBe(
+            leading("Known: metric units. Lives in Lisbon.", "the build runs nightly"),
+        )
+    })
+
+    test("every framed user-role block says where it ends, so the person's message cannot read as part of it", () => {
+        // Claude through OpenRouter merges consecutive user messages into one turn. Without a closing
+        // line Haiku 5.5 read the person's request as part of its notes and sent nothing (0 of 8 on
+        // replayed requests; 8 of 8 with these lines).
+        const { messages } = assembleContext({
+            identity: "You are a test fixture.",
+            volatile: "Known: metric units.",
+            reminder: "Answer in prose.",
+            memory: [
+                {
+                    source: "2026-08.md",
+                    at: "2026-08-01T10:00:00Z",
+                    text: "staging is in frankfurt",
+                },
+            ],
+            history: [],
+            input: "message Sam that the build is green",
+            window: 8192,
+            reserveOutput: 1024,
+        })
+        const before = messages.slice(0, -1).filter((m) => m.role === "user")
+        expect(before.map((m) => m.content.split("\n\n").at(-1))).toEqual([
+            VOLATILE_END,
+            REMINDER_END,
+            MEMORY_END,
+        ])
+        expect(messages.at(-1)?.content).toBe("message Sam that the build is green")
+    })
+
     test("volatile follows the catalogue and precedes the history", () => {
         const slots = withTiers("Memory.").blocks.map((b) => b.slot)
         expect(slots.indexOf(SLOT.volatile) > slots.indexOf(SLOT.tools)).toBe(true)
@@ -153,6 +213,16 @@ describe("workspace tiers in the assembled prompt", () => {
         const slots = withTiers("Memory.").blocks.map((b) => b.slot)
         expect(slots.lastIndexOf(SLOT.history) < slots.indexOf(SLOT.reminder)).toBe(true)
         expect(slots.indexOf(SLOT.reminder) < slots.indexOf(SLOT.input)).toBe(true)
+    })
+
+    test("the reminder says it is the agent's own instructions, its words untouched (pilot.14)", () => {
+        // On a transport that turns a later system message into user text, an unframed reminder
+        // read as something the person had pasted.
+        const reminder = withTiers("Memory.").blocks.find((b) => b.slot === SLOT.reminder)
+        expect(reminder?.content.startsWith("From my own instructions")).toBe(true)
+        expect(reminder?.content).toContain("The person did not write this.")
+        expect(reminder?.content).toContain("\n\nAnswer in prose.\n\n")
+        expect(reminder?.content.endsWith(REMINDER_END)).toBe(true)
     })
 
     test("retrieved memory lands after the reminder and immediately before the input", () => {
@@ -322,9 +392,30 @@ describe("the configuration block", () => {
     test("names the file, so the agent knows its settings are a file at all", () => {
         // The failure: an agent asked to put itself on Telegram started writing a bridge. It had
         // config_set pinned and no idea a `channels` setting existed.
-        const text = renderConfigSummary({ ...base, manifest: manifestFor() })
+        const text = renderConfigSummary({
+            ...base,
+            manifest: manifestFor(),
+            contextFiles: [
+                { name: "SOUL.md", tier: "static" },
+                { name: "AGENTS.md", tier: "static" },
+                { name: "USER.md", tier: "volatile" },
+                { name: "MEMORY.md", tier: "volatile" },
+            ],
+        })
         expect(text).toContain("/agents/milo/agent.yaml")
         expect(text).toContain("configuration, not something to build")
+    })
+
+    test("context.modelIdentity: hidden keeps the model's name out of the prompt, not its window", () => {
+        const hidden = renderConfigSummary({
+            ...base,
+            manifest: manifestFor({ context: { modelIdentity: "hidden" } }),
+        })
+        expect(hidden).not.toContain("deepseek")
+        expect(hidden).toContain("hidden by the operator · nlt dialect")
+        expect(hidden).toContain("token window")
+        const shown = renderConfigSummary({ ...base, manifest: manifestFor() })
+        expect(shown).toContain("deepseek-v4-flash · nlt dialect")
     })
 
     test("an absent capability is a row saying none, never a missing row", () => {
@@ -470,6 +561,21 @@ describe("the configuration block", () => {
         expect(text.includes("I edit it with config_set")).toBe(false)
     })
 
+    test("names every file by tier, and qualifies the per-conversation ones", () => {
+        const row = (files: { name: string; tier: string }[]) =>
+            renderConfigSummary({ ...base, manifest: manifestFor(), contextFiles: files })
+                .split("\n")
+                .find((line) => line.includes("context files"))
+        expect(
+            row([
+                { name: "SOUL.md", tier: "static" },
+                { name: "REMINDER.md", tier: "reminder" },
+                { name: "MEMORY.md", tier: "volatile" },
+            ]),
+        ).toContain("SOUL.md, REMINDER.md every turn; MEMORY.md in private conversations")
+        expect(row([])).toContain("context files  none")
+    })
+
     test("it stays small — this is paid on every turn of every session, forever", () => {
         const text = renderConfigSummary({ ...base, manifest: manifestFor() })
         // A guard against drift, not a precise budget: the whole manifest cost 2,766 tokens and
@@ -482,7 +588,11 @@ describe("the configuration block", () => {
         // measured — an agent holding three excerpts of its own earlier sessions still asserted that
         // "the transcripts themselves don't carry over", having no row to tell it otherwise.
         // `estimateTokens` is biased about 10% high, so the real figure sits near 200.
-        expect(estimateTokens(text)).toBeLessThan(260)
+        //
+        // Raised to 300 for the `context files` row (pilot.15), measured with the four files `init`
+        // generates: an agent asked whether its files were loading found none here, said no, and
+        // re-read every one of them until `no_progress`.
+        expect(estimateTokens(text)).toBeLessThan(300)
     })
 })
 

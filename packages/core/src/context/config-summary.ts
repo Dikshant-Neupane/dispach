@@ -100,6 +100,12 @@ export interface ConfigSummaryInput {
      * the session's life.
      */
     readonly skillNames?: readonly string[]
+    /**
+     * The workspace files, by name and tier (pilot.15). Without them, an agent asked "are
+     * your files loading?" read this block, found no files in it, answered that they were not, and
+     * re-read every one until `no_progress`, while their text sat in its own instructions.
+     */
+    readonly contextFiles?: readonly { readonly name: string; readonly tier: string }[]
     /** Whether the HTTP surface is actually bound, for the same reason. */
     readonly serverListening: boolean
     /**
@@ -132,11 +138,13 @@ export function renderConfigSummary(input: ConfigSummaryInput): string {
     const rows: [string, string][] = [
         [
             "model",
-            `${manifest.model.main.id} · ${manifest.tools.dialect} dialect · ${input.window} token window`,
+            // Hidden by the operator (pilot.15): the window and dialect stay, because the model plans with them.
+            `${manifest.context?.modelIdentity === "hidden" ? "hidden by the operator" : manifest.model.main.id} · ${manifest.tools.dialect} dialect · ${input.window} token window`,
         ],
         ["tools", describeTools(input)],
         ["skills", describeSkills(manifest, input.skillNames)],
         ["memory", describeMemory(manifest)],
+        ["context files", describeContextFiles(input.contextFiles ?? [])],
         [
             "channels",
             describeChannels(
@@ -263,6 +271,31 @@ function describeMemory(manifest: AgentManifest): string {
         ? "my notes and earlier conversations are both searched"
         : "my notes are searched; earlier conversations are not, so what I do not write down is lost"
     return `${scope} — up to ${configured.maxActive} a turn, already in my context when I answer`
+}
+
+/**
+ * The files whose text is in my instructions, by name.
+ *
+ * Volatile files are qualified rather than listed as loaded, because this block is frozen per agent
+ * and they are per conversation: a room or a stand-in turn withholds them. Which ones a given turn
+ * carries is visible in the labels on the files themselves.
+ */
+function describeContextFiles(files: readonly { name: string; tier: string }[]): string {
+    if (files.length === 0) return "none"
+    const of = (tier: string) =>
+        files
+            .filter((file) => file.tier === tier)
+            .map((file) => file.name)
+            .join(", ")
+    const always = [of("static"), of("reminder")].filter((part) => part !== "").join(", ")
+    const volatile = of("volatile")
+    return [
+        always === "" ? "" : `${always} every turn`,
+        volatile === "" ? "" : `${volatile} in private conversations`,
+    ]
+        .filter((part) => part !== "")
+        .join("; ")
+        .concat(" — already in my instructions by name; never re-read them")
 }
 
 /*

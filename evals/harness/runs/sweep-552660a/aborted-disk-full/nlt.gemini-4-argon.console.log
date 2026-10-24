@@ -1,0 +1,6 @@
+pass  single-kv-set            r1  2 calls  27663 ms  $0.01606
+pass  single-read-answer       r1  2 calls  12523 ms  $0.01230
+pass  single-calculator        r1  2 calls  18437 ms  $0.01171
+pass  single-now               r1  2 calls  15569 ms  $0.01545
+pass  single-send              r1  2 calls  42765 ms  $0.01177
+FAIL  chain-order-notify       r1  1 calls  13165 ms  $0.00927  — harness error: 

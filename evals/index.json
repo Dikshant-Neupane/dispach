@@ -1,0 +1,454 @@
+{
+    "claims": [
+        {
+            "section": "Harness head-to-head",
+            "claim": "Dispach native scores 125/125 on five of the eleven models compared with other harnesses, and 99–100% on eight of fourteen models",
+            "evidence": "`evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/` (2026-10-23)",
+            "scope": "25 multi-turn tasks × 5 repeats, tools executed, graded by final state",
+            "limitation": "One benchmark of our own design",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "Matches or beats Hermes 0.19.0 on 8 of 11 models, and costs the least of the three harnesses on 10 of 11 (level with Hermes on GPT-6.1 Sol)",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "Same tasks, isolation and pinned providers for all three harnesses",
+            "limitation": "Rival arms measured 2026-10-22/23, Dispach on 2026-10-23; the 95% intervals of every Dispach–Hermes pair overlap, gpt-oss-20b only just (70–84% against 82–93%)",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "OpenClaw 2026.10.5 scores lowest on every model, 11–60 runs behind",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "As above",
+            "limitation": "Each harness on its own documented defaults",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Harness head-to-head",
+            "claim": "Hermes leads on the small open models: qwen3.5-9b 112 vs 104, gpt-oss-20b 111 vs 97",
+            "evidence": "`evals/harness/summary.json`",
+            "scope": "As above",
+            "limitation": "The qwen3.5-9b intervals overlap widely; the gpt-oss-20b ones only just",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json"
+            ]
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
+            "claim": "NLT ahead of native: qwen3.5:9b 94.6% vs 91.9%, deepseek-chat 97.3% vs 86.5%, deepseek-reasoner 91.9% vs 89.2%",
+            "evidence": "`evals/tools/results.json`, `evals/tools/qwen-3pass/results.json` (2026-08-14)",
+            "scope": "37 fixtures, one model call each, routing + argument coercion, temperature 0",
+            "limitation": "No tool is executed. The qwen margin is **one fixture**. qwen NLT has a 2.7% critical rate against native's 0.0%",
+            "status": "verified",
+            "files": [
+                "evals/tools/results.json",
+                "evals/tools/qwen-3pass/results.json"
+            ]
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
+            "claim": "Native ties or beats NLT on every model on multi-turn tool work; NLT falls to 50–68% on Grok 4.7, Kimi K3, Gemma 4 26B-A4B and GPT-6 Luna",
+            "evidence": "`evals/harness/summary.json`, `evals/harness/runs/sweep-4f3e00a/results.json` (2026-10-23)",
+            "scope": "25 multi-turn tasks × 5 repeats per model, tools executed and graded by final state, pinned providers",
+            "limitation": "One benchmark; qwen3.5-9b under NLT paused at 52 of 125 runs",
+            "status": "verified",
+            "files": [
+                "evals/harness/summary.json",
+                "evals/harness/runs/sweep-4f3e00a/results.json"
+            ]
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
+            "claim": "NLT uses 21–23% fewer prompt tokens",
+            "evidence": "`evals/tools/results.json`",
+            "scope": "Same run",
+            "limitation": "Prompt tokens only, not total cost",
+            "status": "verified",
+            "files": [
+                "evals/tools/results.json"
+            ]
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
+            "claim": "+14.9pp accuracy, 93% fewer critical errors, −25% tokens; +24 to +43pp on small models",
+            "evidence": "Somma, Plante & Premji, 2026 replication of Johnson et al. 2025, [arXiv 2607.03953](https://arxiv.org/abs/2607.03953), 14 models, 8,560 trials",
+            "scope": "External",
+            "limitation": "Preprint. Frontier models (GPT-5, Gemini 2.5 Pro) show smaller or reversed gains. Our own eval cannot test the critical-error claim. **Not reproduced on multi-turn work:** in `evals/harness/runs/sweep-552660a/`, native tied or beat NLT on 13 of 14 models, NLT 37–62% on five",
+            "status": "cite",
+            "files": []
+        },
+        {
+            "section": "Tool dialect (NLT vs native)",
+            "claim": "Decision 4.1's local deltas",
+            "evidence": "`evals/tools/results.json`",
+            "scope": "—",
+            "limitation": "4.1 now quotes the committed +10.8 / +2.7pp and says the earlier +13.5 / +5.4pp run was overwritten",
+            "status": "verified",
+            "files": [
+                "evals/tools/results.json"
+            ]
+        },
+        {
+            "section": "Phase-scoped tools",
+            "claim": "Constraining tools per phase took local models from 2/10 to 10/10",
+            "evidence": "None found in the repo or in a search",
+            "scope": "—",
+            "limitation": "Decision 4.5 now names it as unsourced motivation beside the negative local result. Never quoted publicly",
+            "status": "remove",
+            "files": []
+        },
+        {
+            "section": "Phase-scoped tools",
+            "claim": "On deepseek-v4-pro, phase scoping **cost** 8.3–12.5pp",
+            "evidence": "`evals/phases/results.json`",
+            "scope": "24 of 37 tasks, 1 repeat, two runs",
+            "limitation": "Frontier model only; the small-model arm has never been run. Run-to-run noise was 4.2pp",
+            "status": "verified (negative)",
+            "files": [
+                "evals/phases/results.json"
+            ]
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "Boot to `runtime.ready` under 1000 ms, CI fails at 1200 ms",
+            "evidence": "`scripts/bench-boot.ts:18`, `.github/workflows/ci.yml`",
+            "scope": "Every CI run",
+            "limitation": "Boot, not response latency",
+            "status": "verified",
+            "files": [
+                "scripts/bench-boot.ts",
+                ".github/workflows/ci.yml"
+            ]
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "Boot to ready ~65 ms (0.2.0; ~53 ms at 0.1.3)",
+            "evidence": "`evals/boot/results.json` (`bench:boot --write`)",
+            "scope": "7-run median, Apple M4 Pro, bun, load average recorded",
+            "limitation": "Boot, not response latency. One machine",
+            "status": "verified",
+            "files": [
+                "evals/boot/results.json"
+            ]
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "Container image 867 MB",
+            "evidence": "`docker image inspect`, 2026-10-20; re-measured on every push by the `image size` step in `.github/workflows/ci.yml`",
+            "scope": "arm64 Docker Desktop, 0.2.0 release candidate",
+            "limitation": "701 MB at 0.1.3; the static `ffmpeg` layer is 104 MB. Reported by CI on every push, no longer gated",
+            "status": "verified",
+            "files": [
+                ".github/workflows/ci.yml"
+            ]
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "`Runtime.create` 20.6 ms",
+            "evidence": "`evals/boot/results.json` (`createMs`)",
+            "scope": "Same run as boot",
+            "limitation": "—",
+            "status": "verified",
+            "files": [
+                "evals/boot/results.json"
+            ]
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "A remote provider's post-ready refresh takes ~1.5 s, so awaiting it in boot would multiply boot",
+            "evidence": "Decision 4.21 prose only (1,474 ms)",
+            "scope": "Composio, one cold cache",
+            "limitation": "No committed result",
+            "status": "needs-run",
+            "files": []
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "The gateway Dispach replaced blocked for minutes on network calls during hook initialisation",
+            "evidence": "None committed",
+            "scope": "OpenClaw gateway on our deployment",
+            "limitation": "The README now says \"observed, not measured\" and gives no number; a figure needs the log evidence",
+            "status": "needs-run",
+            "files": []
+        },
+        {
+            "section": "Boot and runtime",
+            "claim": "Idle silo: 104 / 120 / 178 MiB RSS and 118 / 151 / 516 ms cold start for 1 / 10 / 100 agents; resume 5–6 ms",
+            "evidence": "`evals/tenancy/results.json` (2026-09-24)",
+            "scope": "linux/arm64 image, Node 24",
+            "limitation": "One machine",
+            "status": "verified",
+            "files": [
+                "evals/tenancy/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "One emphatic framing line lifts qwen3.5:9b all-rules compliance by 20pp; deepseek-chat unchanged",
+            "evidence": "`evals/prompt-style/results-intensity-6rules.json`",
+            "scope": "6 rules, 20 tasks",
+            "limitation": "p≈0.16; the whole lift comes from one rule (`digits`)",
+            "status": "verified",
+            "files": [
+                "evals/prompt-style/results-intensity-6rules.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Example placement (system vs user) makes no difference",
+            "evidence": "`evals/prompt-style/results.json`",
+            "scope": "Same",
+            "limitation": "Saturated at 100% in both arms: \"no difference at this difficulty\", nothing more",
+            "status": "verified",
+            "files": [
+                "evals/prompt-style/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Rule compliance: deepseek-v4-pro saturated at 64/64",
+            "evidence": "`evals/rules/README.md`",
+            "scope": "1–6 rules",
+            "limitation": "Saturated",
+            "status": "verified",
+            "files": [
+                "evals/rules/README.md"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Rule compliance on a small model",
+            "evidence": "`evals/rules/results.json` holds a qwen3.5:9b run at 0.990; the README says no run finished",
+            "scope": "—",
+            "limitation": "Which is current is not recorded; the README now says so. Neither is quoted",
+            "status": "needs-run",
+            "files": [
+                "evals/rules/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Token-estimate correction: mean error 14.2% uncalibrated, 2.9% with the shipped EMA",
+            "evidence": "`evals/budget/results.json`",
+            "scope": "deepseek-v4-pro, 31 turns",
+            "limitation": "One endpoint",
+            "status": "verified",
+            "files": [
+                "evals/budget/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "A model writing a shell script into `exec` damages 25% of multi-line arguments, half silently",
+            "evidence": "`evals/nlt-heredoc/results.json` (2026-09-13)",
+            "scope": "deepseek-chat, 8 tasks × 2",
+            "limitation": "A floor on the problem, one endpoint; the backstop false-repairs about a third",
+            "status": "verified",
+            "files": [
+                "evals/nlt-heredoc/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Memory retrieval: median 0.34 ms, slowest 3.7 ms over 5,000 passages",
+            "evidence": "`evals/memory/results.json`",
+            "scope": "No model; FTS5 candidates scored in `rank/bm25.ts`",
+            "limitation": "One machine",
+            "status": "verified",
+            "files": [
+                "evals/memory/results.json"
+            ]
+        },
+        {
+            "section": "Prompting, context and memory",
+            "claim": "Skill-index scan, 50 skills: cold well under the 50 ms criterion, warm under 5 ms",
+            "evidence": "`evals/skills/results.json`",
+            "scope": "bun, macOS arm64",
+            "limitation": "Cold varies with load (5–11 ms measured); quote the criterion, not a point",
+            "status": "verified",
+            "files": [
+                "evals/skills/results.json"
+            ]
+        },
+        {
+            "section": "Safety and agents",
+            "claim": "Prompt injection via a fetched page: 0 of 6 cases executed",
+            "evidence": "`evals/web/results.json`, `evals/web/native/results.json`, `evals/web/flash/results.json` (2026-08-15)",
+            "scope": "deepseek-v4-pro (NLT and native), deepseek-v4-flash",
+            "limitation": "Measures the **model**: the write gate never fired. The gate is proven by `trust.test.ts`, not by this eval. No small model was run",
+            "status": "verified",
+            "files": [
+                "evals/web/results.json",
+                "evals/web/native/results.json",
+                "evals/web/flash/results.json"
+            ]
+        },
+        {
+            "section": "Safety and agents",
+            "claim": "Agent scenarios: 4 of 4 pass",
+            "evidence": "`evals/scenarios/example/results.json` (2026-09-27)",
+            "scope": "deepseek-v4-pro judged by deepseek-v4-flash",
+            "limitation": "Only 2 runs",
+            "status": "verified",
+            "files": [
+                "evals/scenarios/example/results.json"
+            ]
+        },
+        {
+            "section": "Safety and agents",
+            "claim": "Delegation cuts the parent's prompt by 31.6%",
+            "evidence": "Fixture-only run, no `results.json`",
+            "scope": "—",
+            "limitation": "Never run against a real endpoint; total tokens went **up**",
+            "status": "needs-run",
+            "files": [
+                "results.json"
+            ]
+        },
+        {
+            "section": "Safety and agents",
+            "claim": "Routing bulk tool work to a subagent pays for itself",
+            "evidence": "`evals/subagents/results.json` is a dry run against canned answers",
+            "scope": "—",
+            "limitation": "The README says so: mechanics only, pass rates meaningless",
+            "status": "needs-run",
+            "files": [
+                "evals/subagents/results.json"
+            ]
+        }
+    ],
+    "evals": [
+        {
+            "name": "boot",
+            "title": "Boot: process start to `runtime.ready`",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-10-24T07:58:53.976Z"
+        },
+        {
+            "name": "budget",
+            "title": "The estimator's bias, and the weight that corrects it",
+            "results": [
+                "results.json"
+            ]
+        },
+        {
+            "name": "handoff",
+            "title": "evals/handoff — does delegation cost the parent fewer tokens?",
+            "results": []
+        },
+        {
+            "name": "harness",
+            "title": "Harness benchmark",
+            "results": [
+                "runs/after-8267f61/results.json",
+                "runs/after-ac5dcc5/results.json",
+                "runs/baseline-aae8fe4/results.json",
+                "runs/h2h-309fdf8/results.json",
+                "runs/h2h-cachefix/results.json",
+                "runs/sweep-4f3e00a/results.json",
+                "runs/sweep-552660a/results.json"
+            ],
+            "measuredAt": "2026-10-23T14:28:59.470Z"
+        },
+        {
+            "name": "memory",
+            "title": "Memory retrieval",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-10-20T14:01:20.581Z"
+        },
+        {
+            "name": "nlt-heredoc",
+            "title": "evals/nlt-heredoc — multi-line values through the NLT parser",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-09-13T11:18:19.831Z"
+        },
+        {
+            "name": "phases",
+            "title": "Phase-scoped tool visibility, measured — and the number is negative",
+            "results": [
+                "results.json"
+            ]
+        },
+        {
+            "name": "prompt-style",
+            "title": "promptStyle — the two open questions, measured",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-08-14T11:00:56.546Z"
+        },
+        {
+            "name": "rules",
+            "title": "`perRuleSuccess`, measured",
+            "results": [
+                "results.json"
+            ]
+        },
+        {
+            "name": "scenarios",
+            "title": "Scenario evals — layer 2",
+            "results": [
+                "example/results.json"
+            ],
+            "measuredAt": "2026-09-27T17:39:17.853Z"
+        },
+        {
+            "name": "skills",
+            "title": "Skill indexing",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-10-20T14:01:20.228Z"
+        },
+        {
+            "name": "subagents",
+            "title": "evals/subagents — is routing bulk tool work to a subagent worth it?",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-10-03T18:23:04.770Z"
+        },
+        {
+            "name": "tenancy",
+            "title": "Density: what an idle silo costs",
+            "results": [
+                "results.json"
+            ],
+            "measuredAt": "2026-09-24T14:03:56.273Z"
+        },
+        {
+            "name": "tools",
+            "title": "Tool dialect comparison — NLT vs native",
+            "results": [
+                "qwen-3pass/results.json",
+                "results.json"
+            ]
+        },
+        {
+            "name": "web",
+            "title": "evals/web — prompt injection through a fetched page",
+            "results": [
+                "flash/results.json",
+                "native/results.json",
+                "results.json"
+            ]
+        }
+    ]
+}

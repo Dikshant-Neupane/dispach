@@ -7,7 +7,7 @@
  * for a typeface the operator's terminal is already using.
  *
  * The palette is the CLI's: an off-black ground, warm off-white text, one accent. A person moving
- * between `dispach` in a terminal and this page should not feel they changed product.
+ * between the CLI in a terminal and this page should not feel they changed product.
  */
 
 :root {
@@ -335,6 +335,26 @@ details.fold[open] summary {
 details.fold .body {
     color: var(--dim);
     font-size: 13px;
+}
+
+/* A routed call's subagent, under its tool row. Folded by default, like reasoning. */
+.tool details.subagent {
+    margin-top: 4px;
+}
+.tool details.subagent summary {
+    cursor: pointer;
+    color: var(--dim);
+    font-size: 11px;
+}
+.tool details.subagent ul {
+    list-style: none;
+    margin: 4px 0 0;
+    padding-left: 12px;
+    border-left: 1px solid var(--line);
+    color: var(--dim);
+}
+.tool details.subagent li.failed .slug {
+    color: var(--bad);
 }
 
 /* ─── composer ──────────────────────────────────────────────────────────── */

@@ -13,8 +13,9 @@
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { Runtime } from "@dispach/core"
+import { dirname, join } from "node:path"
+import { type BuiltInPlugins, Runtime } from "@dispach/core"
+import type { ApprovalRegistry } from "../src/approvals.ts"
 import { createHandler, type Provisioner, type SecretAdmin } from "../src/handler.ts"
 import type { ClaimTicket } from "../src/keys.ts"
 import type { Principal } from "../src/principal.ts"
@@ -188,14 +189,28 @@ export async function harness(
         provision?: Provisioner
         /** The credential writer `GET`/`PUT /v1/agents/:id/secrets` need. Omitted means `501`. */
         secrets?: SecretAdmin
+        /** Plugins a manifest may name by spec, the way the CLI supplies its first-party ones. */
+        builtInPlugins?: BuiltInPlugins
+        /** Workspace files beside the manifest, written before the runtime boots. */
+        files?: Record<string, string | Uint8Array>
+        /** The state directory, for `GET /v1/backup?include=home`. */
+        home?: string
+        /** An approval registry, wired to both the runtime and the handler as `serve` wires it. */
+        approvals?: ApprovalRegistry
     } = {},
 ) {
     const dir = workspace(options.manifest)
+    for (const [name, content] of Object.entries(options.files ?? {})) {
+        mkdirSync(dirname(join(dir, name)), { recursive: true })
+        writeFileSync(join(dir, name), content)
+    }
     const runtime = await Runtime.create({
         agents: [join(dir, "agent.yaml")],
         env: ENV,
         fetch: options.fetch ?? replyFetch(),
         ...(options.streams === undefined ? {} : { streams: options.streams }),
+        ...(options.builtInPlugins === undefined ? {} : { builtInPlugins: options.builtInPlugins }),
+        ...(options.approvals === undefined ? {} : { approve: options.approvals.approver }),
     })
     const handler = createHandler({
         runtime,
@@ -208,6 +223,8 @@ export async function harness(
         ...(options.resolveAgent === undefined ? {} : { resolveAgent: options.resolveAgent }),
         ...(options.provision === undefined ? {} : { provision: options.provision }),
         ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+        ...(options.home === undefined ? {} : { home: options.home }),
+        ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
     })
 
     const call = (

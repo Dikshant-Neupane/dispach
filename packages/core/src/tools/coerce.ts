@@ -12,7 +12,8 @@
  */
 
 import { nearest } from "../nearest.ts"
-import type { FieldError, JsonSchemaNode, ToolSpec } from "./types.ts"
+import { typeWords } from "./json-schema.ts"
+import type { FieldError, JsonSchemaNode, ScalarType, ToolSpec } from "./types.ts"
 
 export interface CoercionSuccess {
     readonly ok: true
@@ -36,8 +37,41 @@ const FALSY = new Set(["false", "no", "n", "0", "off", "disabled"])
 const NUMERIC = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
 
 function typeName(node: JsonSchemaNode): string {
-    if (node.type !== "array") return node.type
-    return node.items === undefined ? "list" : `list of ${node.items.type}`
+    if (node.type !== "array") return typeWords(node.type)
+    return node.items === undefined ? "list" : `list of ${typeWords(node.items.type)}`
+}
+
+/**
+ * A value for a union of plain types (pilot.16): kept as written when it already is one of them, so a
+ * Sheets cell sent as 5 stays a number and "5" stays text. Otherwise each non-text type is tried in
+ * order, which is what lets NLT, where every value arrives as text, still send a number or a yes/no.
+ */
+function convertUnion(
+    node: JsonSchemaNode,
+    types: readonly ScalarType[],
+    value: unknown,
+): Converted {
+    const own =
+        typeof value === "string"
+            ? "string"
+            : typeof value === "boolean"
+              ? "boolean"
+              : typeof value === "number"
+                ? Number.isInteger(value) && types.includes("integer")
+                    ? "integer"
+                    : "number"
+                : undefined
+    if (own !== undefined && types.includes(own)) return { ok: true, value }
+    for (const type of types) {
+        if (type === "string") continue
+        const converted = convertScalar({ ...node, type }, value)
+        if (converted.ok) return converted
+    }
+    if (types.includes("string")) return convertScalar({ ...node, type: "string" }, value)
+    return fail(
+        `expected ${typeWords(types)}, got ${JSON.stringify(shorten(String(value)))}.`,
+        `Write one of: ${typeWords(types)}.`,
+    )
 }
 
 interface Converted {
@@ -57,6 +91,8 @@ function shorten(value: string): string {
 }
 
 function convertScalar(node: JsonSchemaNode, value: unknown): Converted {
+    if (Array.isArray(node.type))
+        return convertUnion(node, node.type as readonly ScalarType[], value)
     switch (node.type) {
         case "string": {
             if (typeof value === "string") return { ok: true, value }
@@ -134,13 +170,26 @@ function convertScalar(node: JsonSchemaNode, value: unknown): Converted {
     }
 }
 
-function splitList(value: string): string[] {
+function splitList(value: string, itemType: JsonSchemaNode["type"]): unknown[] {
     const text = value.trim()
     if (text === "") return []
+    // A list of objects is JSON or nothing: splitting `{"a": 1, "b": 2}` on its commas, or a
+    // pretty-printed object on its newlines, yields fragments no item can be coerced from. So the
+    // bare form — `{…}, {…}` or one object over several lines — is read as the list it means.
+    if (itemType === "object" && !text.startsWith("[")) {
+        try {
+            const parsed: unknown = JSON.parse(`[${text}]`)
+            if (Array.isArray(parsed)) return parsed
+        } catch {
+            // Not JSON; the item conversion below reports it with the hint to write JSON.
+        }
+    }
     if (text.startsWith("[")) {
         try {
             const parsed: unknown = JSON.parse(text)
-            if (Array.isArray(parsed)) return parsed.map((item) => String(item))
+            // Items as parsed: stringifying them turned every object in a JSON list into
+            // "[object Object]", the same defect pilot.3 fixed for native calls.
+            if (Array.isArray(parsed)) return parsed
         } catch {
             // Not JSON after all — fall through to the separator rules, which is what a model
             // writing `[a, b` meant anyway.
@@ -154,10 +203,13 @@ function splitList(value: string): string[] {
 
 function convert(node: JsonSchemaNode, value: unknown, field: string): Converted {
     if (node.type === "array") {
-        const items = Array.isArray(value)
-            ? value.map((item) => String(item))
+        // Items keep their own type and are converted against the item schema below. Stringifying
+        // them first turned every object in a list into "[object Object]", so a native call passing
+        // a list of objects failed coercion and then its repair (pilot.3).
+        const items: readonly unknown[] | undefined = Array.isArray(value)
+            ? value
             : typeof value === "string"
-              ? splitList(value)
+              ? splitList(value, node.items?.type ?? "string")
               : undefined
         if (items === undefined) {
             return fail(

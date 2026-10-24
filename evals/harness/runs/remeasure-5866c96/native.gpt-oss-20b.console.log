@@ -1,0 +1,127 @@
+note: dispach-native — the registry does not know openai/gpt-oss-20b; init's agent did not load, so its window (131072) and native tool support (true) were set from deepinfra/bf16's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  4072 ms  $0.00022
+pass  single-read-answer       r1  2 calls  3327 ms  $0.00021
+pass  single-calculator        r1  2 calls  4247 ms  $0.00022
+pass  single-now               r1  2 calls  10918 ms  $0.00034
+pass  single-send              r1  2 calls  7152 ms  $0.00025
+pass  chain-order-notify       r1  3 calls  9424 ms  $0.00040
+pass  chain-file-to-kv         r1  3 calls  7020 ms  $0.00035
+FAIL  chain-sum-to-file        r1  1 calls  4517 ms  $0.00014  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r1  1 calls  5683 ms  $0.00017  — Dmitri not sent the alert
+pass  chain-edit-json          r1  3 calls  13139 ms  $0.00035
+pass  recall-fact              r1  3 calls  6313 ms  $0.00034
+FAIL  recall-preference        r1  2 calls  6729 ms  $0.00024  — Lee not told about the deploy
+pass  recall-correction        r1  4 calls  6461 ms  $0.00041
+pass  abstain-chitchat         r1  1 calls  3030 ms  $0.00011
+pass  abstain-knowledge        r1  1 calls  1313 ms  $0.00009
+FAIL  abstain-draft-only       r1  1 calls  2248 ms  $0.00011  — no draft in the reply
+pass  abstain-cannot           r1  1 calls  8098 ms  $0.00018
+pass  recover-retry            r1  3 calls  4427 ms  $0.00032
+FAIL  recover-persist          r1  1 calls  5189 ms  $0.00014  — file never written
+pass  recover-bad-expression   r1  2 calls  3740 ms  $0.00022
+pass  recover-missing-file     r1  2 calls  3924 ms  $0.00022
+pass  recover-unknown-order    r1  2 calls  8177 ms  $0.00029
+pass  long-log-needle          r1  3 calls  7415 ms  $0.00190
+pass  long-count-orders        r1  2 calls  36397 ms  $0.00117
+pass  long-handbook            r1  3 calls  7288 ms  $0.00101
+pass  single-kv-set            r2  2 calls  3007 ms  $0.00020
+pass  single-read-answer       r2  2 calls  3433 ms  $0.00021
+pass  single-calculator        r2  2 calls  7359 ms  $0.00026
+pass  single-now               r2  2 calls  7094 ms  $0.00025
+pass  single-send              r2  2 calls  7175 ms  $0.00028
+pass  chain-order-notify       r2  3 calls  7611 ms  $0.00036
+pass  chain-file-to-kv         r2  3 calls  6962 ms  $0.00033
+pass  chain-sum-to-file        r2  4 calls  12539 ms  $0.00053
+pass  chain-kv-to-send         r2  3 calls  5787 ms  $0.00033
+pass  chain-edit-json          r2  3 calls  7988 ms  $0.00037
+pass  recall-fact              r2  4 calls  8799 ms  $0.00045
+pass  recall-preference        r2  3 calls  6573 ms  $0.00034
+pass  recall-correction        r2  4 calls  11335 ms  $0.00048
+pass  abstain-chitchat         r2  1 calls  2486 ms  $0.00012
+pass  abstain-knowledge        r2  1 calls  1372 ms  $0.00010
+pass  abstain-draft-only       r2  1 calls  2278 ms  $0.00012
+pass  abstain-cannot           r2  1 calls  2194 ms  $0.00011
+pass  recover-retry            r2  3 calls  4474 ms  $0.00031
+pass  recover-persist          r2  4 calls  6314 ms  $0.00045
+pass  recover-bad-expression   r2  2 calls  2290 ms  $0.00019
+pass  recover-missing-file     r2  2 calls  4636 ms  $0.00022
+pass  recover-unknown-order    r2  2 calls  5517 ms  $0.00024
+pass  long-log-needle          r2  4 calls  7619 ms  $0.00278
+FAIL  long-count-orders        r2  2 calls  15263 ms  $0.00075  — count is not 58
+pass  long-handbook            r2  3 calls  5789 ms  $0.00098
+pass  single-kv-set            r3  2 calls  3153 ms  $0.00021
+pass  single-read-answer       r3  2 calls  3541 ms  $0.00021
+pass  single-calculator        r3  2 calls  4039 ms  $0.00022
+pass  single-now               r3  2 calls  10224 ms  $0.00032
+pass  single-send              r3  2 calls  7505 ms  $0.00023
+pass  chain-order-notify       r3  3 calls  6113 ms  $0.00034
+pass  chain-file-to-kv         r3  3 calls  6684 ms  $0.00033
+pass  chain-sum-to-file        r3  3 calls  6947 ms  $0.00035
+pass  chain-kv-to-send         r3  3 calls  8762 ms  $0.00036
+FAIL  chain-edit-json          r3  1 calls  4360 ms  $0.00013  — darkMode not true
+pass  recall-fact              r3  3 calls  6796 ms  $0.00033
+pass  recall-preference        r3  3 calls  11261 ms  $0.00041
+pass  recall-correction        r3  3 calls  6927 ms  $0.00033
+pass  abstain-chitchat         r3  1 calls  4399 ms  $0.00012
+pass  abstain-knowledge        r3  1 calls  2770 ms  $0.00010
+pass  abstain-draft-only       r3  1 calls  1934 ms  $0.00011
+pass  abstain-cannot           r3  1 calls  5485 ms  $0.00016
+pass  recover-retry            r3  3 calls  6329 ms  $0.00032
+pass  recover-persist          r3  4 calls  7453 ms  $0.00046
+pass  recover-bad-expression   r3  2 calls  3595 ms  $0.00022
+pass  recover-missing-file     r3  2 calls  4692 ms  $0.00022
+pass  recover-unknown-order    r3  3 calls  9177 ms  $0.00028
+FAIL  long-log-needle          r3  1 calls  4578 ms  $0.00015  — error code not stored
+FAIL  long-count-orders        r3  1 calls  4502 ms  $0.00015  — file never read
+pass  long-handbook            r3  3 calls  8285 ms  $0.00103
+pass  single-kv-set            r4  2 calls  2832 ms  $0.00020
+FAIL  single-read-answer       r4  1 calls  3911 ms  $0.00013  — file never read
+pass  single-calculator        r4  2 calls  2857 ms  $0.00020
+pass  single-now               r4  2 calls  11028 ms  $0.00033
+pass  single-send              r4  3 calls  4972 ms  $0.00021
+pass  chain-order-notify       r4  3 calls  11693 ms  $0.00041
+pass  chain-file-to-kv         r4  3 calls  4842 ms  $0.00031
+pass  chain-sum-to-file        r4  3 calls  5386 ms  $0.00032
+pass  chain-kv-to-send         r4  4 calls  10038 ms  $0.00048
+pass  chain-edit-json          r4  3 calls  11452 ms  $0.00045
+pass  recall-fact              r4  3 calls  4602 ms  $0.00031
+pass  recall-preference        r4  3 calls  7805 ms  $0.00035
+pass  recall-correction        r4  4 calls  6710 ms  $0.00043
+pass  abstain-chitchat         r4  1 calls  1304 ms  $0.00010
+pass  abstain-knowledge        r4  1 calls  1966 ms  $0.00009
+FAIL  abstain-draft-only       r4  1 calls  2311 ms  $0.00011  — no draft in the reply
+pass  abstain-cannot           r4  1 calls  3291 ms  $0.00013
+pass  recover-retry            r4  3 calls  5307 ms  $0.00032
+pass  recover-persist          r4  4 calls  9542 ms  $0.00047
+pass  recover-bad-expression   r4  2 calls  3861 ms  $0.00021
+pass  recover-missing-file     r4  2 calls  3390 ms  $0.00021
+pass  recover-unknown-order    r4  3 calls  8121 ms  $0.00038
+FAIL  long-log-needle          r4  3 calls  5516 ms  $0.00188  — error code not stored
+FAIL  long-count-orders        r4  1 calls  3476 ms  $0.00013  — file never read
+pass  long-handbook            r4  3 calls  4678 ms  $0.00098
+pass  single-kv-set            r5  2 calls  4541 ms  $0.00022
+FAIL  single-read-answer       r5  1 calls  3983 ms  $0.00013  — file never read
+pass  single-calculator        r5  2 calls  3338 ms  $0.00021
+FAIL  single-now               r5  2 calls  2791 ms  $0.00020  — wrong weekday
+FAIL  single-send              r5  1 calls  2566 ms  $0.00012  — no message to Priya about the build
+FAIL  chain-order-notify       r5  2 calls  3970 ms  $0.00023  — Sam not told it is delayed
+pass  chain-file-to-kv         r5  3 calls  5629 ms  $0.00033
+pass  chain-sum-to-file        r5  3 calls  7551 ms  $0.00036
+FAIL  chain-kv-to-send         r5  1 calls  5444 ms  $0.00016  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  1 calls  5420 ms  $0.00016  — darkMode not true
+pass  recall-fact              r5  3 calls  5555 ms  $0.00032
+pass  recall-preference        r5  3 calls  8306 ms  $0.00036
+pass  recall-correction        r5  4 calls  5940 ms  $0.00040
+pass  abstain-chitchat         r5  1 calls  2374 ms  $0.00011
+pass  abstain-knowledge        r5  1 calls  1391 ms  $0.00010
+FAIL  abstain-draft-only       r5  1 calls  3830 ms  $0.00014  — no draft in the reply
+pass  abstain-cannot           r5  1 calls  4805 ms  $0.00016
+pass  recover-retry            r5  3 calls  5059 ms  $0.00033
+pass  recover-persist          r5  4 calls  10799 ms  $0.00048
+pass  recover-bad-expression   r5  2 calls  3641 ms  $0.00021
+pass  recover-missing-file     r5  2 calls  4193 ms  $0.00023
+pass  recover-unknown-order    r5  3 calls  9615 ms  $0.00039
+pass  long-log-needle          r5  3 calls  5725 ms  $0.00187
+FAIL  long-count-orders        r5  2 calls  9335 ms  $0.00064  — count is not 58
+pass  long-handbook            r5  4 calls  7182 ms  $0.00099
+dispach-native · gpt-oss-20b: 104/125 passed → evals/harness/runs/remeasure-5866c96/native.gpt-oss-20b.jsonl

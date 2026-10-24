@@ -1,0 +1,11 @@
+pass  single-kv-set            r1  2 calls  10542 ms  $0.01222
+pass  single-read-answer       r1  2 calls  27470 ms  $0.01235
+pass  single-calculator        r1  2 calls  22684 ms  $0.01212
+pass  single-now               r1  2 calls  7590 ms  $0.01211
+pass  single-send              r1  2 calls  26959 ms  $0.01369
+pass  chain-order-notify       r1  3 calls  16841 ms  $0.01702
+pass  chain-file-to-kv         r1  3 calls  37434 ms  $0.01735
+pass  chain-sum-to-file        r1  4 calls  49053 ms  $0.02247
+pass  chain-kv-to-send         r1  3 calls  20920 ms  $0.01869
+pass  chain-edit-json          r1  3 calls  46673 ms  $0.01785
+FAIL  recall-fact              r1  3 calls  31017 ms  $0.02044  — harness error: 

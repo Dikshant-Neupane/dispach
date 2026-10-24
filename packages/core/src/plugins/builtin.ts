@@ -150,6 +150,7 @@ export function approvalMiddleware(options: ApprovalOptions): Middleware {
                     .ask({
                         approvalId: newApprovalId(),
                         agentId: context.agentId,
+                        sessionKey: context.sessionKey,
                         slug: context.tool.slug,
                         callId: context.intent.callId,
                         mutating: context.tool.mutating,

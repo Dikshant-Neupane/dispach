@@ -48,11 +48,13 @@ import { join } from "node:path"
 import {
     AGENT_SETTABLE_PATHS,
     editManifest,
-    HarnessError,
+    isHarnessError,
+    type MediaProviderFactory,
     parseSettingValue,
     SETTINGS,
     type Tool,
     type ToolHandler,
+    type ToolProviderFactory,
 } from "@dispach/core"
 import { isMap, isSeq, parseDocument, stringify } from "yaml"
 import {
@@ -69,6 +71,10 @@ export interface ConfigOptions {
     readonly agentDir: string
     /** Overridden in tests; the runtime always uses the manifest the agent was loaded from. */
     readonly file?: string
+    /** Provider factories, so a `tools.providers` edit the provider would refuse is refused. */
+    readonly providers?: Readonly<Record<string, ToolProviderFactory>>
+    /** Media provider factories, so a `media` edit naming a provider that does not exist is refused. */
+    readonly mediaProviders?: Readonly<Record<string, MediaProviderFactory>>
 }
 
 /**
@@ -103,6 +109,42 @@ const AGENT_ROWS = SETTINGS.filter((entry) => entry.agentListed)
  * `value` is optional because two of the three depend only on the path, and those have to fire before
  * the value is even parsed.
  */
+const HIDDEN_IDENTITY = "(hidden by the operator)"
+/** What names a model or its vendor: under `model.<role>` (fallbacks too) and `media.<section>`. */
+const MODEL_IDENTITY = new Set(["id", "api", "baseurl", "options", "apikeyenv"])
+const MEDIA_IDENTITY = new Set(["model", "provider", "baseurl", "options", "apikeyenv"])
+
+function hidden(doc: { getIn(path: readonly string[]): unknown }): boolean {
+    return doc.getIn(["context", "modelIdentity"]) === "hidden"
+}
+
+/**
+ * `context.modelIdentity: hidden` (pilot.15): replace every value that names the model or its vendor,
+ * wherever the read started — `model` whole, one role, or the id itself. Nothing else is touched, so
+ * the agent still reads and tunes the rest of its configuration.
+ */
+export function redactIdentity(path: readonly string[], value: unknown): unknown {
+    const keys = path.map((segment) => segment.toLowerCase())
+    if (keys[0] === "model" && keys.slice(2).some((key) => MODEL_IDENTITY.has(key))) {
+        return HIDDEN_IDENTITY
+    }
+    if (keys[0] === "media" && keys[2] !== undefined && MEDIA_IDENTITY.has(keys[2])) {
+        return HIDDEN_IDENTITY
+    }
+    if (Array.isArray(value)) {
+        return value.map((entry, index) => redactIdentity([...path, String(index)], entry))
+    }
+    if (typeof value === "object" && value !== null) {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [
+                key,
+                redactIdentity([...path, key], entry),
+            ]),
+        )
+    }
+    return value
+}
+
 function floorRefusal(path: string, value?: unknown): string | undefined {
     const key = path.toLowerCase()
     const ALLOW_FROM =
@@ -120,6 +162,39 @@ function floorRefusal(path: string, value?: unknown): string | undefined {
     // And not through the parent, either: `tools.providers` is settable so the agent can turn on the
     // web provider when asked, which means the *value* is a place a writeRoots list could hide.
     if (key.startsWith("tools.providers") && containsKey(value, "writeroots")) return WRITE_ROOTS
+    // What a command's environment holds is containment too (pilot.9): an agent that could set
+    // `env: inherit` back could hand its own shell every secret the scrub was there to keep out.
+    const CHILD_ENV =
+        "what your commands can see of the environment is not yours to widen. The scrub keeps the runtime's credentials out of anything you run; a person lists a variable your commands need"
+    // Where a provider sends its requests (pilot.10): an agent that could set a baseUrl could point
+    // Composio or the web backends at a server of its choosing and hand it the token and every query.
+    // Composio's was settable this way before web had one.
+    const API_ADDRESS =
+        "where a provider sends its requests, and so its credentials, is not yours to decide. A person sets a provider's baseUrl"
+    if (key.startsWith("tools.providers") && key.split(".").includes("baseurl")) return API_ADDRESS
+    if (key.startsWith("tools.providers") && containsKey(value, "baseurl")) return API_ADDRESS
+    // Which skills may run code (pilot.14): an agent that could add a name could make any skill it was
+    // handed, a community one or one a person uploaded, run its scripts.
+    const SKILL_TRUST =
+        "which skills may run code is not yours to decide. A person lists them in skills.trusted"
+    if (key === "skills.trusted" || (key === "skills" && containsKey(value, "trusted"))) {
+        return SKILL_TRUST
+    }
+    // Where the file tools may read (pilot.14): an agent that could turn `confineReads` off could read
+    // the other agents' notes the setting was there to keep out of reach.
+    const READ_REACH =
+        "which files you may read is not yours to widen. A person sets tools.providers.system.confineReads"
+    if (key.startsWith("tools.providers") && key.split(".").includes("confinereads"))
+        return READ_REACH
+    if (key.startsWith("tools.providers") && containsKey(value, "confinereads")) return READ_REACH
+    // Whose turns may use the owner's accounts: an agent in a room that could set a provider's
+    // `personal` to false would hand the owner's connected accounts to everyone in it.
+    const OWNER_REACH =
+        "who may use your owner's connected accounts is not yours to widen. A person sets a provider's personal flag"
+    if (key.startsWith("tools.providers") && key.split(".").includes("personal")) return OWNER_REACH
+    if (key.startsWith("tools.providers") && containsKey(value, "personal")) return OWNER_REACH
+    if (key.startsWith("tools.providers") && key.split(".").includes("env")) return CHILD_ENV
+    if (key.startsWith("tools.providers") && containsKey(value, "env")) return CHILD_ENV
     // Same two shapes as `writeRoots`: the path itself, and the key hidden inside a value. `channels`
     // is settable so the agent can set up a bot when asked, which makes its value a place an
     // allowFrom could ride along in.
@@ -247,7 +322,9 @@ export function configReadHandler(options: ConfigOptions): ToolHandler {
             if (value === undefined) {
                 return `${asked} is not set in this configuration. It can be — see config_read with no path for the full list.`
             }
-            return `${asked}:\n${stringify(isMap(value) || isSeq(value) ? value.toJS(doc) : value).trimEnd()}`
+            const plain = isMap(value) || isSeq(value) ? value.toJS(doc) : value
+            const shown = hidden(doc) ? redactIdentity(asked.split("."), plain) : plain
+            return `${asked}:\n${stringify(shown).trimEnd()}`
         }
 
         // A summary with the current values, not the file.
@@ -262,7 +339,8 @@ export function configReadHandler(options: ConfigOptions): ToolHandler {
             const current = doc.getIn(entry.path.split("."), false)
             // Lists inline as `[a, b]` rather than as block YAML flattened onto one line, which
             // renders `- a - b` and reads as a subtraction.
-            const value = isMap(current) || isSeq(current) ? current.toJS(doc) : current
+            const plain = isMap(current) || isSeq(current) ? current.toJS(doc) : current
+            const value = hidden(doc) ? redactIdentity(entry.path.split("."), plain) : plain
             const shown =
                 value === undefined || value === null
                     ? "(not set)"
@@ -287,17 +365,55 @@ export function configReadHandler(options: ConfigOptions): ToolHandler {
             "Settings config_set can change, with their current values:",
             rows,
             "",
+            ...contextFiles(doc),
             "Anything not on this list is not settable from a conversation. A change takes effect when the agent next starts, not in the current conversation.",
             "",
-            "Some edits are refused whatever the rules say. Removing a check: replacing tools.policy.deny, or setting tools.untrusted.onMutate to allow. Deciding reach: a writeRoots list anywhere, a channel's allowFrom, and server.host or server.tokenEnv. Enabling a capability is what a person asks you for; where you may write, who may talk to you, and what address you listen on are theirs — name what you need and why, and let them add it.",
+            "Some edits are refused whatever the rules say. Removing a check: replacing tools.policy.deny, or setting tools.untrusted.onMutate to allow. Deciding reach: a writeRoots list anywhere, the system provider's env, any provider's baseUrl or personal flag, a channel's allowFrom, and server.host or server.tokenEnv. Enabling a capability is what a person asks you for; where you may write, who may talk to you, and what address you listen on are theirs — name what you need and why, and let them add it.",
             "",
-            `The whole file, comments and all, is at ${file} — read it with file_read if that tool is enabled, or ask the person to open it.`,
+            // Hidden (pilot.15): pointing at the raw file would point past the redaction above.
+            ...(hidden(doc)
+                ? []
+                : [
+                      `The whole file, comments and all, is at ${file} — read it with file_read if that tool is enabled, or ask the person to open it.`,
+                  ]),
         ].join("\n")
     }
 }
 
+/**
+ * The workspace files the manifest loads, read-only (pilot.15). Told "check your config",
+ * a model called this tool, found no context section, and concluded that nothing loaded its files,
+ * trusting the tool over the files' own text in its prompt. So the section names them and says
+ * where they already are. Not settable here: which files define the agent is the person's.
+ */
+function contextFiles(doc: ReturnType<typeof parseDocument>): string[] {
+    const list = (path: string[]): string[] => {
+        const value = doc.getIn(path, false)
+        const plain = isMap(value) || isSeq(value) ? value.toJS(doc) : value
+        if (Array.isArray(plain)) return plain.map(String)
+        return typeof plain === "string" && plain !== "" ? [plain] : []
+    }
+    const rows = (
+        [
+            ["context.soul.file", list(["context", "soul", "file"])],
+            ["context.static", list(["context", "static"])],
+            ["context.files", list(["context", "files"])],
+            ["context.volatile", list(["context", "volatile"])],
+            ["context.reminder", list(["context", "reminder"])],
+        ] as const
+    )
+        .filter(([, names]) => names.length > 0)
+        .map(([path, names]) => `- ${path} = [${names.join(", ")}]`)
+    if (rows.length === 0) return []
+    return [
+        "Context files (read-only here). These files are loaded into my instructions every turn, under their names, so I never need to read them; volatile ones only in private conversations:",
+        ...rows,
+        "",
+    ]
+}
+
 export function configSetHandler(options: ConfigOptions): ToolHandler {
-    return async (args) => {
+    return async (args, context) => {
         const file = manifestPath(options)
         const path = typeof args.path === "string" ? args.path.trim() : ""
         const raw = typeof args.value === "string" ? args.value : String(args.value ?? "")
@@ -323,26 +439,54 @@ export function configSetHandler(options: ConfigOptions): ToolHandler {
         // only explanation it will have of why nothing happened.
         let result: Awaited<ReturnType<typeof editManifest>>
         try {
-            result = await editManifest({ file, path: path.split("."), value })
+            result = await editManifest({
+                file,
+                path: path.split("."),
+                value,
+                ...(options.providers === undefined ? {} : { providers: options.providers }),
+                ...(options.mediaProviders === undefined
+                    ? {}
+                    : { mediaProviders: options.mediaProviders }),
+            })
         } catch (cause) {
-            if (cause instanceof HarnessError && cause.code === "manifest_edit_unreadable") {
+            // `isHarnessError`, not `instanceof`: this package and core are separate copies in a
+            // bundle, and a class check across them fails silently (CLAUDE.md).
+            if (isHarnessError(cause) && cause.code === "manifest_edit_unreadable") {
                 throw configReadFailed(file, String(cause.cause ?? cause.message))
             }
-            if (cause instanceof HarnessError && cause.code === "manifest_edit_invalid") {
+            if (isHarnessError(cause) && cause.code === "manifest_edit_invalid") {
                 // The detail after the colon; the sentence around it is written for a person.
                 const detail = cause.message.slice(cause.message.indexOf(": ") + 2)
                 throw configInvalid(path, raw, detail)
+            }
+            // A provider refusing its own config (a malformed MCP server): its sentence and hint are
+            // the explanation the model has, so they reach it rather than a bare code.
+            if (isHarnessError(cause)) {
+                throw configInvalid(path, raw, `${cause.message} ${cause.hint ?? ""}`.trim())
             }
             throw cause
         }
 
         const wasSet = result.before !== undefined
+        // A pin takes effect now where it can (pilot.14): the turn adds what a provider resolves from
+        // its cache, a slug `composio_search` just found, and queues a reload for the rest. Where no
+        // turn can take it, the old sentence stands, and it is still true.
+        const pinned =
+            path === "tools.pinned" && Array.isArray(value) && context.pinTools !== undefined
+                ? await context.pinTools(value.map(String))
+                : undefined
+        const effect =
+            pinned === undefined
+                ? "The configuration still validates. This takes effect when the agent next starts — nothing in the current conversation changes, so do not try the new tool yet."
+                : pinned.length > 0
+                  ? `The configuration still validates. Usable now, in this conversation: ${pinned.join(", ")}. Anything else listed here works from the person's next message, once the agent reloads after this turn.`
+                  : "The configuration still validates. The new tools work from the person's next message: the agent reloads once this turn ends, with no restart. Tell them it is ready for their next message; do not try the tool in this turn."
         return [
             `Set ${path} in ${file}.`,
             wasSet ? `It was: ${stringify(result.before).trim()}` : "It was not set before.",
             `It is now: ${stringify(value).trim()}`,
             "",
-            "The configuration still validates. This takes effect when the agent next starts — nothing in the current conversation changes, so do not try the new tool yet.",
+            effect,
             ...pendingSecrets(result.manifest, value),
         ].join("\n")
     }

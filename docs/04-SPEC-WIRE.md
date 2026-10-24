@@ -4,9 +4,9 @@ The HTTP surface exposed by `@dispach/server`. Deliberately boring: HTTP + JSON 
 control, SSE for streaming, WebSocket only where genuinely bidirectional. **`curl` must be
 sufficient to drive everything.**
 
-This is Dispach's *own* protocol. The OpenClaw-compatible surface VelaOps currently
-speaks is a separate adapter documented in `06-VELAOPS-INTEGRATION.md`, and it is not part
-of this spec.
+This is Dispach's *own* protocol, and the only one. There is no OpenClaw-compatible adapter:
+VelaOps calls `/v1` like any other client, and `06-VELAOPS-INTEGRATION.md` records why the
+adapter was deleted rather than built.
 
 ---
 
@@ -16,6 +16,11 @@ of this spec.
 - `Authorization: Bearer <token>`, from `server.tokenEnv`. Loopback binds may omit it;
   a non-loopback host without a token refuses to start.
 - All bodies JSON. All timestamps RFC 3339 UTC.
+- CORS: a browser origin the server answers to — a loopback origin, one listed in
+  `server.allowedOrigins`, or the request's own host on a public bind — gets
+  `Access-Control-Allow-Origin` echoing it exactly (never `*`, and no `Allow-Credentials`: the
+  credential is a bearer header, not a cookie). `OPTIONS` answers a real preflight: `204` with
+  `Allow` and the `Access-Control-*` headers. Any other origin is `403 origin_not_allowed`.
 - Errors:
 
 ```json
@@ -23,7 +28,9 @@ of this spec.
 ```
 
 `code` is stable and machine-readable. `hint` names the likely fix. Every error type in
-`errors.ts` populates it.
+`errors.ts` populates it. `detail`, when present, is a provider's own words verbatim, for an operator
+(pilot.14): AWS's text names the assumed-role ARN and the account, so it is kept out of `message`,
+which an embedder shows to people. A failed turn's record carries it as `errorDetail`.
 
 ### Error codes
 
@@ -47,21 +54,45 @@ and WebSocket surfaces can return:
 | `body_too_large` | 400 | Over the 1 MB cap, refused before a channel plugin sees it. |
 | `bad_request_url` | 400 | `request.url` could not be parsed — usually a relative URL from a host framework. |
 | `message_text_required` | 400 | `POST /messages` with no `text`. |
+| `vars_required` | 400 | `PATCH …/vars` with no `vars` object. |
+| `rerender_not_supported` | 501 | `PATCH …/vars` on a server with no templates directory (an embedder's handler). |
+| `agent_not_from_template` | 409 | `PATCH …/vars` on an agent with no record of its template: one made before 0.2.0-pilot.5, or not from a template. |
+| `template_var_secret` | 400 | `PATCH …/vars` naming a secret var; set it with `PUT …/secrets`. |
+| `tools_refresh_providers_invalid` | 400 | `POST …/tools/refresh` with `providers` that is not a non-empty list of ids. |
+| `model_role_unknown` | 400 | `POST /messages` with a `role` not declared under `model:`. Nothing is recorded. |
+| `message_note_invalid` | 400 | `POST /messages` with a `runtimeNote` that is empty or over 8,000 characters. |
+| `message_note_untrusted` | 400 | `POST /messages` with a `runtimeNote` from a peer agent (`from.kind: "agent"`). |
+| `message_images_invalid` | 400 | `POST /messages` with `images` that is not a list of `{path}` or `{data, mediaType?}`. The checks on each image have their own codes (`image_*`, `model_no_vision`); see `images` above. |
 | `deliver_invalid` | 400 | `deliver` named a channel with no recipient, or an unknown shape. |
+| `delivery_channel_required` | 400 | `POST /deliveries` with no `channel`. |
+| `delivery_recipient_required` | 400 | `POST /deliveries` with no `to`. |
+| `delivery_text_required` | 400 | `POST /deliveries` with empty `text`. |
+| `delivery_key_required` | 400 | `POST /deliveries` with no `key`. |
+| `delivery_channel_unknown` | 404 | `POST /deliveries` named a channel the agent is not running. |
+| `agent_remove_unconfirmed` | 400 | `DELETE /v1/agents/:id` without `?confirm=<id>`. |
+| `agent_remove_not_in_sandbox` | 404 | `DELETE` of an agent with no directory in the sandbox. |
+| `agent_remove_shared_id` | 409 | `DELETE` of an id two sandbox directories declare. |
+| `agent_remove_unsupported` | 501 | `DELETE` on a server with no remover (an embedded handler). |
 | `sender_invalid` | 400 | `from` is malformed, or `from.kind` is not `user` or `agent`. Refused rather than defaulted — `kind` decides the trust boundary. |
 | `idempotency_key_invalid` | 400 | `Idempotency-Key` is empty, over 255 characters, or not printable ASCII. |
 | `idempotency_key_reused` | 409 | The key belongs to a turn whose text or session differed. Nothing ran. |
-| `phase_invalid` | 400 | The phase is not declared in the manifest. |
+| `phase_invalid` | 400 | `phase` is missing or not a non-empty string (`null` included). The route does not check the name against the manifest's declared phases. |
+| `recall_invalid` | 400 | `recall` on a session is not a boolean. |
 | `approval_decision_required` | 400 | `POST /approvals/:id` with no boolean `granted`. No default in either direction. |
 | `key_label_required` | 400 | `POST /v1/keys` with no string `label`. Required rather than defaulted — it is the only thing distinguishing two credentials. |
 | `key_label_invalid` | 400 | The label is empty, over 64 characters, or carries a control character. |
 | `claim_spent` | 401 | The boot claim was recognised and has already been exchanged. A claim from an earlier boot is `unauthorized` instead — this process has never seen it. |
 | `web_asset_missing` | 500 | The routes serving the browser surface and the table backing them diverged. A broken build, not a missing file. |
 | `schedule_invalid` | 400 | The schedule failed validation — a bad cron expression, or a field the schema refuses. |
+| `schedule_delivery_channel_unknown` | 400 | A schedule's `deliver.channel` is not a channel id on this agent. A target names a channel's id, not its type. |
+| `schedule_role_unknown` | 400 | A schedule's `role` is not declared under `model:`. |
+| `schedule_missing_delivery` | — | A manifest schedule with no `deliver`. A load finding, carried in `details[]` of `manifest_validation_failed`; over the API a body with no `deliver` is `schedule_invalid`. |
+| `schedule_tool_unknown` | 400 | A schedule's `tools.allow` names nothing this agent has. A schedule can only narrow the agent's own tools. |
 | `unknown_event_type` | 400 | `?types=` named an event that does not exist. Carries the nearest real name. |
-| `agent_turn_in_flight` | 409 | A reload or stop was asked for while a turn is running. It names the count; retry when the turn ends, because aborting one to apply a setting is the worse trade. |
+| `agent_turn_in_flight` | 409 | A stop was asked for while a turn is running. It names the count; retry when the turn ends. A reload no longer answers this: it waits (`reload_pending`). |
+| `reload_pending` | — | Returned *inside* a `200` as `pending`: the manifest was written and applies when the running turns finish. Not an error. |
 | `agent_not_replaceable` | 400 | `reload` on a team member, which has no manifest of its own — replace its supervisor, which reloads the team as one unit. |
-| `provisioning_not_supported` | 501 | This server was built with no provisioner — an embedder over its own agent store. The container has one and is refused by the bind instead. |
+| `provisioning_not_supported` | 501 | This server was built with no provisioner — an embedder over its own agent store. The container has one. |
 | `provisioning_not_local` | 403 | `POST /v1/agents` with neither a loopback bind nor a credential carrying `admin`. What is refused is a filesystem write on a server that required **no** credential and is reachable from the network — the bind-only version of this refused the safer case, since a token-less loopback server was allowed while an authenticated public one was not. |
 | `request_body_invalid` | 400 | A body failed its schema and the failing field declared no code of its own. Carries the field. |
 | `agent_stop_invalid` | 400 | `stop` was sent a `reason` that is not a string. |
@@ -111,8 +142,15 @@ and WebSocket surfaces can return:
 | `provision_daemon_refused` | 400 | `daemon` over the wire. The host answering the request is already the daemon. |
 | `provision_skills_search_refused` | 400 | `skills: "find"`, which needs an interactive picker. Points at `skills install`. |
 | `schedule_manifest_owned` | 409 | `PATCH` or `DELETE` on a schedule the manifest declares. Reconciliation restores every field from the file at the next boot, so the write would be undone and reported as success. Change the manifest entry instead. |
-| `config_path_unknown` | 400 | `PATCH /config` named a field this surface does not set. Carries the nearest real path — or, for `channels[].allowFrom`, the action that does set it. |
-| `config_value_unreadable` | 400 | `value` is not a string, or is text no parser can read. It is read exactly as a terminal reads it. |
+| `config_path_unknown` | 400 | `PATCH /config` named a field this surface does not set. Carries the nearest real path — or, for `channels[].allowFrom`, the action that does set it. In a `changes[]` batch, every unknown path is named with its index and `field` is `changes.<i>.path` of the first. |
+| `config_value_unreadable` | 400 | `value` is not a string, is text no parser can read, or is absent without `remove: true`. It is read exactly as a terminal reads it. |
+| `config_remove_invalid` | 400 | `remove` is anything but `true`, or was sent together with a `value`. |
+| `agent_not_running` | — | Not a refusal: the `pending` on a write to an agent that is not running (pilot.15). The file changed; `POST /start` puts it in force. |
+| `workspace_file_unknown` | 404 | `PUT /workspace/:file` named a file the manifest does not declare (pilot.15). Nothing was written. |
+| `workspace_manifest_invalid` | 409 | The agent's manifest does not parse, so its workspace files cannot be named. Fix it with `PATCH /config` first. |
+| `workspace_content_required` | 400 | `PUT /workspace/:file` had no `content` string. |
+| `assignee_channel_ids_invalid` | 400 | `channelIds` on `PUT /assignee` is not a list of channel sender ids (pilot.15). Nothing was assigned. |
+| `config_changes_invalid` | 400 | A `PATCH /config` body named both a top-level `path` and `changes` (pilot.15). Nothing was written. |
 | `config_confirm_required` | 409 | One of the two edits whose only purpose is to stop a check running, without `confirm: true`. The message is the reason. Nothing was written. |
 | `config_not_editable` | 409 | The agent was loaded from an object rather than a file, so there is no manifest to change. |
 | `channel_patch_empty` | 400 | Neither `enabled` nor `credential` was sent. "Send something" is a sentence rather than a schema: a union expressing it names neither field in its error. |
@@ -127,8 +165,48 @@ and WebSocket surfaces can return:
 | `key_scope_invalid` | 400 | `scope` is not an object. |
 | `key_scope_agents_invalid` | 400 | `scope.agents` is not a list of ids. |
 | `key_scope_sessions_invalid` | 400 | `scope.sessions` is not a string prefix. |
-| `key_scope_can_invalid` | 400 | `scope.can` names something that is not one of the four capabilities. |
+| `key_scope_can_invalid` | 400 | `scope.can` names something that is not one of the five capabilities (`read`, `chat`, `write`, `admin`, `peer`). |
 | `key_scope_expires_invalid` | 400 | `scope.expiresIn` is not a positive whole number of seconds. |
+| `key_scope_participant_invalid` | 400 | `scope.participant` is not a non-empty id. |
+| `sender_not_bound_participant` | 403 | **Experimental in 0.2.0.** A key bound to a participant sent `from` naming someone else, or claiming `kind: "agent"` — or a room message whose `authorId` is someone else. Refused rather than corrected, so the caller never believes a turn was attributed as they asked when it was not. Omit `from` (or `authorId`) and it is filled in. |
+| `participant_id_invalid` | 400 | A participant id that is empty. |
+| `participant_id_reserved` | 400 | Registering an `agent:` id. Agents are participants already. |
+| `participant_role_invalid` | 400 | A role other than `admin` or `member`. |
+| `participant_not_found` | 404 | No such participant. |
+| `conversation_kind_invalid` | 400 | A kind other than `room` or `dm`. |
+| `conversation_members_required` | 400 | No members, or a members list that is not a list of ids. |
+| `conversation_member_unknown` | 400 | A member that is neither a registered human nor an agent this key reaches. |
+| `conversation_dm_shape` | 400 | A dm that is not one human and one agent, or two humans with at most one agent each, assigned to them — or a change to a dm's members. |
+| `conversation_creator_not_member` | 403 | A participant-bound key creating a conversation it is not in. |
+| `conversation_not_found` | 404 | No such conversation, or one this key may not see — a member-bound key sees only its own, and every key must reach each agent in it. The same answer either way. |
+| `conversation_author_required` | 400 | A message from an unbound key with no `authorId`. |
+| `conversation_author_not_member` | 400 | The author is not a human member of the conversation. Agents post by answering. |
+| `conversation_mention_unknown` | 400 | A mention naming someone who is not a member. |
+| `presence_invalid` | 400 | A presence other than `online` or `offline`. |
+| `action_decision_required` | 400 | A decision without a boolean `approve`. |
+| `action_not_found` | 404 | No such action, or one this key may not decide — a member-bound key decides only its own. The same answer either way. |
+| `action_already_decided` | 409 | The action was approved or declined already. Nothing ran twice. |
+| `assignment_requires_admin` | 403 | A participant-bound key assigning an agent when its participant is not an `admin`. |
+| `participant_timezone_invalid` | 400 | `POST /v1/participants` with a `timezone` that is not an IANA zone the runtime knows. |
+| `backup_requires_unscoped_key` | 403 | `GET /v1/backup` with a key scoped to some agents: a backup holds every agent's data. |
+| `backup_include_invalid` | 400 | `GET /v1/backup?include=` names something other than `env`, `git` or `home`. |
+| `backup_home_unavailable` | 400 | `include=home` on a server that was not given its state directory (a handler embedded outside `serve`). |
+| `memory_scope_invalid` | 400 | A scope other than `space`, `owner:<participantId>` or `project:<projectId>`. An agent's private memory has no route: the agent writes it. |
+| `memory_note_empty` | 400 | A note with no text. |
+| `memory_scope_forbidden` | 403 | This participant may not write — or, for an owner scope, read — that scope. `owner:<id>` is its owner's alone, admins included; the space takes an admin or the designated writer; a project, an admin. Also a non-admin participant defining a project or naming the space writer, and anyone but the person or an admin reading their audit. |
+| `memory_write_requires_admin` | 403 | An unbound key without `admin` writing a shared scope. A member writes through a participant-bound key. |
+| `memory_note_not_found` | 404 | No such note. |
+| `project_not_found` | 404 | A `project:<id>` scope naming a project nobody defined. |
+| `project_agents_invalid` | 400 | `agents` that is not a list of agent ids. |
+| `space_writer_invalid` | 400 | No `writer`. |
+| `bundle_path_not_allowed` | 400 | A bundle path, or an export `paths` entry, other than `MEMORY.md`, `memory/<name>.md` or `knowledge/<name>.md` — one level, markdown only. The manifest, secrets and skills never travel. Nothing is written when any path is refused. |
+| `bundle_version_unsupported` | 400 | A bundle whose `version` this build does not read. |
+| `bundle_files_invalid` | 400 | No `bundle`, no `files` list, an entry without a string `path` and `content`, or a path named twice. |
+| `bundle_mode_invalid` | 400 | A `mode` other than `skip` or `overwrite`. |
+| `bundle_memory_not_writable` | 400 | A bundle carrying `MEMORY.md` into an agent with no writable memory file. |
+| `bundle_no_memory` / `bundle_no_knowledge` | 400 | A bundle carrying `memory/` or `knowledge/` into an agent without that manifest block. |
+| `bundle_import_refused` | 400 | The agent would not load with the bundle (a knowledge entry without keywords, a file over its budget). Every file the import touched was restored; the message and hint are the load's own. |
+| `plugin_route_failed` | 500 | A plugin's route threw. The error names the plugin; the runtime's own routes are unaffected. |
 | `key_scope_agent_unknown` | 400 | `scope.agents` names an agent this server does not hold. Refused at mint rather than producing a key that reaches nothing. |
 | `provision_adopt_failed` | — | Returned *inside* a `201`: the agent was written and is not running. |
 | `start_not_supported` | 501 | This server has no way to find the manifest for an agent it is not hosting — an embedder over its own agent store. The container has the lookup, and `start` works there. |
@@ -166,11 +244,20 @@ so it is refused with a hint naming the reason. `OPTIONS` on those paths does no
 
 ## Endpoints
 
+**Experimental in 0.2.0**: participants, conversations (rooms and DMs), presence and stand-in
+actions (`/v1/participants`, `/v1/conversations`, `/v1/actions`), team memory and projects
+(`/v1/memory/*`, `/v1/projects`), export and import, the assignee routes, plugin-mounted routes and
+the `peer` capability, participant-bound keys (`scope.participant`), `limits.maxHops`, personal
+tools (`tool_personal`), per-message model roles (`POST /messages {role}`), media and its events,
+and the Slack and Teams channels, threading included. Each is marked where it appears. They are complete and tested, have no TUI or web screens yet, and may change
+within 0.2.x. Everything else here is stable.
+
 ### Health and readiness
 
 ```
 GET /v1/health   → 200 { status, version, uptimeMs, agents: number }
-GET /v1/ready    → 200 when every agent has loaded; 503 { status: "starting" } otherwise
+GET /v1/ready    → 200 when every agent has loaded; 503 { status: "starting" } otherwise, and
+                   503 { status: "draining" } once a SIGTERM drain has begun (`DISPACH_DRAIN_MS`)
 ```
 
 ```
@@ -194,7 +281,10 @@ the socket — in each case before a turn id is issued, so nothing is recorded.
 visible on the agent resource. This distinction is deliberate: a channel that cannot
 connect must not make the process look dead to an orchestrator.
 
-Each entry of `channels[]` is `{ id, type, status, detail?, input? }`. `status` is one of
+Each entry of `channels[]` is `{ id, type, enabled, status?, detail?, input?, credentialEnv?,
+credentialSet? }` — `credentialEnv` names the variable holding the channel's token and `credentialSet`
+says whether it has a value, never the value. A disabled channel is never constructed, so it has no
+`status`. `status` is one of
 `starting | connected | disconnected | error | needs_input`, and **a consumer must tolerate a
 sixth**: the set can grow inside `v: 1` while a field's type cannot.
 
@@ -224,10 +314,36 @@ GET /v1/agents           → [{ id, name, status, model, channels[], entryPhase,
                            plus a thin { id, name, status: "disabled", disabledAt?, reason? }
                            row per stopped agent
 GET /v1/agents/:id       → the above plus dialect, window, tool count, skills indexed,
-                           schedule count, warnings[], team? [{ id, task, artifact[] }]
+                           schedule count, warnings[], team? [{ id, task, artifact[] }],
+                           assignedTo? { participantId, assignedBy?, assignedAt }
+                           a stopped agent answers its listing row instead (since 0.2.0-pilot.5);
+                           every route that acts on it still answers 404
 POST /v1/agents/:id/stop   { reason? } → 200 { id, status: "disabled", disabledAt, reason? }
+DELETE /v1/agents/:id?confirm=<id> → 200 { id, removed: true, dir, sessions, messages, … }   (admin; deletes for good)
 POST /v1/agents/:id/start           → 200 { id, status: "loaded", adopted[] }
-POST /v1/agents/:id/reload
+                                    | 200 { id, status: "loaded", disabledAt?, reason? } when already hosted
+POST /v1/agents/:id/tools/refresh { providers? } → 200 | 202 { id, providers: [{ provider, ok, fetched, error? }],
+                                  added[], removed[], changed[], reload: "none" | "loaded" | "pending" }   (admin, since 0.2.0-pilot.5)
+POST /v1/agents/:id/reload        → 200 { id, status: "loaded", adopted[] }
+                                  | 202 { id, status: "pending", running, holdAfterMs, adopted: [] }
+*    /v1/agents/:id/plugins/:plugin/<path>   → whatever the plugin answers, behind its declared
+                                            capability and this key's agent scope (Phase 30)
+GET  /.well-known/<name>                     → a plugin route's `root`, while one agent claims it
+GET  /v1/agents/:id/export?paths=MEMORY.md,memory/,knowledge/
+                                  → { version: 1, agentId, exportedAt, files: [{ path, content }] }
+POST /v1/agents/:id/import { bundle, mode?: "skip" | "overwrite" }   (25 MB cap)
+                                  → { id, added[], merged: [{ path, notes }], skipped[], overwritten[],
+                                      evicted, reload: "none" | "loaded" | "pending" }
+GET  /v1/backup?include=env,git,home
+                                 → application/gzip: a tar of backup.json, store.db (a consistent
+                                    snapshot) and agents/<id>/… for every hosted agent, no .env,
+                                    .venv, node_modules or .git   (admin, unscoped key; since pilot.9)
+                                    `include` (pilot.10) adds .env, .git or both; .venv and
+                                    node_modules are always rebuilt rather than restored.
+                                    `home` (pilot.11) adds the rest of the state directory under
+                                    home/…: stopped agents, templates, anything an embedder keeps
+                                    there. Never the live store.db*, logs/ or the sources/ clone
+                                    cache. The host token (agents/.api-token) follows `env`
 
 GET  /v1/openapi.json    → the generated OpenAPI 3.1 document
 GET  /docs               → a browser reference over it
@@ -237,14 +353,65 @@ POST /v1/agents            { answers: {step: value, …} }
                            | { template, name, vars?: {var: value, …} }
                          → 201 { id, dir, files[], adopted[] }
 GET  /v1/templates       → { templates: [{ name, description?, vars[], problem? }] }
+PATCH /v1/agents/:id/vars  { vars: {var: value, …} }   (admin, gated like POST /v1/agents; since 0.2.0-pilot.5)
+                         → 200 | 202 { id, rendered[], skipped: [{ file, reason: "edited" | "memory" | "removed" }],
+                                       reload: "none" | "loaded" | "pending" }
+PUT  /v1/agents/:id/workspace/:file  { content }     (admin; since 0.2.0-pilot.15)
+                         → 200 { id, file, written, loads, error?, applied, pending? }
+
+**An agent on disk that is not running is still reachable** (pilot.15). One that failed to load
+used to answer 404 on every route, so only a shell inside the container could repair it. Now:
+
+- `GET /v1/agents/:id` answers `{ id, status: "failed", error }` with the load error and its hint,
+  or `{ id, status: "not_running" }` when it would load. A stopped one keeps its stopped row.
+- `GET` and `PATCH /config` (and `changes[]`) and `PATCH /vars` edit its files with the usual checks.
+  Nothing is reloaded: the reply carries `applied: false` and `pending.code: "agent_not_running"`, and
+  `GET /config` says `running: false`.
+- `PUT /workspace/:file` replaces a file its manifest declares (a tier list, `context.files`, or the
+  soul), named by basename or by its path in the workspace. Any other name is
+  `workspace_file_unknown` (404). On a running agent it reloads, and a text that would stop the agent
+  loading is refused with the load error and the old text put back. On one that is not running it
+  writes and reports `loads` and `error`, so a repair can take several writes.
+- `context.budgets.static`, `.volatile`, `.reminder` and `.total` are settable by a person, so an
+  over-budget file can also be fixed by raising the budget.
+- `POST /start` then loads it from the files as they are now.
 
 POST   /v1/webhooks { url, types[], agents? } → 201 { subscriptionId, url, types, scope?, secret, … }
 GET    /v1/webhooks            → { webhooks: [{ subscriptionId, url, types, scope?, failing,
                                                 consecutiveFailures, lastError?, pending, … }] }
 DELETE /v1/webhooks/:webhookId → { id, deleted: true }
 
+POST   /v1/participants { id, name?, role?, title?, timezone? }
+                                                     → 201 { id, kind: "human", name?, role, title?, timezone?, createdAt }
+GET    /v1/participants                              → { participants: [...] }
+DELETE /v1/participants/:participantId               → { id, deleted: true }
+POST   /v1/conversations { kind, members[], title? } → 201 { id, kind, title?, members, createdAt }
+GET    /v1/conversations                             → { conversations: [...] }   (those this key sees)
+GET    /v1/conversations/:conversationId             → { id, kind, title?, members, createdAt }
+PATCH  /v1/conversations/:conversationId/members { add?, remove? } → the conversation
+POST   /v1/conversations/:conversationId/messages { text, mentions?, authorId? }
+                                                     → 202 { id, authorId, origin, text, mentions, hop, seq, … }
+GET    /v1/conversations/:conversationId/messages?after&limit → { conversationId, messages, nextAfter? }
+PUT    /v1/participants/:participantId/presence { presence: "online" | "offline" } → the participant
+GET    /v1/actions?status                            → { actions: [{ id, agentId, conversationId, ownerId,
+                                                                   requestedBy, slug, args, status, result?, … }] }
+POST   /v1/actions/:actionId { approve }             → the action, decided (`done`, `failed` or `denied`)
+GET    /v1/agents/:id/assignee                       → { id, assignment: { agentId, participantId, … } | null }
+PUT    /v1/agents/:id/assignee { participantId, channelIds? } → { agentId, participantId, channelIds?, assignedBy?, assignedAt }
+DELETE /v1/agents/:id/assignee                       → { id, unassigned }
+POST   /v1/memory/notes { scope, text }              → 201 { id, scope, text, writtenBy, createdAt }
+GET    /v1/memory/notes?scope                        → { notes: [...] }   (oldest first)
+DELETE /v1/memory/notes/:noteId                      → { id, deleted: true }
+GET    /v1/participants/:participantId/memory/reads  → { reads: [{ scope, reader, turnId, sessionKey,
+                                                                 requestedBy?, onBehalfOf?, sources, at }] }
+GET    /v1/projects                                  → { projects: [{ id, name?, agents, createdAt }] }
+PUT    /v1/projects/:projectId { name?, agents? }    → the project (`agents` replaces the membership)
+DELETE /v1/projects/:projectId                       → { id, deleted }
+PUT    /v1/memory/space/writer { writer }            → { writer }
+
 GET /v1/usage?by&from&to → { buckets: [{ agentId?, model?, day?, sender?, calls, promptTokens,
-                                         cachedPromptTokens, outputTokens, estimatedCalls }],
+                                         cachedPromptTokens, cacheWriteTokens, outputTokens,
+                                         images, audioSeconds, estimatedCalls }],
                              meteredSince? }
 GET /v1/agents/:id/usage   → { id, buckets[], meteredSince? }
 GET /v1/agents/:id/turns?limit&before → { id, turns[], nextBefore? }
@@ -253,6 +420,23 @@ GET /v1/agents/:id/secrets → { id, secrets: [{ name, set, usedBy[] }] }
 PUT /v1/agents/:id/secrets   { values: {NAME: value, …} }
                          → 200 { id, written[], shadowed[], applied, adopted[], stopped?, error? }
 ```
+
+**Restoring a backup** (pilot.10) is a file operation with the server stopped, into a home with no
+store yet. There is no restore route: a running runtime would be restoring over the store and
+directories it holds open.
+
+1. `store.db` goes to the path the server opens (`~/.dispach/store.db`, or `serve --store`). Leave
+   no `store.db-wal` or `store.db-shm` beside it.
+2. Each `agents/<id>/` goes to the `dir` that `backup.json` records for that agent.
+3. With `include=home`, the contents of `home/` go to the state directory (`home.dir` in
+   `backup.json`), beside the store. Copy them before step 2's directories, so a hosted agent's
+   files win wherever the two overlap.
+4. Start the server. Migrations run forward at open, so a backup restores into the same version or a
+   newer one, never an older one. The snapshot carries no serve leases (pilot.12), so the first
+   start is never refused by the process the backup was taken from.
+
+Without `include=env`, each agent's `.env` has to be written again before it starts; without
+`include=git`, `.git` directories are absent. `.venv` and `node_modules` are rebuilt on first use.
 
 **Provisioning is one POST, and it ends in an adopt rather than a restart.** The directory is
 written and the agent is **live before the response returns** — served, channels started, schedules
@@ -351,7 +535,7 @@ webhook-signature: v1,<base64 HMAC-SHA256 of "{id}.{timestamp}.{body}", keyed by
 - **Where it may go.** Every address the host resolves to is checked, at subscribe and before
   every send. The public internet is allowed. Private, loopback and CGNAT addresses are refused
   unless the operator lists the hostname or range in the server's `<PREFIX>WEBHOOK_ALLOW`
-  (`velacrew-api, 172.16.0.0/12`), because a self-hosted receiver is usually on the same network.
+  (`internal-api, 172.16.0.0/12`), because a self-hosted receiver is usually on the same network.
   Link-local, where cloud metadata lives, is refused whatever is listed. A redirect is not
   followed. DNS rebinding is not covered: the check and the connection resolve separately.
 - **Retries.** A non-2xx or a timeout retries at 30 s, 2 min, 10 min, 1 h and 6 h, then the delivery
@@ -371,8 +555,13 @@ turn, role, model, prompt, cached, output, sender), and `/usage` sums those. `tu
   `agent,model`, the split a bill needs because prices differ per model. `by=` alone is one total.
   `from` is inclusive and `to` exclusive, so a month is `from=2026-09-01&to=2026-10-01`.
 - `estimatedCalls` counts calls where either figure was our estimate rather than the endpoint's.
+- `cacheWriteTokens` sums what calls wrote to a prompt cache (Bedrock and Anthropic report it; nothing else does, and a call that reports nothing adds zero). Each row also carries the call's `callId`, the same id its `model.result` carried, so a biller reconciling events against this table matches them one to one (Phase 26c).
   The estimate runs 16–20% low on tool-heavy prompts (`evals/budget/`), so a non-zero count means
   the total is partly a guess.
+- `images` and `audioSeconds` are media calls: an image `image_generate` produced, seconds of a
+  voice note transcribed. A media call is a row in the same ledger, with its tokens zero and
+  reported, so every grouping applies to it; `model` is the media model and the row's role is
+  `image` or `transcription`. Its `callId` is the one its `media.result` carried (Phase 26j).
 - `meteredSince` is the earliest call on record. The meter starts at the upgrade that added it and
   earlier turns are not backfilled, since their stored figure is the wrong quantity.
 - Filtered by scope, **session prefix included**: a per-sender row is identity. `sender` groups by
@@ -428,8 +617,10 @@ turn is running, and `404` only when the id is neither hosted nor recorded. `sta
 `501 start_not_supported` on a server built without a manifest lookup — an embedder over its own
 agent store. The container has the lookup and `start` works there.
 
-**A stopped agent is listed and its resource is `404`**, and the asymmetry is deliberate: the
-listing answers "what exists" and the resource answers "what is running". The row is thin because a
+**A stopped agent is listed, and its resource answers that thin row**, while every route that acts
+on it answers `404`: the listing and the resource say what exists, the acting routes what is running.
+An agent on disk that is neither hosted nor stopped answers `{ id, status: "not_running" }`, or
+`status: "failed"` with the `error` that stopped it loading. The row is thin because a
 stopped agent is not loaded — there is no manifest in memory to report a model or channels from, and
 loading one to fill the row in would make a listing depend on credentials being present.
 
@@ -452,15 +643,43 @@ behaviour underneath a conversation. Replacing the instance honours that where a
 reload would quietly break it. It returns no diff — that was specified and never built, and a
 report of "what changed" between two instances is a different feature from restarting one.
 
-**Nothing in flight is discarded.** A reload while a turn is running answers
-`409 agent_turn_in_flight` naming the count, rather than aborting it: picking up a setting is not
-worth somebody's half-finished answer, and from a caller's side an aborted turn is
-indistinguishable from the runtime crashing. Retry once the turn ends.
+**Nothing in flight is discarded, and nothing waits on the caller.** A reload while a turn is running
+answers `202 pending` (it was `409 agent_turn_in_flight` until 26g, which in a team silo with a turn
+nearly always running meant a reload nobody could land). The running turns finish on the settings
+they started with, and the swap happens the moment none is left, announced by `agent.reloaded`. New
+turns keep running on the old settings for `limits.reloadHoldMs` (default 30 s), then wait for the
+swap and start on the new ones, so a busy agent cannot postpone a reload forever. A second reload
+while one is pending joins it. The new manifest is loaded in full **before** the old instance goes —
+at the request when a turn is running, and again at the swap — so a manifest broken on disk refuses
+the reload (`400`) and the agent keeps serving. `PATCH /config`, the channel `PATCH` and
+`PUT …/secrets` apply the same way: `applied: false` with `pending.code: "reload_pending"`, or
+`applied: "pending"` for secrets.
 
 This answered `501 reload_not_supported` until 17.1, when `Runtime.replace` (16.2b) made the
 honest version possible. The old refusal's argument was correct about in-place mutation and is
 preserved above; what changed is that an **attached** view owns no runtime, so `/restart` in a CLI
 session hosted by a server has to reach it through here. Decisions 11.22 and 11.220.
+
+### Deliveries
+
+```
+POST /v1/agents/:id/deliveries
+```
+
+```json
+{ "channel": "tg", "to": "123456789", "text": "Your standup is in 10 minutes.", "key": "task-run-42" }
+```
+
+Sends exact text on one of the agent's channels with **no model turn**, through the same outbox as
+a reply: chunking, retries and the dedupe key are the outbox's. `to` is the channel's own address
+(the peer id an inbound message arrives with). Returns `202 { sessionKey, key, duplicate }`.
+
+- The text joins the history of the conversation an inbound message from `to` resolves to
+  (`{channel}:{to}`) as an assistant message, so a reply to it reads as a reply to something the
+  agent said. A threaded reply (Slack, Teams; **experimental in 0.2.0**) carries a thread segment and lands in its own session.
+- `key` is required. A repeated key answers `202` with `duplicate: true` and is neither sent nor
+  recorded again.
+- `admin`: it speaks as the agent to any recipient with nothing in between.
 
 ### Turns
 
@@ -481,6 +700,49 @@ POST /v1/agents/:id/messages
 
 Returns `202` with `{ turnId, sessionKey }` immediately, then streams SSE if `stream` is
 true. **The turn is not bound to this connection.** Disconnecting does not cancel it.
+
+#### `role` — run this turn on another model role (since 0.2.0-pilot.7)
+
+**Experimental in 0.2.0**, and may change within 0.2.x.
+
+```json
+{ "text": "summarise this thread", "role": "fast" }
+```
+
+A role declared under `model:`, the one a schedule names with `role:`. This turn only: the
+conversation's other turns run on `main`. The turn is budgeted against that role's own context
+window, and its usage rows carry the role. An undeclared name is refused before the turn starts
+(`model_role_unknown`, `field: "role"`), with nothing recorded. A person adds a role with
+`PATCH /config {path: "model.<name>", value: "{id: …, api or baseUrl, apiKeyEnv, …}"}`.
+
+#### `runtimeNote` — your application's note about this message (since 0.2.0-pilot.5)
+
+```json
+{ "text": "what's next?", "runtimeNote": "Project: Website Relaunch (id p_42)\nToday is 2026-10-02, Asia/Dhaka" }
+```
+
+Shown to the model in its own block just before the text, labelled as coming from the application
+and not from the person, for this turn only. It is kept on the turn record (`note` on
+`GET …/turns`) and never stored in the conversation, so a later turn neither carries it nor sees it
+as something the person said. At most 8,000 characters (`message_note_invalid`). A message with
+`from.kind: "agent"` cannot carry one (`message_note_untrusted`): a peer's text is fenced as untrusted,
+and a note is trusted framing outside that fence. It is not part of the idempotency hash.
+
+#### `images` — what the model is shown with the text (since 0.2.0-pilot.5)
+
+```json
+{ "text": "what's in this?", "images": [{ "path": "files/c1/shot.png" }] }
+```
+
+Each entry is `{ "path" }`, relative to the agent's directory, or `{ "data", "mediaType"? }` with
+base64 (within the 1 MB body limit). PNG, JPEG, GIF or WebP by their bytes, at most five, 3.75 MB
+each. They are read and checked before the turn starts, so every refusal is a `400` with nothing
+recorded: `image_not_found`, `image_path_invalid` (absolute, or outside the directory after
+symlinks), `image_unsupported`, `image_too_large`, `image_count_exceeded`, `image_data_invalid`,
+`image_media_type_mismatch`, and `model_no_vision` when `capabilities.vision` is not true for the
+agent's model. The model receives the images on every step of this turn; history keeps an
+`[image: <path>]` line (`upload` for inline data), so a later turn pays for no image and still knows
+one was sent. The idempotency hash covers the images.
 
 #### `from` — who sent it, and what follows
 
@@ -538,8 +800,12 @@ watching a turn's progress — most of them — wants none of that. So the reade
 wants to be billed for the resolution. `stream` asks for a stream; `chunks` asks for the tokens
 in it.
 
+`children: true` (since 0.2.0-pilot.6) adds the events of any subagent the turn runs, interleaved
+in the order they happened and marked by `parentTurnId`. Off by default, because a client that ends
+on `turn.end` without reading `turnId` would otherwise stop at the child's.
+
 ```
-GET  /v1/agents/:id/turns/:turnId/stream?chunks=  → SSE, replays buffered events then tails
+GET  /v1/agents/:id/turns/:turnId/stream?chunks=&children=  → SSE, replays buffered events then tails
 POST /v1/agents/:id/turns/:turnId/stop            → cooperative cancel; persists partial content
 GET  /v1/agents/:id/turns/:turnId                 → final state once complete, with `sender*`
 ```
@@ -551,7 +817,7 @@ content is saved on explicit stop only, never on disconnect.
 
 ```
 GET  /v1/agents/:id/approvals              → { approvals: [...] }, oldest first
-POST /v1/agents/:id/approvals/:approvalId  → { granted: true | false }
+POST /v1/agents/:id/approvals/:approvalId  { granted: true | false } → { approvalId, granted }
 ```
 
 A call the policy says to `ask` about, or a mutating call under `tools.untrusted.onMutate:
@@ -673,6 +939,7 @@ POST /v1/keys  { "label": "web · user_8812",
                  "scope": { "agents":   ["milo"],
                             "sessions": "team_42:*",
                             "can":      ["chat", "read"],
+                            "participant": "user:8812",
                             "expiresIn": 3600 } }
 ```
 
@@ -680,13 +947,24 @@ POST /v1/keys  { "label": "web · user_8812",
 | --- | --- | --- |
 | `agents` | every agent | An id naming no agent is **reported at mint**, never silently matched against nothing. |
 | `sessions` | every session | A prefix; a trailing `*` is accepted and ignored. Not a namespace — `team_4` also matches `team_42:x`. |
-| `can` | all four | An **empty array** is honoured as written: a key that may do nothing is a coherent thing to mint. |
+| `can` | all of them | `read`, `chat`, `write`, `admin`, and `peer` — the last reaches only a plugin route that declares it (an A2A endpoint) and no first-party route, so a remote agent's key cannot start a trusted turn. An **empty array** is honoured as written: a key that may do nothing is a coherent thing to mint. |
+| `participant` | any sender | **Experimental in 0.2.0.** The one participant this key speaks for. Every turn it starts, on `POST /messages` or the socket, has `from` set to it; a `from` naming anyone else is `403 sender_not_bound_participant`. It becomes the turn's **acting participant**, which every tool receives (below). |
 | `expiresIn` | never expires | Seconds. Reported back as an absolute `expiresAt`. Enforced in the same query that hides a revoked key, so the two are indistinguishable. |
 
 **This is not an identity system.** No users, teams, orgs or roles — `06-VELAOPS-INTEGRATION.md`
 refuses them in four places and Better Auth stays authoritative for the consumer that needs them. A
 scope supplies *isolation*; `from` on `POST /messages` supplies *attribution*. That pair is the whole
 contribution, and it is enough to build a collaborative app on.
+
+**The acting participant** (experimental in 0.2.0, with `scope.participant`). Who a turn acts for, handed to every tool as
+`ToolContext.actingParticipant` so an embedder's tool can authorise the person as well as the agent
+(member ∩ agent). Stamped by the runtime from the surface, never from model output:
+
+| Turn | Acting participant |
+| --- | --- |
+| `POST /messages` or the socket with `from.kind: "user"` (or a bound key) | `{ id: from.id, name?, via: "api" }` |
+| a channel message | `{ id: "<channel type>:<sender id>", name?, via: "channel" }`: the person, not the group |
+| `from.kind: "agent"`, a schedule, a delegation, the operator with no `from` | `null` |
 
 **Out of scope answers `404`, never `403`.** A refusal that confirms existence turns a narrow
 credential into a directory of other tenants' agents and sessions, so a caller outside its scope sees
@@ -695,10 +973,15 @@ refusal, which is `403 capability_required`: that discloses nothing about what e
 what this credential may do — and a `404` there would tell somebody holding a read-only key that the
 agent they are plainly reading has vanished.
 
-Listings **filter** rather than refuse — `GET /v1/agents`, `GET /v1/agents/:id/sessions` and the
-`/v1/events` firehose — because a listing is how a client discovers what it can reach. The firehose
+Listings **filter** rather than refuse — `GET /v1/agents`, `GET /v1/agents/:id/sessions`,
+`GET /v1/agents/:id/approvals` and the `/v1/events` firehose — because a listing is how a client discovers what it can reach. The firehose
 is the one that matters most: without a scope check there, a key narrowed to one agent could open
 `/v1/events` with **no parameter at all** and read every other agent's turns, prompts and tool calls.
+
+A `sessions` prefix binds the routes that take a turn id as well: `GET …/turns/:turnId`, its
+`/stream` and `POST …/turns/:turnId/stop` answer `404 turn_not_found` for a turn whose session is
+outside the prefix, exactly as for a turn that never ran, and `GET …/approvals` lists only the
+approvals of sessions inside it.
 
 ### The capability each route requires
 
@@ -737,6 +1020,7 @@ here that the server does not register, or a registered route missing from here,
 | `GET /v1/agents/:id/turns` | `read` |
 | `POST /v1/agents/:id/approvals/:approvalId` | `chat` |
 | `POST /v1/agents/:id/messages` | `chat` |
+| `POST /v1/agents/:id/deliveries` | `admin` |
 | `POST /v1/agents/:id/turns/:turnId/stop` | `chat` |
 | `POST /v1/agents/:id/schedules` | `write` |
 | `DELETE /v1/agents/:id/schedules/:sid` | `write` |
@@ -744,10 +1028,18 @@ here that the server does not register, or a registered route missing from here,
 | `POST /v1/agents/:id/schedules/:sid/run` | `write` |
 | `DELETE /v1/agents/:id/sessions/:key` | `write` |
 | `POST /v1/agents/:id/sessions/:key/phase` | `write` |
+| `POST /v1/agents/:id/sessions/:key/recall` | `write` |
 | `POST /v1/agents` | `admin` |
 | `POST /v1/agents/:id/reload` | `admin` |
+| `POST /v1/agents/:id/tools/refresh` | `admin` |
+| `PATCH /v1/agents/:id/vars` | `admin` |
+| `PUT /v1/agents/:id/workspace/:file` | `admin` |
+| `GET /v1/backup` | `admin` |
+| `GET /v1/agents/:id/export` | `admin` |
+| `POST /v1/agents/:id/import` | `admin` |
 | `POST /v1/agents/:id/start` | `admin` |
 | `POST /v1/agents/:id/stop` | `admin` |
+| `DELETE /v1/agents/:id` | `admin` |
 | `GET /v1/agents/:id/secrets` | `admin` |
 | `PUT /v1/agents/:id/secrets` | `admin` |
 | `GET /v1/agents/:id/config` | `admin` |
@@ -761,6 +1053,29 @@ here that the server does not register, or a registered route missing from here,
 | `POST /v1/webhooks` | `admin` |
 | `GET /v1/webhooks` | `admin` |
 | `DELETE /v1/webhooks/:webhookId` | `admin` |
+| `POST /v1/participants` | `admin` |
+| `GET /v1/participants` | `read` |
+| `DELETE /v1/participants/:participantId` | `admin` |
+| `POST /v1/conversations` | `admin` |
+| `GET /v1/conversations` | `read` |
+| `GET /v1/conversations/:conversationId` | `read` |
+| `PATCH /v1/conversations/:conversationId/members` | `admin` |
+| `POST /v1/conversations/:conversationId/messages` | `chat` |
+| `GET /v1/conversations/:conversationId/messages` | `read` |
+| `PUT /v1/participants/:participantId/presence` | `chat` |
+| `GET /v1/actions` | `read` |
+| `POST /v1/actions/:actionId` | `chat` |
+| `GET /v1/agents/:id/assignee` | `read` |
+| `PUT /v1/agents/:id/assignee` | `admin` |
+| `DELETE /v1/agents/:id/assignee` | `admin` |
+| `POST /v1/memory/notes` | `chat` |
+| `GET /v1/memory/notes` | `read` |
+| `DELETE /v1/memory/notes/:noteId` | `chat` |
+| `GET /v1/participants/:participantId/memory/reads` | `read` |
+| `GET /v1/projects` | `read` |
+| `PUT /v1/projects/:projectId` | `admin` |
+| `DELETE /v1/projects/:projectId` | `admin` |
+| `PUT /v1/memory/space/writer` | `admin` |
 
 
 
@@ -806,10 +1121,16 @@ GET    /v1/agents/:id/sessions/:key
 GET    /v1/agents/:id/sessions/:key/messages?before=&limit=
 DELETE /v1/agents/:id/sessions/:key          → clears history; keeps memory files
 POST   /v1/agents/:id/sessions/:key/phase    → { phase }
+POST   /v1/agents/:id/sessions/:key/recall   { recall } → { sessionKey, recall }
 ```
 
 `DELETE` clears conversation state only. Memory markdown is a file artifact and is never
 deleted by an API call.
+
+`recall` (pilot.10) keeps a conversation's history and takes it out of `memory.includeHistory`
+recall: `false` drops its passages at once and keeps them out of later index passes; `true` puts it
+back at the agent's next turn. A session switched out carries `recall: false`; absent means recalled.
+An unknown session is `404`.
 
 **The `messages` page is newest-first, and `nextBefore` walks backwards.** `ORDER BY id DESC`,
 with `nextBefore` carrying the page's *oldest* id — so paging with `before=` goes back through the
@@ -863,16 +1184,18 @@ POST   /v1/agents/:id/schedules/:sid/run     → fire now, out of band
 }
 ```
 
-Validation is at write time, not fire time. Missing delivery target:
+Validation is at write time, not fire time. A delivery to a channel the agent does not declare:
 
 ```json
 { "error": {
-  "code": "schedule_missing_delivery",
-  "message": "Schedule 'morning-brief' has no delivery target.",
-  "hint": "Set deliver to { channel, to }, or the literal \"none\" to return results only via the event stream.",
-  "field": "deliver"
+  "code": "schedule_delivery_channel_unknown",
+  "message": "Schedule \"morning-brief\" delivers to \"tg\", which is not a channel id on this agent. The agent declares no channels.",
+  "hint": "A delivery target names a channel's id, not its type. Use deliver: \"none\" to return results through the event stream instead.",
+  "field": "deliver.channel"
 }}
 ```
+
+A body with no `deliver` at all is `schedule_invalid` (`field: "deliver"`).
 
 Listing includes disabled schedules by default. `?enabled=true` filters.
 
@@ -880,7 +1203,9 @@ Listing includes disabled schedules by default. `?enabled=true` filters.
 
 ```
 GET /v1/agents/:id/tools     → resolved catalogue with tags, mutating, trust, phase visibility
-GET /v1/agents/:id/skills    → indexed skills with description, token cost and script slugs
+GET /v1/agents/:id/skills    → indexed skills with description, token cost, script slugs and
+                               `trusted` (whether those scripts become tools: false for a skill
+                               `skills.trusted` does not name; true for all when it is absent; pilot.14)
 GET /v1/agents/:id/context   → the assembled context for the next turn, with token counts per slot
 ```
 
@@ -888,8 +1213,26 @@ GET /v1/agents/:id/context   → the assembled context for the next turn, with t
 
 ```
 GET   /v1/agents/:id/config     → every field this surface may set, what it does, and its current value
-PATCH /v1/agents/:id/config     → set one field, then replace the agent so it takes effect
+PATCH /v1/agents/:id/config     → set one field, or several, then replace the agent so it takes effect
 ```
+
+`model.<role>` (since 0.2.0-pilot.7) is the one path a person fills in: `{path: "model.fast", value:
+"{id: …, api: bedrock-converse, options: {region: eu-west-2}}"}` adds or replaces a whole named role,
+which a schedule (`role:`) or a message (`role`) then runs on. `model.main` (since 0.2.0-pilot.16) is
+replaced whole the same way, so a provider switch (transport, endpoint, key variable, capabilities) is
+one validated write and one reload; its fields keep their own rows too, and `GET` reports the whole
+role, `baseUrl` and the `apiKeyEnv` variable name included (never a key's value). Person-only, like
+every model setting: an agent choosing its own model is its owner's money. `PUT /secrets` accepts only
+a variable the saved manifest already reads, so a switch to a new key variable is two calls: PATCH
+`model.main` (written; the reload is refused for the unset variable and reported as `applied: false`),
+then `PUT /v1/agents/:id/secrets` with the key, which writes it and reloads the agent. (`PATCH /vars`
+is not the route: it re-renders a template's variables and refuses a secret with `template_var_secret`.)
+A key variable the manifest already names can be
+set first and the switch is one call.
+
+A `changes[]` batch naming paths this surface does not set is refused once, naming every one with
+its index (`"media.speach" (changes.1.path)`), `field` set to the first, and nothing written
+(0.2.0-pilot.16).
 
 ### Channels (connect, disconnect, re-credential, unpair)
 
@@ -944,18 +1287,44 @@ because two would eventually disagree about whether `["a", "b"]` is a list of tw
 
 Two fields carry a `confirm` sentence — `tools.policy.deny` and `tools.untrusted.onMutate` — and
 each is refused with `config_confirm_required` until `{ "confirm": true }` accompanies the value.
+
+`{ "path", "remove": true }`, in place of a value, takes the field out of the manifest so it returns to
+its default; `before` is what was there and `after` is absent. The result is checked like any edit, so
+removing a required field is refused (`manifest_edit_invalid`). A field that is not there is left as
+it is, so a removal is safe to repeat. The client's `removeConfig(path)` sends it.
 They are the two edits whose only purpose is to stop a check running.
 
 The reply reports the write and the *application* separately:
 
 ```json
-{ "path": "limits.maxSteps", "before": 6, "after": 40, "reflowed": false, "applied": true }
+{ "path": "limits.maxSteps", "before": 6, "after": 40, "reflowed": false, "changed": true, "reloaded": true, "applied": true }
 ```
 
+**A value already in the file is not a change** (pilot.15). Compared as values, not text, so `"40"`
+for a `40` already there is equal too. Nothing is written and nothing reloads: `changed: false`,
+`reloaded: false`, `applied: true`, because what was asked is already in force. A removal of a field
+that is not there is the same.
+
+**Several changes in one request** (pilot.15): `{ "changes": [{ "path", "value" }, { "path", "remove":
+true }, …] }` instead of a top-level `path`. They are applied in order, each checked against the file
+as the earlier ones left it, then written once and reloaded once. Any refusal writes none of them.
+The reply carries `changes: [{ path, before, after, reflowed, changed }]` beside `reloaded`,
+`applied` and `pending?`. Sending both `path` and `changes` is `config_changes_invalid`. The client's
+`setConfigs(changes)` sends it.
+
+Removing a block's last key removes the block too, so `limits.noProgress.sameTool` on a manifest
+whose `noProgress` holds nothing else leaves no empty `noProgress:`, which would not load.
+
 An agent's settings are fixed for its instance's lifetime, so the change is applied by replacing the
-agent. `dispose` refuses while a turn is in flight — the file is written by then, so the reply says
-`"applied": false` with the reason under `pending`, and the edit takes effect at the next start.
-Reporting 409 as though nothing had happened would leave a written manifest described as unwritten.
+agent. While a turn is in flight the file is written and the replace waits, as `reload` does (above):
+the reply says `"applied": false` with `pending.code: "reload_pending"`, and the edit is in force
+once the running turns finish, announced by `agent.reloaded`. Reporting 409 as though nothing had happened would leave a written manifest described as unwritten.
+
+`delegation.offer` also reloads every hosted agent whose `delegation.to` names this one (or is
+`"*"`), because a roster renders at load. Each is reported under `peers`, as
+`{ "id", "applied", "pending"? }`. When this agent's own reload is pending, its peers are listed
+with `applied: false`, since their roster would read the old offer. Reload them once this agent's
+`agent.reloaded` event arrives.
 
 `/context` exists because "why did it do that?" is almost always a context question, and
 guessing at it is how days get lost.
@@ -995,8 +1364,9 @@ governs event *types*.
 POST /v1/channels/:channelId/webhook/:agentId
 ```
 
-Signature verification is the channel plugin's responsibility. Core enforces a body-size
-cap and rate limit before the plugin sees anything.
+Signature verification is the channel plugin's responsibility. Core caps the JSON body at 1 MB and
+routes by agent and channel id before the plugin sees anything; an unknown agent and an unknown
+channel both answer `404`, so probing cannot enumerate the runtime. There is no rate limit.
 
 ### Runtime event stream
 
@@ -1033,6 +1403,8 @@ interface Event {
   sessionKey?: string
   turnId?: string
   stepId?: string
+  parentTurnId?: string     // a subagent's events: the turn that ran it
+  parentSessionKey?: string
   type: string
   data: unknown
 }
@@ -1044,40 +1416,50 @@ any agent, so they carry no id. A client that trusted the old declaration and de
 reading the field on exactly the events that report the runtime coming up. `sessionKey`, `turnId`
 and `stepId` narrow the same way: present when the event happened inside one, absent otherwise.
 
+**A subagent's events carry `parentTurnId` and `parentSessionKey`** (since 0.2.0-pilot.6): its own
+`sessionKey` is `subagent:<runId>`, and these name the turn whose routed call ran it, so a view can
+nest the child's steps under that call. A key scoped to a session prefix reaches a child's events
+when it reaches the parent's session. A turn's stream (`POST /messages` with `stream: true`, or
+`GET …/turns/:turnId/stream`) includes them only with `children: true` (`?children=true`); the
+stream still ends on its own turn's `turn.end`, so read `turnId` before treating one as the end.
+
 | Type | When | Key `data` |
 | --- | --- | --- |
-| `runtime.ready` | boot complete | `bootMs`, `phases: {step: ms}` |
+| `runtime.ready` | boot complete | `bootMs` (inside `Runtime.create`), `processMs` (since process start), `phases: {step: ms}`, `agents` |
 | `store.ready` | store open, migrations done | `location`, `driver`, `from`, `to`, `applied[]`, `reaped[]` |
 | `runtime.stopping` | shutdown begins | `reason` |
-| `runtime.released` | a lease this process held is given back | `agentId`, `kind` |
+| `runtime.released` | a tool provider let go of something outside this process (backgrounded `exec` children), at shutdown or when one agent is disposed; only when it released something | `provider`, `released[]` |
 | `plugin.loaded` | per plugin | `name`, `version`, `setupMs`, `permissions` |
 | `plugin.slow` | setup over budget | `name`, `setupMs` |
 | `agent.loaded` | per agent | `tools`, `skills`, `schedules` (the manifest's **declared** count — this fires before reconciliation), `model` |
 | `agent.disposed` | this process stopped hosting an agent, without exiting | `reason` (`requested` \| `replaced` \| `stopped`) |
+| `agent.reloaded` | a reload finished — at once (`waitedMs: 0`) or after running turns; includes the runtime's own, after a cache warmed | `ok`, `adopted[]`, `waitedMs`, `held` (new turns that waited for it), `disposed`, `error?` — `ok: false` with `disposed: false` means the old instance is still serving. A reload refused before anything waited (the manifest or a file on disk does not load) emits `ok: false` too, since pilot.14, beside the error the caller receives |
 | `agent.warning` | a fact true for the whole session, said at load | `code`, `message`, `hint`, `field?` |
 | `agent.channel.status` | connect/disconnect, or a channel now waiting on a person | `channelId`, `channelType`, `status` (`starting` \| `connected` \| `disconnected` \| `error` \| `needs_input`), `detail?`, `input?` (`{kind, payload, issuedAt, expiresAt?}`, present only with `needs_input`) |
 | `agent.channel.error` | channel failure that did not stop the channel | `channelId`, `code`, `message`, `hint` |
 | `agent.channel.rejected` | inbound not turned into a turn | `channelId`, `reason` (`duplicate` \| `denied`), `sender`, `detail` |
-| `handoff.start` | a delegation began | `member`, `task`, `sessionKey` |
-| `handoff.result` | how it ended | `member`, `sessionKey`, `outcome`, `steps`, `tokens`, `errorCode?` |
+| `handoff.start` | a delegation began | `member`, `task`, `sessionKey`, `kind` (`member` or `self` for a subagent), `name?` (the subagent's), `callId?` (the parent's tool call) |
+| `handoff.result` | how it ended | `member`, `sessionKey`, `kind`, `name?`, `callId?`, `outcome`, `steps`, `tokens`, `errorCode?` |
 | `approval.requested` | a call is waiting on a person | `approvalId`, `slug`, `callId`, `match?`, `mutating`, `reason` |
 | `approval.resolved` | how it ended | `approvalId`, `slug`, `granted`, `by` |
-| `turn.start` | inbound accepted | `source`, `inputTokens`, `trust`, `from?` |
+| `turn.start` | inbound accepted | `source`, `inputTokens`, `trust`, `from?`, `inputKind?` (`voice` for a transcribed voice note) |
 | `context.assembled` | per turn | `slots: [{slot, label, tokens, pinned}]`, `total` |
 | `context.pressure` | per step, after compaction | `fraction` (of the prompt actually sent), `tokens`, `budget`, `source: reported \| corrected \| estimated`, `peak?` (what the ladder faced) |
 | `compaction.stage` | per stage that ran | `stage`, `before`, `after`, `changed`, `digest?: model \| mechanical` |
 | `context.reset` | per S5 firing | `count`, `warning?` |
 | `context.dropped` | history the budget could not fit | `messages`, `budget`, `keptTokens` |
 | `phase.changed` | per `phase_set` that moved | `to`, `tools` (count now visible) |
-| `model.call` | request sent | `role`, `model`, `promptTokens`, `cached`, `attempt` |
+| `model.call` | request sent | `callId`, `role`, `model`, `promptTokens`, `cached` (always false; the cache hit is on `model.result`), `attempt` |
 | `model.chunk` | streaming | `delta`, `kind: text \| reasoning` — emitted only while some subscriber has opted in, per subscriber |
 | `model.retry` | a retryable model failure, before the next attempt | `status`, `attempt`, `delayMs` |
-| `model.result` | response done | `outputTokens`, `promptTokens`, `promptTokensReported`, `finishReason`, `latencyMs`, `firstTokenMs?` (to the first streamed output of any kind; absent when nothing streamed) |
-| `tool.call` | before execute | `slug`, `callId`, `argsHash`, `mutating` |
-| `tool.result` | after execute | `slug`, `callId`, `ok`, `latencyMs`, `bytes`, `truncated`, `trust` |
+| `model.fallback` | a call moved to the next model in its role's `fallbacks`, before any output (Phase 26c) | `from`, `to`, `reason` |
+| `model.result` | response done | `outputTokens`, `promptTokens`, `promptTokensReported`, `finishReason`, `latencyMs`, `firstTokenMs?` (to the first streamed output of any kind; absent when nothing streamed), `callId` (the model call's id: minted before its retries and fallbacks, the key a ledger debits on, carried by its usage row; not a tool call's), `model` (the one that answered, after any fallback), `role`, `cachedPromptTokens?`, `cacheWriteTokens?`, `sender?` (Phase 26c) |
+| `tool.call` | before execute | `slug`, `callId`, `argsHash`, `mutating`, `args?` (only under `tools.eventDetail: redacted`: the arguments, redacted; strings over 1,024 characters are cut) |
+| `tool.result` | after execute | `slug`, `callId`, `ok`, `latencyMs`, `bytes`, `truncated`, `trust`, `output?`, `outputTruncated?` (only under `tools.eventDetail: redacted`: the first 2,048 characters of the output the model saw, redacted, and whether it was longer; `truncated` still means the model's own observation was cut) |
 | `tool.gated` | a call was blocked | `slug`, `callId`, `reason`, `policy` |
 | `tool.repair` | step unusable | `slugs[]`, `errors[]` |
 | `tools.refreshed` | after `runtime.ready` | `provider`, `ok`, `fetched`, `changed[]`, `missing[]`, `latencyMs`, `error?` |
+| `agent.tools.refreshed` | `POST …/tools/refresh` finished | `added[]` (pinned tools a provider now has), `removed[]` (served tools a provider no longer has), `changed[]` (served tools whose schema moved), `reload` (`none` when nothing moved; `pending` lands when the running turn ends) (since 0.2.0-pilot.5) |
 | `delivery.sent` | outbox success | `channelId`, `providerMessageId?`, `chunkIndex`, `chunkTotal`, `attempts`, `uncertain` |
 | `delivery.retry` | retryable send failed | `channelId`, `chunkIndex`, `attempts`, `delayMs`, `error` |
 | `delivery.failed` | chunk abandoned | `channelId`, `chunkIndex`, `chunkTotal`, `attempts`, `exhausted`, `abandoned`, `error` |
@@ -1087,8 +1469,34 @@ and `stepId` narrow the same way: present when the event happened inside one, ab
 | `schedule.skipped` | occurrences passed with nothing running | `scheduleId`, `kind`, `reason`, `missed`, `missedAtLeast` |
 | `schedule.deferred` | a fire arrived mid-run | `scheduleId`, `kind` |
 | `schedule.error` | unreadable schedule, or the turn it started failed | `scheduleId`, `code`, `message`, `hint` |
-| `turn.end` | complete | `reason`, `steps`, `tokens`, `durationMs` |
+| `media.result` | a media call finished (**experimental in 0.2.0**) | `callId` (a ledger key, like `model.result`'s, and on its usage row), `kind` (`transcription` \| `image` \| `speech`), `provider`, `model`, `latencyMs`, `images?`, `audioSeconds?` (when the provider or the channel reported a duration), `characters?` (a speech call's characters spoken, pilot.15), `sender?` (Phase 26j) |
+| `tool.usage` | a tool reported what one call spent at a third party | `slug`, `callId`, `provider` (`tavily`, `firecrawl`, …), `operation?` (`search`, `scrape`, `crawl`, `map`), `unit` (`credits` \| `requests`), `units`, `participant?` (the acting participant, whom it is billed to). Zero or more per call (pilot.9) |
+| `conversation.message` | a message in a room or DM | `conversationId`, `messageId`, `authorId`, `origin` (`human` \| `agent`, stamped by the runtime), `text`, `mentions`, `hop`, `turnId?` (an agent's reply). A stand-in's messages carry `onBehalfOf` in the log. An agent's carries its `agentId` in the envelope; a human's carries none (Phase 27) |
+| `conversation.skipped` | a message addressed an agent that did not answer (**experimental in 0.2.0**, as is the `limits.maxHops` ceiling) | `conversationId`, `messageId`, `reason` (`hop_limit` \| `refused` \| `failed`), `detail`, `hop`, `ceiling` (the agent's `limits.maxHops`) |
+| `agent.assigned` | an admin recorded who an agent works for | `participantId`, `assignedBy?` |
+| `action.deferred` | a stand-in queued a mutating call for its absent owner; nothing ran (Phase 28) | `actionId`, `conversationId`, `ownerId`, `requestedBy`, `slug` |
+| `action.decided` | the owner answered it | `actionId`, `conversationId`, `status` (`done` \| `failed` \| `denied`) |
+| `memory.read` | a turn recalled someone's owner scope for somebody other than that person — a stand-in, a room, another caller (Phase 29). The owner's own requests, and unattributed work on their own agent, are not recorded | `scope`, `reader` (the agent), `sources`, `requestedBy?`, `onBehalfOf?` (set for a stand-in). The same record is kept for `GET /v1/participants/:id/memory/reads` |
+| `memory.recalled` | a turn's prompt carries recalled memory: notes, shared scopes, or excerpts of other conversations (`memory.includeHistory`) (pilot.13) | `passages: [{ source, score }]`, best first. A conversation's source is `session:<key>`. Not emitted when nothing was recalled, nor for a context preview |
+| `memory.forgotten` | `memory_forget` deleted notes (pilot.15): the agent's private notes, or the space's when it is the space writer. Not emitted for a listing, nor when nothing matched the ids | `scope` (`private` or `space`), `count` (notes), `messages?` (past conversation messages redacted, when any). The text itself is not repeated, so an audit of deletions is not a copy of what was deleted |
+| `turn.end` | complete | `reason`, `steps`, `tokens`, `durationMs`, `finalText?` (the last step's prose alone, when any step wrote some; the reply joins every step's, so a lead-in repeated before each tool call appears once here (pilot.14). Taken before any `wrapTurn` middleware, like the `model.chunk` stream), `attachments?` (`[{path, mimeType}]`, files a tool produced for the reply, relative to the agent's directory; a channel sends them after the text) |
 | `error` | anything uncaught | `code`, `message`, `hint`, `stack?` |
+
+**What `units` counts, per first-party provider** (pilot.10). Where a provider reports its own
+charge on the response, `units` is that figure; otherwise it is the fallback below. Multiply by your
+own price: Dispach carries no prices.
+
+| `provider` | `operation` | `unit` | `units` |
+| --- | --- | --- | --- |
+| `tavily` | `search` | `credits` | 1. Dispach always asks for `search_depth: basic`; it never sends `advanced` (2 credits) |
+| `brave`, `exa` | `search` | `requests` | 1 |
+| `firecrawl` | `search` | `credits` | the response's `creditsUsed`, else 1. No `scrapeOptions` are sent, so no per-hit scrape |
+| `firecrawl` | `scrape` (`web_fetch`) | `credits` | `creditsUsed`, else 1. No proxy option is sent, so never a stealth charge |
+| `firecrawl` | `map` | `credits` | `creditsUsed`, else 1 |
+| `firecrawl` | `crawl` | `credits` | the crawl status's `creditsUsed`, else the pages returned. A stopped or timed-out crawl is cancelled and reports what it spent |
+
+The turn and conversation a charge belongs to are on the event envelope, as on every event:
+`turnId`, `sessionKey` and `agentId`, beside `data`.
 
 ### Planned
 
@@ -1170,6 +1578,15 @@ Refusals are reported rather than dropped silently: an allowlist that quietly di
 indistinguishable from a channel that is not receiving at all. `sender` is the handle where the
 provider exposes one and the peer id otherwise — never the message body.
 
+**The owner's apps are the owner's** (pilot.15; **experimental in 0.2.0**). A tool marked `personal` (every Composio tool, an
+MCP server declared `personal: true`) is offered only to a turn acting for the agent's assigned owner.
+A call naming one from anyone else's turn is refused with `tool_personal`, and `tool.gated` carries
+`reason: personal`. Someone else's turn means another member asking, a delegation from their agent, a
+stand-in, or a channel sender who is not listed. `channelIds` on the assignee lists the owner's own channel senders, as a
+channel turn names them (`whatsapp:8801711223344`, `slack:U0123ABC`). Without it no channel turn counts
+as the owner. An embedder sending a turn for somebody passes them as the participant, or the turn is
+the operator's and nothing is withheld.
+
 `tool.gated` fires when a mutating call is refused because untrusted content entered the turn. It is
 not an error: the model is told to report back and ask instead, and the turn continues. `policy` names
 the `tools.untrusted.onMutate` setting that decided it, so a surprised operator can see whether they
@@ -1183,6 +1600,11 @@ whatever the conversation carried and an event stream is the wrong place to copy
 model invented and a field that failed coercion. The first occurrence is followed by one correction
 request; a second in a row ends the turn with `tool_repair_failed` rather than asking again, so two
 of these back to back is the signal that a catalogue needs work rather than that a model does.
+
+It also fires, once per turn, with an empty `slugs` and one entry in `errors`, when a step would have
+ended the turn without doing what the turn needs: `no visible reply after a tool result`, or `said it
+would act and made no call` (decision 14.123), or `said it was done and nothing that acts ran`
+(decision 14.128). The loop sends one framed note and takes one more step; a second silence is the reply.
 
 `turn.end.reason`: `final` \| `max_steps` \| `no_progress` \| `truncated` \| `stopped` \| `timeout` \|
 `error`. Everything that is not `final` is reported honestly rather than dressed up as a normal
@@ -1214,9 +1636,20 @@ streaming plus mid-turn interrupts:
 GET /v1/ws?agentId=&token=&chunks=
 ```
 
-Client frames: `{ type: "message" | "stop" | "subscribe" | "ping" }`.
+Client frames:
+
+| Frame | Fields | Answer |
+| --- | --- | --- |
+| `message` | `text`, `sessionKey?` (default `api:default`) | `ws.accepted { turnId }`. Runs on the socket's current agent; the frame carries no `agentId` and no `from` (a participant-bound key supplies one). |
+| `stop` | `turnId` | `ws.stopping { turnId, found }` |
+| `subscribe` | `agentId`, `chunks?` | `ws.subscribed { agentId, chunks }` |
+| `ping` | — | `pong` |
+
 Server frames: the same event objects as SSE, plus the control frames `ws.open`, `ws.subscribed`,
-`ws.accepted`, `ws.stopping` and `ws.error`.
+`ws.accepted`, `ws.stopping`, `pong` and `ws.error`. `ws.error` has two shapes, so read both: most
+carry the code at the top level (`{ type, code, message?, hint? }` — a refused admission spreads the
+whole `{ code, message, hint }` there), while a `subscribe` naming an agent outside the key's scope
+nests it as `{ type, error: { code, message, hint } }`.
 
 `chunks` is **per socket**, not per server: one client asking for tokens must not start sending
 them to every other connected client. It is set on the handshake and reported back on `ws.open`,

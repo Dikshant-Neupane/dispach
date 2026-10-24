@@ -28,6 +28,7 @@ import type {
     ToolSummary,
 } from "@dispach/client"
 import { DispachError } from "@dispach/client"
+import { DEFAULT_BRAND, isChildSession } from "@dispach/core/wire"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Composer, Rows } from "./chat.tsx"
 import { Keys } from "./keys.tsx"
@@ -42,6 +43,12 @@ import {
 import { hrefFor, type PanelName, placeFrom } from "./lib/deep-link.ts"
 import { type LiveStream, liveStream } from "./lib/live.ts"
 import { initialAnswers, missingAnswers, payloadFor } from "./lib/provision-form.ts"
+import {
+    newConversationKey,
+    OPEN_SESSION,
+    rememberedSession,
+    rememberSession,
+} from "./lib/session.ts"
 import { EMPTY, emptyFor, reduce, type Transcript, withUser } from "./lib/transcript.ts"
 import { Onboarding } from "./onboarding.tsx"
 import {
@@ -58,7 +65,7 @@ import {
 } from "./panels.tsx"
 
 /** Where a live turn id is parked so a refresh can reattach. Per tab, not per browser. */
-const LIVE_TURN = "dispach.turn"
+const LIVE_TURN = `${DEFAULT_BRAND.slug}.turn`
 
 export function App(props: { readonly baseUrl: string }): React.ReactElement {
     const [credential, setCredential] = useState<Credential | undefined>()
@@ -150,8 +157,8 @@ function PasteCredential(props: {
                 onChange={(event) => setValue(event.target.value)}
             />
             <p className="hint" style={{ margin: "8px 0 12px" }}>
-                <code>dispach serve</code> prints a one-time claim at boot while no key exists. A
-                claim is exchanged for a key this browser keeps; a key is used directly.
+                <code>{DEFAULT_BRAND.slug} serve</code> prints a one-time claim at boot while no key
+                exists. A claim is exchanged for a key this browser keeps; a key is used directly.
             </p>
             <div className="ask">
                 <div className="buttons">
@@ -329,7 +336,7 @@ function Workspace(props: {
                     ...previous,
                     filter: emptyFor(first.dialect ?? "nlt").filter,
                 }))
-                document.title = `${first.name} · Dispach`
+                document.title = `${first.name} · ${DEFAULT_BRAND.name}`
             })
             .catch((caught: unknown) => setError(describe(caught)))
     }, [])
@@ -361,7 +368,8 @@ function Workspace(props: {
     const refreshSessions = useCallback(async () => {
         if (agent === undefined) return
         try {
-            setSessions(await agent.sessions())
+            // Not a delegation's own session: those are a child of a turn, not a conversation.
+            setSessions((await agent.sessions()).filter((row) => !isChildSession(row.sessionKey)))
             // **Cleared on success, or one transient failure is permanent.** The old code set the
             // error and never unset it, and because the string was identical every time React
             // bailed out of the re-render — so the banner sat there with nothing retrying behind
@@ -407,7 +415,8 @@ function Workspace(props: {
             stopRef.current = () => handle.stop()
             try {
                 sessionStorage.setItem(LIVE_TURN, turnId)
-                for await (const item of handle.stream({ chunks: true, signal })) {
+                // `children`: a routed call's subagent streams into its block under the tool row.
+                for await (const item of handle.stream({ chunks: true, children: true, signal })) {
                     setState((previous) => reduce(previous, item))
                 }
             } catch (caught) {
@@ -438,14 +447,36 @@ function Workspace(props: {
      */
     useEffect(() => {
         if (agent === undefined) return
+        let stored: string | null = null
+        try {
+            stored = sessionStorage.getItem(OPEN_SESSION)
+        } catch {}
+        // A reload reopens the conversation this tab had open (QA C1), and its history lands before
+        // the reattached stream does — the other order would replace rows the stream had written.
+        const key = agentId === undefined ? undefined : rememberedSession(stored, agentId)
         const parked = sessionStorage.getItem(LIVE_TURN)
-        if (parked === null) return
-        setState((previous) => ({ ...previous, running: true }))
-        void follow(parked, agent)
+        let cancelled = false
+        void (async () => {
+            if (key !== undefined) {
+                setSessionKey(key)
+                try {
+                    const messages = await history(props.baseUrl, props.token, agentId ?? "", key)
+                    if (!cancelled) setState({ ...EMPTY, rows: messages })
+                } catch {
+                    // A conversation that no longer exists opens empty, as a new one would.
+                }
+            }
+            if (parked === null || cancelled) return
+            setState((previous) => ({ ...previous, running: true }))
+            void follow(parked, agent)
+        })()
         // The cleanup this never had. Without it, a change of agent left the previous agent's
         // stream writing into a transcript the page had already replaced.
-        return () => liveRef.current.abort()
-    }, [agent, follow])
+        return () => {
+            cancelled = true
+            liveRef.current.abort()
+        }
+    }, [agent, agentId, follow, props.baseUrl, props.token])
 
     useEffect(() => {
         if (agent === undefined) return
@@ -480,11 +511,18 @@ function Workspace(props: {
         setDraft("")
         setError(undefined)
         setState((previous) => withUser(previous, text))
+        // A new conversation gets its own key rather than the server's `api:default` (QA C1).
+        const key =
+            sessionKey ??
+            newConversationKey((count) => crypto.getRandomValues(new Uint8Array(count)))
         try {
-            const handle = await agent.send(text, {
-                ...(sessionKey === undefined ? {} : { sessionKey }),
-            })
-            if (sessionKey === undefined) setSessionKey(handle.sessionKey)
+            // `chunks` at the send, not only at the attach: a reply streamed before the stream
+            // attached was otherwise missing from the replay, and the page showed no reply at all.
+            const handle = await agent.send(text, { sessionKey: key, chunks: true })
+            if (sessionKey === undefined) {
+                setSessionKey(handle.sessionKey)
+                remember(handle.sessionKey)
+            }
             await follow(handle.turnId, agent)
         } catch (caught) {
             setError(describe(caught))
@@ -505,6 +543,15 @@ function Workspace(props: {
         }
     }
 
+    const remember = (key: string | undefined) => {
+        try {
+            if (key === undefined || agentId === undefined) sessionStorage.removeItem(OPEN_SESSION)
+            else sessionStorage.setItem(OPEN_SESSION, rememberSession(agentId, key))
+        } catch {
+            // Storage refused (a private window): the tab simply forgets, as before.
+        }
+    }
+
     const openSession = async (key: string | undefined) => {
         // Close the live stream *before* replacing the transcript it is writing into. Without this
         // a turn started in one conversation went on appending rows to the next one — the
@@ -512,6 +559,7 @@ function Workspace(props: {
         liveRef.current.abort()
         setPanel("chat")
         setSessionKey(key)
+        remember(key)
         setState(EMPTY)
         setDraft("")
         if (key === undefined || agent === undefined) return
@@ -711,7 +759,7 @@ function Workspace(props: {
                         ? `${path} saved. The manifest was re-serialised, so its comments have moved — worth a look at the diff.`
                         : undefined
                 }
-                return `${path} was written to the manifest and is not in force yet: ${result.pending?.message ?? "the agent could not be replaced"} It takes effect at the next start.`
+                return `${path} was written to the manifest and is not in force yet: ${result.pending?.message ?? "the agent could not be replaced"}`
             }),
         [write],
     )
@@ -847,7 +895,7 @@ function Workspace(props: {
         <div className="shell">
             <aside className="side">
                 <header>
-                    <div className="brand">Dispach</div>
+                    <div className="brand">{DEFAULT_BRAND.name}</div>
                     <div style={{ fontSize: 12, color: "var(--dim)" }}>{agentName ?? "…"}</div>
                 </header>
                 <nav>
@@ -857,7 +905,7 @@ function Workspace(props: {
                      * A picker on a single-agent server is a control with one option — noise on the
                      * shape this runtime is most often deployed in, one agent per container. The
                      * *stopped* rows are the exception: those appear whatever the count, because an
-                     * agent that is off and invisible is the failure `dispach stop` was designed
+                     * agent that is off and invisible is the failure the CLI's `stop` was designed
                      * around, and here it would leave a blank page with nothing explaining it.
                      */}
                     {agents.length > 1 || agents.some((entry) => entry.status === "disabled") ? (
@@ -1137,16 +1185,17 @@ function Tail(props: { readonly state: Transcript }): React.ReactElement {
     // every render of the whole tree instead of when the transcript actually grew — the recorded
     // `trim` trigger mistake, one component over.
     const depth = props.state.rows.length + props.state.live.length
-    // `depth` is never read inside the body, so the rule offers to delete it — and taking that
-    // offer scrolls once at mount and never again, which lints clean and does nothing. Recorded in
-    // CLAUDE.md for the TUI's `trim` action and true here for the same reason.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: a deliberate trigger dependency
+    // A transcript that grew from nothing is a conversation just opened: it starts at its newest
+    // reply, not at the top (QA C1). Only growth after that respects a reader who scrolled up.
+    const previous = useRef(0)
     useEffect(() => {
         const node = anchor.current
         const box = node?.closest(".scroll")
+        const opened = previous.current === 0
+        previous.current = depth
         if (node === null || box === null || box === undefined) return
         const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40
-        if (atBottom) node.scrollIntoView({ block: "end" })
+        if (opened || atBottom) node.scrollIntoView({ block: "end" })
     }, [depth])
     return <div ref={anchor} />
 }
@@ -1206,7 +1255,7 @@ async function history(
 /**
  * One sentence for the screen — and **it does not re-append the hint**.
  *
- * `DispachError`'s constructor already embeds it: `super(`${message}\n  hint: ${hint}`)`. Appending
+ * The client error's constructor already embeds it: `super(`${message}\n  hint: ${hint}`)`. Appending
  * `— ${hint}` on top of that rendered every transport failure with the hint printed twice, in one
  * paragraph, which is how the sessions banner came to read `hint: Check the base URL … — Check the
  * base URL …`. `message` is the whole readable error; `detail` is the part before the hint.

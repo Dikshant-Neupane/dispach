@@ -1,0 +1,7 @@
+note: dispach-nlt — the registry does not know x-ai/grok-4.7; init's agent did not load, so its window (500000) and native tool support (true) were set from xai's published endpoint through config set model.main.
+pass  single-kv-set            r1  2 calls  12657 ms  $0.02080
+FAIL  single-read-answer       r1  1 calls  2063 ms  $0.00273  — file never read
+pass  single-calculator        r1  3 calls  4955 ms  $0.00835
+FAIL  single-now               r1  1 calls  2676 ms  $0.00308  — clock not read (a guess)
+pass  single-send              r1  3 calls  15203 ms  $0.01336
+pass  chain-order-notify       r1  3 calls  11238 ms  $0.01139

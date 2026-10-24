@@ -15,7 +15,7 @@ import { EventBus } from "../src/events/bus.ts"
 import type { AnyEvent } from "../src/events/types.ts"
 import { coerceArgs } from "../src/tools/coerce.ts"
 import { nativeDialect } from "../src/tools/dialect/native.ts"
-import { nltDialect } from "../src/tools/dialect/nlt.ts"
+import { nltDialect, parseNlt, renderNltEntry } from "../src/tools/dialect/nlt.ts"
 import {
     type ApprovalRequest,
     batch,
@@ -103,6 +103,28 @@ describe("resolution", () => {
     test("built-in slugs resolve without any provider", async () => {
         const registry = await ToolRegistry.create({ local: ["now", "memory_write"] })
         expect(registry.specs().map((entry) => entry.slug)).toEqual(["now", "memory_write"])
+    })
+
+    test("a built-in pinned again under a namespace leaves the catalogue, and says so", async () => {
+        // Measured: with `now` and `bench__now` both offered, Sonnet 5.5 read the built-in clock on
+        // every run of a task about the server's. The namespaced one was pinned on purpose, so it wins.
+        const registry = await ToolRegistry.create({
+            local: ["now", "memory_write"],
+            pinned: ["bench__now"],
+            providers: [provider("mcp", [tool({ slug: "bench__now" })])],
+        })
+        expect(registry.specs().map((entry) => entry.slug)).toEqual(["memory_write", "bench__now"])
+        const detail = registry.warnings.find((warning) => warning.code === "tool_builtin_shadowed")
+        expect(detail?.message).toContain(
+            "now, because a pinned tool has the same name (bench__now)",
+        )
+        expect(detail?.field).toBe("tools.local")
+
+        const alone = await ToolRegistry.create({ local: ["now"] })
+        expect(alone.specs().map((entry) => entry.slug)).toEqual(["now"])
+        expect(alone.warnings.some((warning) => warning.code === "tool_builtin_shadowed")).toBe(
+            false,
+        )
     })
 
     test("catalogue order is manifest order, because that is trim priority", async () => {
@@ -343,6 +365,80 @@ function coerce(args: Record<string, unknown>) {
 }
 
 describe("coercion", () => {
+    test("a list of objects keeps its objects (pilot.3)", () => {
+        // Items were stringified before their own schema was checked, so a native call passing a
+        // list of objects failed coercion, then its repair, and the turn ended `tool_repair_failed`.
+        const BOARD = spec({
+            slug: "update_board",
+            mutating: true,
+            parameters: {
+                type: "object",
+                properties: {
+                    ops: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: { id: { type: "string" }, status: { type: "string" } },
+                        },
+                    },
+                },
+                required: ["ops"],
+            },
+        })
+        const ops = [
+            { id: "T-1", status: "done" },
+            { id: "T-2", status: "doing" },
+        ]
+        const result = coerceArgs(BOARD, { ops })
+        expect(result.ok && result.args.ops).toEqual(ops)
+        // A string list still takes native numbers and booleans as text.
+        const mixed = coerce({ to: "a@b.com", labels: [1, true, "x"] })
+        expect(mixed.ok && mixed.args.labels).toEqual(["1", "true", "x"])
+    })
+
+    test("a list of objects written under NLT keeps its objects, in each shape a model writes it (pilot.7)", () => {
+        // pilot.3 fixed the native path; the NLT path read a JSON list through `String(item)`, so
+        // every object became "[object Object]", and the bare forms were split on their commas.
+        const BOARD = spec({
+            slug: "update_board",
+            mutating: true,
+            parameters: {
+                type: "object",
+                properties: {
+                    ops: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: { id: { type: "string" }, status: { type: "string" } },
+                        },
+                    },
+                },
+                required: ["ops"],
+            },
+        })
+        const ops = [
+            { id: "T-1", status: "done" },
+            { id: "T-2", status: "doing" },
+        ]
+        const written = [
+            '[{"id": "T-1", "status": "done"}, {"id": "T-2", "status": "doing"}]',
+            '{"id": "T-1", "status": "done"}, {"id": "T-2", "status": "doing"}',
+            '{"id": "T-1", "status": "done"}\n{"id": "T-2", "status": "doing"}',
+            '[\n  {\n    "id": "T-1",\n    "status": "done"\n  },\n  {\n    "id": "T-2",\n    "status": "doing"\n  }\n]',
+        ]
+        for (const text of written) {
+            const parsed = parseNlt(`ACTION: update_board\nops: <<<\n${text}\n>>>\nEND`)
+            const result = coerceArgs(BOARD, parsed.intents[0]?.args ?? {})
+            expect(result.ok && result.args.ops).toEqual(ops)
+        }
+        // Not JSON is still refused with the hint to write JSON, never coerced into a partial object.
+        const bad = coerceArgs(BOARD, { ops: "T-1 done, T-2 doing" })
+        expect(bad.ok).toBe(false)
+        // A JSON list of strings is unchanged.
+        const labels = coerce({ to: "a@b.com", labels: '["a", "b"]' })
+        expect(labels.ok && labels.args.labels).toEqual(["a", "b"])
+    })
+
     test("matches a field name written in another case or separator", () => {
         const result = coerce({ To: "a@b.com" })
         expect(result.ok).toBe(true)
@@ -561,7 +657,113 @@ async function runTools(
     return { outcome, events }
 }
 
+describe("a union of plain values (pilot.16)", () => {
+    const CELLS = spec({
+        slug: "sheet_write",
+        mutating: true,
+        parameters: {
+            type: "object",
+            properties: {
+                cell: { type: ["string", "number", "boolean"] },
+                count: { type: ["integer", "boolean"] },
+            },
+        },
+    })
+
+    test("a value already of a listed type is kept as written", () => {
+        expect(coerceArgs(CELLS, { cell: 5 })).toEqual({ ok: true, args: { cell: 5 } })
+        expect(coerceArgs(CELLS, { cell: "5" })).toEqual({ ok: true, args: { cell: "5" } })
+        expect(coerceArgs(CELLS, { cell: true })).toEqual({ ok: true, args: { cell: true } })
+    })
+
+    test("text is converted when text is not one of the types, as NLT sends everything", () => {
+        expect(coerceArgs(CELLS, { count: "7" })).toEqual({ ok: true, args: { count: 7 } })
+        expect(coerceArgs(CELLS, { count: "yes" })).toEqual({ ok: true, args: { count: true } })
+        const refused = coerceArgs(CELLS, { count: "seven" })
+        expect(refused.ok).toBe(false)
+        expect(JSON.stringify(refused)).toContain("integer or boolean")
+    })
+
+    test("both dialects name every type, and native passes the schema through unchanged", () => {
+        expect(renderNltEntry(CELLS)).toContain("string, number or boolean")
+        const wire = nativeDialect.requestTools([CELLS])?.[0]?.parameters as
+            | { properties: { cell: { type: unknown } } }
+            | undefined
+        expect(wire?.properties.cell.type).toEqual(["string", "number", "boolean"])
+    })
+})
+
 describe("execution", () => {
+    test("a tool's meter reaches the bus as tool.usage, with the participant it is billed to (pilot.9)", async () => {
+        const search = tool({ slug: "web_search", mutating: false }, async (_args, context) => {
+            context.meter?.({ provider: "tavily", operation: "search", unit: "credits", units: 1 })
+            return "results"
+        })
+        const registry = await ToolRegistry.create({
+            pinned: ["web_search"],
+            providers: [provider("fake", [search])],
+        })
+        const bus = new EventBus({ runtimeId: "rt_test" })
+        const events = capture(bus)
+        await executeIntents({
+            registry,
+            intents: [intent("web_search")],
+            context: toolContext({ actingParticipant: { id: "user:ada", via: "api" } }),
+            bus,
+            eventContext: { agentId: "a", sessionKey: "s", turnId: "t" },
+            timeoutMs: 1000,
+            maxParallel: 4,
+            observationMaxTokens: 2000,
+            untrustedInTurn: false,
+            onMutate: "refuse",
+            policy: { ...DEFAULT_POLICY, mode: "allow" },
+        })
+        const usage = events.find((event) => event.type === "tool.usage")
+        expect(usage?.data).toEqual({
+            slug: "web_search",
+            callId: "c1",
+            provider: "tavily",
+            operation: "search",
+            unit: "credits",
+            units: 1,
+            participant: "user:ada",
+        })
+        expect(usage?.turnId).toBe("t")
+        expect(usage?.sessionKey).toBe("s")
+    })
+
+    test("a path rule sees the normalised path, so ../ cannot walk past it (pilot.4)", async () => {
+        const read = tool(
+            {
+                slug: "file_read",
+                mutating: false,
+                policyArg: "path",
+                policyArgIsPath: true,
+                parameters: {
+                    type: "object",
+                    properties: { path: { type: "string" } },
+                    required: ["path"],
+                },
+            },
+            async () => "the secret",
+        )
+        const registry = await ToolRegistry.create({
+            pinned: ["file_read"],
+            providers: [provider("fake", [read])],
+        })
+        const policy = { ...DEFAULT_POLICY, mode: "allow" as const, deny: ["file_read(.env)"] }
+        for (const path of [".env", "./.env", "workspace/../.env", "a/b/../../.env"]) {
+            const { outcome } = await runTools(registry, [intent("file_read", { path })], {
+                policy,
+            })
+            expect([path, outcome.results[0]?.ok]).toEqual([path, false])
+        }
+        const { outcome } = await runTools(registry, [intent("file_read", { path: "notes.md" })], {
+            policy,
+        })
+        expect(outcome.results[0]?.ok).toBe(true)
+    })
+
     test("a built-in tool runs and its observation is the output", async () => {
         const registry = await ToolRegistry.create({ local: ["now"] })
         const { outcome } = await runTools(registry, [intent("now")])
@@ -886,7 +1088,12 @@ describe("execution", () => {
 describe("the local provider", () => {
     test("offers exactly the built-ins, and resolves nothing else", async () => {
         const local = localProvider()
-        expect(await local.list?.()).toEqual(["now", "memory_write", "artifact_read"])
+        expect(await local.list?.()).toEqual([
+            "now",
+            "memory_write",
+            "memory_forget",
+            "artifact_read",
+        ])
         expect((await local.resolve(["gmail_send"])).length).toBe(0)
     })
 })
@@ -1181,7 +1388,9 @@ describe("telling the model what it was not given", () => {
         // "unable", and do not reach for another tool to get around it.
         expect(text).toContain("tools.pinned")
         expect(text).toContain("not permitted to yet")
-        expect(text).toContain("work around it")
+        expect(text).toContain("by another route")
+        // Scoped, or a pinned tool that does the job reads as a forbidden workaround and is refused.
+        expect(text).toContain("A tool you have been given that does the job is not a workaround")
     })
 
     test("native says the same thing, in the only place it can", async () => {

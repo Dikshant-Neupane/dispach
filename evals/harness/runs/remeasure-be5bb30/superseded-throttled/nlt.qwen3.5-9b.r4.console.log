@@ -1,0 +1,20 @@
+pass  single-kv-set            r4  2 calls  49928 ms  $0.00073
+pass  single-read-answer       r4  2 calls  26292 ms  $0.00070
+pass  single-calculator        r4  2 calls  27332 ms  $0.00069
+pass  single-now               r4  2 calls  364787 ms  $0.00107
+pass  single-send              r4  2 calls  34533 ms  $0.00070
+FAIL  chain-order-notify       r4  2 calls  900068 ms  $0.00000  — harness error: 
+FAIL  chain-file-to-kv         r4  2 calls  900081 ms  $0.00000  — harness error: 
+pass  chain-sum-to-file        r4  5 calls  143486 ms  $0.00159  (1 429 retries)
+pass  chain-kv-to-send         r4  4 calls  127026 ms  $0.00116  (1 429 retries)
+FAIL  chain-edit-json          r4  4 calls  606606 ms  $0.00108  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:49312/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  recall-fact              r4  4 calls  622343 ms  $0.00240  (3 429 retries)
+pass  recall-preference        r4  6 calls  303556 ms  $0.00185  (1 429 retries)
+pass  recall-correction        r4  8 calls  43600 ms  $0.00140  (3 429 retries)
+pass  abstain-chitchat         r4  1 calls  14411 ms  $0.00035
+pass  abstain-knowledge        r4  3 calls  17830 ms  $0.00035
+pass  abstain-draft-only       r4  2 calls  18435 ms  $0.00035  (1 429 retries)
+pass  abstain-cannot           r4  1 calls  39181 ms  $0.00039
+pass  recover-retry            r4  5 calls  22767 ms  $0.00109  (3 429 retries)
+FAIL  recover-persist          r4  8 calls  34641 ms  $0.00113  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:49312/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.5-9b is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits
+pass  recover-bad-expression   r4  2 calls  14174 ms  $0.00069

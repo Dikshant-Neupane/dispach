@@ -6,17 +6,25 @@ skill source, and cross-cutting behaviour arrives as a plugin — including the 
 ones. If a first-party package needs something the plugin API can't express, the API is
 wrong and gets fixed. No private back doors.
 
+**Writing a plugin in 0.2.0 needs a repository checkout.** The plugin types — `Plugin`,
+`PluginContext`, `Middleware`, `conformance()` — live in `@dispach/core`, a private workspace package
+that is not published. The one npm package, `dispach`, exports only the HTTP client
+(`dispach/client`) and the event types (`dispach/wire`). A published plugin entry point is planned,
+not shipped. Every `import … from "@dispach/core"` on this page is a **checkout import**: it resolves
+inside this repository's workspace and nowhere else.
+
 ---
 
 ## The contract
 
 ```ts
+// checkout import — @dispach/core is a workspace package, not on npm
 import type { Plugin, PluginContext } from "@dispach/core"
 
 export default {
   name: "telegram",
   version: "0.1.0",
-  dispachApi: "^0.1",
+  dispachApi: "^0.2",
   permissions: [
     { kind: "network", hosts: ["api.telegram.org"] },
     { kind: "env", vars: ["TELEGRAM_BOT_TOKEN"] },
@@ -31,9 +39,9 @@ export default {
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `name` | yes | Unique within a runtime. Collision is a load failure. |
+| `name` | yes | Unique within a runtime. A collision fails that plugin's load: it is skipped with a warning and the agent starts without it (see *Loading*). |
 | `version` | yes | Semver. Reported in `plugin.loaded` events. |
-| `dispachApi` | yes | Semver **range**. Host refuses to load on mismatch, naming both versions and the range. |
+| `dispachApi` | yes | Semver **range**. On mismatch the host refuses the plugin, naming both versions and the range; it is skipped with a warning and the agent starts. |
 | `permissions` | no | Declarative. Advisory in v1 — recorded, surfaced, unenforced. |
 | `configSchema` | no | Zod schema. Manifest `config` is validated against it before `setup` runs. |
 | `setup` | yes | Runs once at boot. **Must not await network I/O.** |
@@ -45,9 +53,10 @@ export default {
 - Budget: **200 ms**. The loader times each plugin and emits `plugin.slow` past the budget.
 - No network calls. Connect in the channel's `start()`, which runs after readiness.
 - No filesystem walks beyond your own package.
-- Throwing fails the agent load with your plugin named. That is the correct behaviour for
-  a genuine misconfiguration and the wrong behaviour for a transient failure — do not
-  throw on anything you could retry later.
+- Throwing fails *your plugin's* load, named: it is skipped with a warning on `agent.warnings` and
+  the agent starts without it (see *Loading*). That is the correct behaviour for a genuine
+  misconfiguration and the wrong behaviour for a transient failure — do not throw on anything you
+  could retry later, because a skipped plugin stays skipped until the next boot.
 
 ---
 
@@ -60,8 +69,11 @@ interface PluginContext {
   // registration
   defineChannel(id: string, factory: ChannelFactory): void
   defineToolProvider(id: string, factory: ToolProviderFactory): void
+  defineModelTransport(api: string, transport: ModelTransport): void   // Phase 26c
+  defineMediaProvider(name: string, factory: MediaProviderFactory): void // Phase 26j
   defineScriptRunner(runner: ScriptRunner): void
   use(middleware: Middleware): void          // Phase 9B
+  defineRoute(route: PluginRoute): void      // Phase 30
 
   // ambient
   readonly config: unknown          // validated against configSchema
@@ -76,7 +88,7 @@ interface PluginContext {
 Two departures from the shape this document first described, both deliberate.
 
 **`define*` takes an id and a factory rather than a spec object.** The id is what a manifest
-*selects* — `tools.provider` names a provider id, a `channels[]` entry names a `type` — so
+*selects* — a `tools.providers` key names a provider id (the scalar `tools.provider` is a deprecated alias), a `channels[]` entry names a `type` — so
 registration and selection are the same namespace, and naming a plugin stays separate from granting
 what it offers. The factory is what already existed: `ChannelFactory` and `ToolProviderFactory` are
 the seams `Runtime.create` has taken since Phase 3, and a plugin registering one means core's wiring
@@ -92,7 +104,6 @@ liability rather than a convenience.
 
 | Point | Status |
 | --- | --- |
-| `defineModelProvider` | Deferred. The chat-completions transport is the only one, and a second implementation is what would tell us what the seam needs. |
 | `defineStore` | Deferred with the Postgres driver (open item O.5). The `Store` interface exists; nothing has needed to register one. |
 | `defineSkillSource` | Deferred. Skill sources resolve through `lib/sources.ts` in the CLI, which is a fetch a person triggers rather than something an agent boots with. |
 | `defineTools` | Deferred. `tools.local` covers the built-ins and a plugin wanting to add tools registers a provider, which is the same capability with a name a manifest can select. |
@@ -165,8 +176,9 @@ wrong for as long as it has none.
 
 **An installed plugin is one directory with a runnable entry and nothing to resolve.** That is the
 rule the whole install mechanism is built on, and it is what makes it small enough to be worth
-having: nothing installs dependencies, ever, so the npm install and the container — whose `node_modules`
-holds only the two declared dependencies — load a plugin exactly as a checkout does.
+having: nothing installs dependencies, ever, so the npm install and the container — where `dispach`
+declares no `dependencies` at all, only `ink` and `react` as optional ones for the terminal UI — load a
+plugin exactly as a checkout does.
 
 `plugins add` is what keeps it true. A fetched tree that declares runtime `dependencies` and ships no
 `node_modules` is refused by name (`plugin_not_self_contained`) before anything is renamed into place
@@ -247,7 +259,7 @@ plugin also does not reserve its `name`, so a working plugin is never refused fo
 that is not there.
 
 Loading happens **once per agent**, before that agent's manifest is validated. That ordering is
-forced: `loadManifest` checks `tools.provider` and a channel `type` against the ids the host can
+forced: `loadManifest` checks the `tools.providers` keys and a channel `type` against the ids the host can
 supply, and once plugins exist half of those ids come from the manifest itself. The refs are read
 from a shallow header parse, which needs no credentials and expands no environment — a plugin spec
 is a package name, never a secret.
@@ -261,8 +273,9 @@ is a package name, never a secret.
 **This section described an interface that does not exist** for as long as it has been here — a
 `ChannelSpec`/`Channel` pair with `capabilities.maxMessageLength` and `ctx.inbound(event)`, none of
 which is in `packages/core/src/channels/channel.ts`. Rewritten against the real one in 0.1.3,
-because it is what the second channel gets written from. `channels/channel.ts` is the authority; the
-shapes below are copied from it.
+because it is what the second channel gets written from. `channels/channel.ts` is the authority for
+the transport shapes below; `ChannelFactory` and `ChannelFactoryContext` are in
+`runtime/channels.ts`.
 
 ```ts
 type ChannelFactory = (context: ChannelFactoryContext) => ChannelTransport
@@ -290,6 +303,8 @@ interface ChannelLimits {
   readonly maxMessageChars: number
   readonly idempotentSend: boolean
   readonly minSendIntervalMs?: number
+  readonly attachments?: boolean    // send() can carry OutboundMessage.attachment (Phase 26j)
+  readonly voiceNotes?: boolean     // an audio/* attachment is sent as a voice note (pilot.15)
 }
 
 interface ChannelHost {
@@ -356,30 +371,65 @@ the `channelId`, `channelType` and `sessionKey`.
 
 ### Tool provider
 
+Registered with `defineToolProvider(id, factory)` and selected by a `tools.providers` key.
+`tools/types.ts` is the authority; the shapes below are copied from it, trimmed of docstrings.
+
 ```ts
-interface ToolProviderSpec {
-  id: string
-  configSchema?: ZodSchema
-  create(config: unknown, ctx: ProviderContext): ToolProvider
-}
+type ToolProviderFactory = (context: ToolProviderContext) => ToolProvider
+// context: { dir, env, config, agentId, providers?, mediaProviders? } — see "Local tools" below
 
 interface ToolProvider {
-  resolve(slugs: string[]): Promise<ToolSpec[]>       // omits what it does not own; never throws for that
-  execute(call: ToolCall, signal: AbortSignal): Promise<ToolResult>
-  explainUnresolved?(slugs: string[]): ConfigError | undefined
-  search?(query: string, k: number): Promise<ToolSpec[]>
+  readonly id: string
+  resolve(slugs: readonly string[]): Promise<readonly Tool[]>   // omits what it does not own; never throws for that
+  list?(): Promise<readonly string[]>                           // only for a nearest-match suggestion
+  refresh?(slugs: readonly string[], signal?: AbortSignal): Promise<ToolProviderRefresh> // after ready, never before
+  available?(): Promise<readonly ToolAvailability[]>            // what exists unpinned, one line each
+  explainUnresolved?(slugs: readonly string[]): ConfigError | undefined
+  refused?(): readonly RefusedTool[]                            // pilot.16: found by the last resolve, not loadable
+  stop?(): Promise<readonly string[]>                           // from Runtime.stop; reaps what it owns
+}
+
+interface Tool {
+  readonly spec: ToolSpec
+  readonly handler: (args, context: ToolContext) => Promise<string> | string  // the observation; throw = failed call
+  readonly trustOf?: (args) => Trust                           // per-call trust; can only lower it
 }
 
 interface ToolSpec {
   slug: string
-  description: string
+  provider: string              // which provider resolved it; named in a resolution failure
+  summary: string               // one line: what it does
   whenToUse: string
-  whenNotToUse: string          // required — negative examples improve routing materially
-  schema: JSONSchema
-  tags: string[]                // "read" | "write" | custom; drives phases and write quota
-  mutating: boolean             // counts against reserveWrite; never parallelised
+  whenNotToUse?: string         // optional in the type, required by the catalogue: absent warns, naming the slug
+  parameters: ToolParameters    // a JSON Schema object at the top level
+  tags: readonly string[]       // matched by phases.*.allow as tag:<name>
+  mutating: boolean             // serialises, holds reserved write slots, never retried
+  trust?: Trust                 // the registry defaults a provider tool to "untrusted"
+  trustReason?: string          // why "trusted" was declared; silences the warning
+  policyArg?: string            // which argument a tools.policy pattern matches
+  policyArgIsPath?: true        // ...matched normalised, so ../ cannot walk past a path rule
+  alone?: true                  // must be the only call in its step (since 0.2.0-pilot.6)
+  personal?: boolean            // acts as the agent's owner (since 0.2.0-pilot.15)
 }
 ```
+
+There is no `execute` on the provider and no `search`: a resolved `Tool` carries its own `handler`,
+and the executor calls that. Discovery inside a catalogue is a tool the provider offers
+(`composio_search`), never a provider method the loop calls.
+
+**`personal` is for a tool that acts as the person the agent belongs to**: their mailbox, their
+connected accounts. A turn that does not act for the agent's assigned owner is not offered one, and a
+call naming one anyway is refused with `tool_personal` and a `tool.gated` event (`reason: personal`).
+That covers another member asking, a delegation from their agent, a stand-in, and a channel sender
+who is not in the assignment's `channelIds`. An unassigned agent, and a turn with no person (the
+operator, a schedule), are unaffected. Composio sets it on every tool. MCP sets it for a server
+declared `personal: true`.
+
+**`alone` is for a tool that reports on what other calls return.** Several calls may share a step
+and run in order, so a model can write a call and its report in one message and submit an answer
+invented before the result existed: a subagent did exactly that in `eval:subagents`. Asked for beside
+other calls, an `alone` call is refused (`tool_not_alone`, a `tool.gated` event) and the others run;
+the observation says to call it again on its own. `submit_artifact` sets it.
 
 **An unknown slug must fail the load, naming it — but `resolve()` is not where that happens.**
 Silently dropping dead slugs is the exact failure that starves write tools and produces "tool not
@@ -396,64 +446,171 @@ still missing after every provider has answered, and returning `undefined` falls
 generic nearest-match failure. Return a reason only while it is the better explanation: a provider
 that blames its cache forever turns every future typo into a misleading message.
 
-`whenNotToUse` is not optional. If you have nothing to say, say what the adjacent tool is
-for instead.
+`refused()` (0.2.0-pilot.16) is for a slug the provider **found** and could not load, most often a
+schema `parametersFromJsonSchema` cannot represent. `resolve()` leaves the tool out and lists it here
+with the error's detail; the registry warns `tool_schema_unsupported` by name and field, does not also
+report it as missing, and tells the model it is unavailable rather than asking for it to be pinned.
+One upstream schema change then costs one tool, not every reload of every agent that pins it.
 
-### Model provider
+A field's `type` may be a list of scalar types (`["string", "number", "boolean"]`), JSON Schema's own
+spelling for a union of plain values, mapped from `anyOf`/`oneOf` of scalars or a `type` list (pilot.16).
+The native dialect sends it unchanged; NLT names every type; coercion keeps a value already of a listed
+type as written and otherwise tries the non-text types in order. A union with a list or an object in
+it, `allOf`, `not`, `$ref`, or a variant carrying its own constraint is still refused.
+
+Treat `whenNotToUse` as required even though the type does not: a spec without one renders a visible
+placeholder and the registry warns. If you have nothing to say, say what the adjacent tool is for
+instead.
+
+### Model transport
+
+**Built in Phase 26c.** Registered with `defineModelTransport(api, transport)` and selected by
+`model.<role>.api`:
 
 ```ts
-interface ModelProviderSpec {
-  id: string
-  create(config: unknown): ModelProvider
+interface ModelTransport {
+  optionsSchema?: ConfigSchema            // validates model.<role>.options at load
+  capabilities?(resolved, config): ModelCapabilities      // what this transport makes true
+  warnings?(config, field): ErrorDetail[]                 // what it adjusts, shown at load (pilot.6)
+  create(context: ModelTransportContext): ModelProvider   // no network: runs before ready
+}
+
+interface ModelTransportContext {
+  id: string                              // "<api>:<role>"
+  field: string                           // "model.main", for errors that name a field
+  config: ModelRoleConfig                 // the whole role, id and sampling included
+  options: unknown                        // options after optionsSchema
+  env?: EnvSource
+  fetch?: FetchLike
+  retry?: RetryPolicy
+  onRetry?(info): void                    // emit model.retry through this
+  onUsageUnsupported?(info): void
 }
 ```
 
-Core ships `chat-completions`. Implement this only for a genuinely different wire protocol
-(a native Messages-API adapter, a local in-process runner). Not for a different vendor —
-that's a base URL.
+Core ships `chat-completions`, registered the same way. A host may also supply transports
+directly (`RuntimeOptions.modelTransports`), which is how the CLI hands every agent
+`bedrock-converse` without a `plugins:` entry. An unknown `api` refuses the load; so do `options`
+the transport's schema rejects.
 
-### Store driver
+Two harness-only fields reach a transport on `ChatMessage` and are its to act on or ignore:
+`cacheBreakpoint: true` marks where the cache-stable prefix ends (after the static slots, and at the
+active skill), and `thinking` carries signed thinking blocks on an assistant call when
+`capabilities.thinking` is `anthropic`. A transport that produces signed thinking emits a
+`{type: "thinking_block", block}` chunk when a block completes, beside the `reasoning` deltas it
+streams; the loop replays them for the rest of the turn. `chat-completions` never sends `thinking`,
+and sends `cacheBreakpoint` only as Anthropic's `cache_control` markers, only for an OpenRouter base
+URL serving an `anthropic/claude*` model (`sendsCacheControl`, decision 14.119); every other endpoint
+gets neither field.
+
+Implement one only for a genuinely different wire protocol (Bedrock's Converse; later a native
+Messages-API adapter). Not for a different vendor on the same protocol: that's a base URL. A
+transport may carry a heavy dependency, since it lives outside core, but it `import()`s it on the
+first call, so boot never pays for it.
+
+### Media provider
+
+**Built in Phase 26j.** Registered with `defineMediaProvider(name, factory)` and selected by
+`media.transcription.provider`, `media.image.provider` or `media.speech.provider`:
 
 ```ts
-interface StoreSpec {
-  id: string
-  create(config: unknown): Promise<Store>
+interface MediaProviderFactory {
+  optionsSchema?: ConfigSchema                  // validates media.<section>.options at load
+  create(context: MediaProviderContext): MediaProvider   // no network: runs before ready
+}
+
+interface MediaProvider {
+  transcribe?(audio: AudioInput, signal: AbortSignal): Promise<Transcript>          // {text, durationS?}
+  generateImage?(request: ImageRequest, signal: AbortSignal): Promise<GeneratedImage> // {bytes, mimeType}
+  synthesize?(request: SpeechRequest, signal: AbortSignal): Promise<SpokenAudio>       // media.speech (pilot.15)
 }
 ```
 
-Core ships `sqlite`. A Postgres driver is the expected second implementation. The interface
-lives in `store/store.ts` and is deliberately narrow — no query builder, no ORM, no
-transactions spanning subsystems.
+One contract with optional halves, because real backends come in sets. Core ships `openai`
+(any endpoint with `/audio/transcriptions` and `/images/generations`); `media-aws` registers `aws`
+(Amazon Transcribe streaming, Nova Canvas). An unknown name, a provider lacking the half its
+section needs, or options its schema rejects refuses the load. The runtime owns the deadline and
+the metering, so a provider only answers.
 
-### Skill source
+**On a channel.** A transport puts a voice note on `RawInbound.audio` as `{mimeType, durationS?,
+sizeBytes?, fetch(signal)}`: the bytes are fetched only if the note is transcribed, which happens
+after `allowFrom`, so a stranger's audio is never downloaded. Photos go on `RawInbound.images` as
+`[{sizeBytes?, fetch(signal)}]`, fetched on the same terms: the runtime asks first whether the model
+reads images, then reads at most five, each capped and typed by its bytes as `POST /messages`
+`images` are, and sends them with the turn. A refusal is a reply to the sender and an
+`agent.channel.error`, never silence. A transport that can send a file
+declares `limits.attachments` and reads `OutboundMessage.attachment` (`{path, mimeType}`, with `text`
+as its caption); for one that does not, the outbox names the file in the reply instead. A tool
+produces such a file by calling `ToolContext.attach({path, mimeType})`.
+
+### HTTP route
+
+**Built in Phase 30.** A plugin that needs to answer HTTP — an A2A endpoint, a provider's callback —
+declares a route rather than reaching for the server:
 
 ```ts
-interface SkillSourceSpec {
-  id: string
-  list(): Promise<SkillMeta[]>              // frontmatter only — called at boot
-  load(id: string): Promise<SkillBody>      // called on activation
+interface PluginRoute {
+  method: "GET" | "POST"
+  path: string                       // below the mount; "/" is the mount itself
+  capability: Capability | "open"    // read | chat | write | admin | peer, or open
+  root?: string                      // also answer here while exactly one hosted agent declares it
+  handler(request: { request: Request; url: URL; path: string; caller: PluginCaller }): Promise<Response>
 }
+type PluginCaller =
+  | { kind: "operator" } | { kind: "key"; keyId: string; label: string } | { kind: "anonymous" }
 ```
 
-`list()` runs inside the boot budget. Cache aggressively; a network-backed skill source
-must serve `list()` from a local cache and refresh after readiness.
+It is mounted at `/v1/agents/<agentId>/plugins/<plugin name>/<path>`, so the plugin's `name` must be a
+lowercase slug; an invalid path or a route declared twice fails the plugin's `setup`, which is a
+warning like any failed plugin rather than an agent that will not start. **The gate is the one every
+first-party route has**: the server authenticates the caller, checks the declared capability (403), and
+answers an agent the key does not reach exactly as a missing one (404), all before the handler runs.
+The handler receives a *caller*, never the credential. Routes are rebuilt with the agent, so a reload
+changes them and a stopped agent answers none.
+
+`peer` is the capability for a remote agent's key: no first-party route asks for it, so a key minted
+with `can: ["peer"]` reaches a plugin route that declares it and nothing else — it cannot start a
+trusted turn through `POST /messages`. A route that throws answers `500 plugin_route_failed`, naming the
+plugin. `root` exists for `/.well-known/agent-card.json`, which a peer looks for at the host root; a root
+path that two agents claim is answered by neither, because it cannot say which one it means.
+
+A channel whose inbound text comes from another agent sets `RawInbound.senderKind: "agent"`: the text
+is fenced as untrusted and the turn acts for nobody, the treatment an agent sender gets everywhere.
 
 ### Local tools
 
-```ts
-interface LocalTool {
-  slug: string
-  description: string
-  whenToUse: string
-  whenNotToUse: string
-  schema: JSONSchema
-  tags: string[]
-  mutating: boolean
-  execute(args: unknown, ctx: ToolContext): Promise<ToolResult>
-}
-```
+There is no separate local-tool shape. A built-in tool is the same `Tool` a provider resolves —
+`{spec, handler, trustOf?}` from `tools/types.ts` — selected by `tools.local`. Same catalogue, same
+budget, same phase rules as provider tools. A plugin that wants to add tools registers a provider
+(`defineTools` is in *Not built yet*, as are `defineStore` and `defineSkillSource`).
 
-In-process functions. Same catalogue, same budget, same phase rules as provider tools.
+A **tool provider factory** receives `{ dir, env, config, agentId, providers? }`. `providers` is every
+factory the runtime builds agents with, handed over so a provider whose tools edit the manifest
+(`config_set`) can have a `tools.providers` edit checked by the providers themselves before it is
+written: the same check the TUI, the web app and `PATCH /config` make (decision 14.24). A factory must
+construct without network I/O, which is what makes building one to validate its config safe.
+
+**`ctx.pinTools?.(slugs)`** (since pilot.14) is for a tool that has just added slugs to `tools.pinned`
+(`config_set` does). Slugs a provider resolves from what it already holds, with no network call, become
+callable on the next step of this turn and are re-rendered into the catalogue. It returns those slugs,
+and the agent queues a reload for when the turn ends, so the rest work from the next message. It is
+absent where no turn can take them.
+
+**`ctx.meter?.({provider, operation?, unit, units})`** (since pilot.9) reports what one call spent at a
+third party, in that party's own unit (`credits`, `requests`). The runtime emits it as a `tool.usage`
+event with the acting participant, so an embedder bills a user's web spend the way it bills
+`model.result`. The executor supplies it on every call; the web provider meters each search, scrape,
+crawl and map.
+
+**`ctx.actingParticipant`** is who the turn acts for: `{ id, name?, via: "api" | "channel", onBehalfOf? }`, or
+`null` for a schedule, a peer agent, an in-process team handoff or the operator. A cross-member
+delegation (Phase 28) carries the person who asked the coordinator, who stays accountable; a
+stand-in's turn carries the real sender as `id` and the absent owner as `onBehalfOf`. Every tool receives it, local and
+provider alike. The runtime stamps it from the surface the turn arrived through; nothing the model
+writes reaches it. A tool that calls an embedder's API forwards it (a header, say) so the embedder
+can authorise the person as well as the agent. Optional in the type so a plugin's own test fixture
+keeps compiling, and absent reads as `null`. `04-SPEC-WIRE.md` has the table of which turn gets
+what, and how a key is bound to a participant.
 
 ---
 
@@ -569,19 +726,29 @@ const approvals: Middleware = {
   async wrapToolCall(ctx, next) {
     if (!ctx.tool.mutating) return next()
     const ok = await requestApproval(ctx.tool.slug, ctx.args)
-    if (!ok) {
-      return {
-        ok: false,
-        error: { code: "denied_by_policy", message: "Operator denied this action." },
-      }
+    if (ok) return next()
+    return {
+      callId: ctx.intent.callId,
+      slug: ctx.tool.slug,
+      ok: false,
+      output: `${ctx.tool.slug} was not approved, so nothing ran.`,
+      error: {
+        code: "denied_by_approval",
+        message: `${ctx.tool.slug} was not approved.`,
+        hint: "A person was asked and declined. Do not retry the same call.",
+      },
+      latencyMs: 0,
+      bytes: 0,
+      truncated: false,
+      trust: "trusted",          // the refusal is the runtime's own text
     }
-    return next()
   },
 }
 ```
 
-The denial returns a well-formed `ToolResult`, so the agent sees an honest observation and
-can adapt, rather than an exception that kills the turn.
+The denial returns a well-formed `ToolResult` — every required field, and an `error` with a `hint` —
+so the agent sees an honest observation and can adapt, rather than an exception that kills the turn.
+It is `approvalMiddleware` in `plugins/builtin.ts`, cut down; that one also races the turn's signal.
 
 ---
 
@@ -619,7 +786,7 @@ scramble. That trade is stated in the README.
 - [ ] `setup()` does no network I/O and returns under 200 ms
 - [ ] `configSchema` covers every field, secrets referenced by env var name
 - [ ] Every tool declares `whenNotToUse`
-- [ ] `resolve()` throws on unknown slugs
+- [ ] `resolve()` omits slugs it does not own, and explains a cold cache through `explainUnresolved()`
 - [ ] A channel transport reports the `id` and `type` it was given
 - [ ] `send()` is idempotent
 - [ ] Middleware calls `next()` and respects `ctx.signal`
@@ -642,13 +809,16 @@ unusable by most of them.
 **It checks the mechanical half only, and says so in its own docstring**: the shape, the version
 range, the setup budget, that `setup` registers something and survives an empty environment with a
 workspace that does not exist. It does **not** check that `send()` is idempotent, that `resolve()`
-throws on an unknown slug, or that the plugin avoids the network — those are properties of code the
+omits a slug it does not own, or that the plugin avoids the network — those are properties of code the
 suite calls once, under conditions a conformance run does not create. Passing means *well-formed*,
 not safe. A suite advertised as proving more than it does is worse than none, because it invites the
 belief that passing means the plugin is bounded by what it declared.
 
-Every first-party plugin runs it: `packages/cli/test/plugin-conformance.test.ts`, which lives there
-because the CLI is the package that imports all four — `packages/core` may not (hard rule 2), and a
+Every first-party plugin runs it: `packages/cli/test/plugin-conformance.test.ts`, which walks
+`BUILT_IN_PLUGINS` in `packages/cli/src/lib/providers.ts` — the five channels (`channel-a2a`, `-slack`,
+`-teams`, `-telegram`, `-whatsapp`), `media-aws`, `model-bedrock` and the four tool packages
+(`tools-composio`, `-mcp`, `-system`, `-web`). It lives there because the CLI is the package that
+imports them all — `packages/core` may not (hard rule 2), and a
 package asserting against itself would only ever check itself.
 
 **`plugins add` runs it too**, which is the useful half of it being assertions rather than a test

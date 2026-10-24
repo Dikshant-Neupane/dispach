@@ -1,0 +1,131 @@
+note: dispach-nlt — the registry does not know x-ai/grok-4.7; init's agent did not load, so its window (500000) and native tool support (true) were set from xai's published endpoint through config set model.main.
+pass  single-kv-set            r1  3 calls  8865 ms  $0.01615
+FAIL  single-read-answer       r1  2 calls  3126 ms  $0.00582  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: the block started in the middle of a line, so it was read as prose and nothing ran.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a val
+pass  single-calculator        r1  3 calls  4472 ms  $0.00790
+FAIL  single-now               r1  2 calls  4713 ms  $0.00536  — clock not read (a guess)
+FAIL  single-send              r1  1 calls  2630 ms  $0.00286  — no message to Priya about the build
+FAIL  chain-order-notify       r1  2 calls  4303 ms  $0.01135  — order never looked up
+pass  chain-file-to-kv         r1  3 calls  5985 ms  $0.01911
+pass  chain-sum-to-file        r1  4 calls  7759 ms  $0.01306
+FAIL  chain-kv-to-send         r1  2 calls  4159 ms  $0.00645  — Dmitri not sent the alert
+FAIL  chain-edit-json          r1  2 calls  3494 ms  $0.00578  — darkMode not true
+pass  recall-fact              r1  5 calls  11076 ms  $0.02205
+FAIL  recall-preference        r1  3 calls  7352 ms  $0.01507  — Lee not told about the deploy
+pass  recall-correction        r1  6 calls  8880 ms  $0.02193
+pass  abstain-chitchat         r1  1 calls  4215 ms  $0.00880
+pass  abstain-knowledge        r1  1 calls  1801 ms  $0.00770
+pass  abstain-draft-only       r1  1 calls  3634 ms  $0.00362
+pass  abstain-cannot           r1  1 calls  9107 ms  $0.00709
+pass  recover-retry            r1  5 calls  7784 ms  $0.01573
+FAIL  recover-persist          r1  5 calls  9228 ms  $0.01693  — file never written
+pass  recover-bad-expression   r1  3 calls  4381 ms  $0.00790
+pass  recover-missing-file     r1  2 calls  5018 ms  $0.00713
+FAIL  recover-unknown-order    r1  2 calls  4408 ms  $0.00661  — never looked the order up
+FAIL  long-log-needle          r1  2 calls  3100 ms  $0.00574  — error code not stored
+FAIL  long-count-orders        r1  2 calls  3388 ms  $0.00541  — file never read
+pass  long-handbook            r1  3 calls  5973 ms  $0.03696
+pass  single-kv-set            r2  2 calls  6230 ms  $0.00793
+FAIL  single-read-answer       r2  2 calls  2751 ms  $0.00537  — file never read
+pass  single-calculator        r2  2 calls  2858 ms  $0.00550
+pass  single-now               r2  3 calls  8545 ms  $0.01112
+FAIL  single-send              r2  1 calls  2434 ms  $0.00324  — no message to Priya about the build
+FAIL  chain-order-notify       r2  2 calls  4621 ms  $0.00633  — order never looked up
+FAIL  chain-file-to-kv         r2  2 calls  3629 ms  $0.00560  — region not stored as eu-west-2
+pass  chain-sum-to-file        r2  4 calls  7598 ms  $0.01326
+FAIL  chain-kv-to-send         r2  2 calls  4108 ms  $0.00645  — Dmitri not sent the alert
+FAIL  chain-edit-json          r2  2 calls  3690 ms  $0.00585  — darkMode not true
+pass  recall-fact              r2  4 calls  17476 ms  $0.02741
+FAIL  recall-preference        r2  3 calls  10325 ms  $0.01230  — Lee not told about the deploy
+pass  recall-correction        r2  6 calls  10013 ms  $0.02360
+pass  abstain-chitchat         r2  1 calls  3228 ms  $0.00346
+pass  abstain-knowledge        r2  1 calls  2123 ms  $0.00274
+pass  abstain-draft-only       r2  1 calls  3583 ms  $0.00368
+pass  abstain-cannot           r2  1 calls  8029 ms  $0.00622
+pass  recover-retry            r2  5 calls  6704 ms  $0.02017
+FAIL  recover-persist          r2  3 calls  6711 ms  $0.01036  — file never written
+pass  recover-bad-expression   r2  2 calls  3195 ms  $0.00557
+FAIL  recover-missing-file     r2  2 calls  2835 ms  $0.00553  — never tried to read the file
+FAIL  recover-unknown-order    r2  2 calls  5318 ms  $0.01190  — never looked the order up
+pass  long-log-needle          r2  3 calls  5997 ms  $0.07464
+FAIL  long-count-orders        r2  2 calls  2792 ms  $0.00548  — file never read
+FAIL  long-handbook            r2  2 calls  3529 ms  $0.00571  — meal_limit is not 75
+pass  single-kv-set            r3  2 calls  6358 ms  $0.00768
+pass  single-read-answer       r3  3 calls  4555 ms  $0.01408
+pass  single-calculator        r3  3 calls  5176 ms  $0.01313
+pass  single-now               r3  3 calls  8315 ms  $0.01567
+FAIL  single-send              r3  1 calls  1946 ms  $0.00302  — no message to Priya about the build
+FAIL  chain-order-notify       r3  2 calls  3226 ms  $0.00545  — order never looked up
+pass  chain-file-to-kv         r3  3 calls  4633 ms  $0.00891
+pass  chain-sum-to-file        r3  4 calls  6739 ms  $0.01224
+FAIL  chain-kv-to-send         r3  2 calls  4594 ms  $0.00651  — Dmitri not sent the alert
+FAIL  chain-edit-json          r3  2 calls  3271 ms  $0.00588  — darkMode not true
+FAIL  recall-fact              r3  3 calls  11595 ms  $0.01704  — flight not stored as BA 286
+FAIL  recall-preference        r3  3 calls  8750 ms  $0.01098  — Lee not told about the deploy
+pass  recall-correction        r3  5 calls  7461 ms  $0.01984
+pass  abstain-chitchat         r3  1 calls  2788 ms  $0.00310
+pass  abstain-knowledge        r3  1 calls  1684 ms  $0.00268
+pass  abstain-draft-only       r3  1 calls  3473 ms  $0.00370
+pass  abstain-cannot           r3  1 calls  10592 ms  $0.00708
+FAIL  recover-retry            r3  2 calls  2815 ms  $0.00529  — never got past the failure
+FAIL  recover-persist          r3  3 calls  7336 ms  $0.00981  — file never written
+pass  recover-bad-expression   r3  2 calls  3082 ms  $0.00537
+FAIL  recover-missing-file     r3  2 calls  3001 ms  $0.00560  — never tried to read the file
+FAIL  recover-unknown-order    r3  2 calls  5882 ms  $0.00658  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: the block started in the middle of a line, so it was read as prose and nothing ran.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a val
+FAIL  long-log-needle          r3  2 calls  4222 ms  $0.00567  — error code not stored
+FAIL  long-count-orders        r3  2 calls  2963 ms  $0.00529  — file never read
+FAIL  long-handbook            r3  2 calls  3858 ms  $0.00605  — meal_limit is not 75
+pass  single-kv-set            r4  2 calls  6895 ms  $0.00801
+FAIL  single-read-answer       r4  2 calls  3868 ms  $0.00543  — file never read
+FAIL  single-calculator        r4  2 calls  3269 ms  $0.00506  — calculator not used
+FAIL  single-now               r4  2 calls  3328 ms  $0.01020  — clock not read (a guess)
+FAIL  single-send              r4  1 calls  2398 ms  $0.00328  — no message to Priya about the build
+FAIL  chain-order-notify       r4  2 calls  3921 ms  $0.00553  — order never looked up
+pass  chain-file-to-kv         r4  3 calls  5877 ms  $0.00870
+FAIL  chain-sum-to-file        r4  2 calls  3204 ms  $0.00572  — reports/total.txt is not 499.75
+FAIL  chain-kv-to-send         r4  2 calls  5902 ms  $0.00695  — Dmitri not sent the alert
+FAIL  chain-edit-json          r4  2 calls  3520 ms  $0.01077  — darkMode not true
+pass  recall-fact              r4  4 calls  9550 ms  $0.01790
+pass  recall-preference        r4  5 calls  11912 ms  $0.02204
+pass  recall-correction        r4  6 calls  9568 ms  $0.01775
+pass  abstain-chitchat         r4  1 calls  3938 ms  $0.00309
+pass  abstain-knowledge        r4  1 calls  1706 ms  $0.00261
+pass  abstain-draft-only       r4  1 calls  3418 ms  $0.00347
+pass  abstain-cannot           r4  1 calls  12895 ms  $0.00883
+FAIL  recover-retry            r4  2 calls  2751 ms  $0.00528  — never got past the failure
+FAIL  recover-persist          r4  3 calls  6700 ms  $0.01048  — file never written
+pass  recover-bad-expression   r4  2 calls  3006 ms  $0.00547
+pass  recover-missing-file     r4  2 calls  4734 ms  $0.00671
+FAIL  recover-unknown-order    r4  2 calls  3234 ms  $0.00565  — never looked the order up
+pass  long-log-needle          r4  3 calls  5626 ms  $0.03500
+pass  long-count-orders        r4  3 calls  21821 ms  $0.05239
+FAIL  long-handbook            r4  2 calls  3807 ms  $0.00611  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: the block started in the middle of a line, so it was read as prose and nothing ran.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a val
+pass  single-kv-set            r5  2 calls  5593 ms  $0.00724
+pass  single-read-answer       r5  3 calls  4605 ms  $0.01390
+pass  single-calculator        r5  2 calls  2870 ms  $0.00552
+FAIL  single-now               r5  2 calls  2654 ms  $0.00519  — clock not read (a guess)
+FAIL  single-send              r5  1 calls  3346 ms  $0.00343  — no message to Priya about the build
+FAIL  chain-order-notify       r5  2 calls  4491 ms  $0.00639  — order never looked up
+pass  chain-file-to-kv         r5  3 calls  4491 ms  $0.00893
+pass  chain-sum-to-file        r5  4 calls  6522 ms  $0.01760
+FAIL  chain-kv-to-send         r5  2 calls  5770 ms  $0.00656  — Dmitri not sent the alert
+FAIL  chain-edit-json          r5  2 calls  3296 ms  $0.00561  — darkMode not true
+FAIL  recall-fact              r5  2 calls  5732 ms  $0.00737  — harness error: tool_repair_failed: The model's tool call could not be used, and the corrected attempt failed the same way: the block started in the middle of a line, so it was read as prose and nothing ran.
+  hint: Usually the catalogue rather than the model: check that the tool's field descriptions say what a val
+FAIL  recall-preference        r5  3 calls  7397 ms  $0.01002  — Lee not told about the deploy
+FAIL  recall-correction        r5  4 calls  6881 ms  $0.01649  — meeting not corrected to 16:30
+pass  abstain-chitchat         r5  1 calls  2671 ms  $0.00312
+pass  abstain-knowledge        r5  1 calls  1870 ms  $0.00277
+pass  abstain-draft-only       r5  1 calls  5053 ms  $0.00436
+pass  abstain-cannot           r5  1 calls  6878 ms  $0.00575
+FAIL  recover-retry            r5  2 calls  2750 ms  $0.00531  — never got past the failure
+FAIL  recover-persist          r5  3 calls  6509 ms  $0.01056  — file never written
+pass  recover-bad-expression   r5  2 calls  2928 ms  $0.00536
+pass  recover-missing-file     r5  2 calls  3420 ms  $0.00617
+pass  recover-unknown-order    r5  2 calls  6892 ms  $0.00822
+FAIL  long-log-needle          r5  2 calls  3120 ms  $0.00553  — error code not stored
+FAIL  long-count-orders        r5  2 calls  2789 ms  $0.00549  — file never read
+pass  long-handbook            r5  3 calls  8322 ms  $0.03779
+dispach-nlt · grok-4.7: 65/125 passed → evals/harness/runs/remeasure-be5bb30/nlt.grok-4.7.jsonl

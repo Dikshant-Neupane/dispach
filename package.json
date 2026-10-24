@@ -15,7 +15,7 @@
         "node": ">=24"
     },
     "scripts": {
-        "build": "bun run --filter='@dispach/core' build && bun run --filter='@dispach/client' build && bun run --filter='@dispach/tools-*' build && bun run --filter='@dispach/channel-*' build && bun run --filter='@dispach/web' build && bun run --filter='@dispach/server' build && bun run --filter='dispach' build && bun scripts/rewrite-dts-extensions.ts",
+        "build": "bun run --filter='@dispach/core' build && bun run --filter='@dispach/client' build && bun run --filter='@dispach/tools-*' build && bun run --filter='@dispach/model-*' build && bun run --filter='@dispach/media-*' build && bun run --filter='@dispach/channel-*' build && bun run --filter='@dispach/web' build && bun run --filter='@dispach/server' build && bun run --filter='dispach' build && bun scripts/rewrite-dts-extensions.ts",
         "typecheck": "bun run --filter='*' typecheck",
         "test": "bun test",
         "test:node": "node --test --test-timeout=60000 packages/core/test/*.test.ts",
@@ -36,6 +36,7 @@
         "eval:memory": "bun scripts/eval-memory.ts",
         "eval:skills": "bun scripts/eval-skills.ts",
         "eval:handoff": "bun scripts/eval-handoff.ts",
+        "eval:subagents": "bun scripts/eval-subagents.ts",
         "eval:tenancy": "bun scripts/eval-tenancy.ts",
         "eval:scenarios": "bun scripts/eval-scenarios.ts",
         "bench:schedule": "bun scripts/bench-schedule.ts",
@@ -43,7 +44,10 @@
         "verify:package": "bun scripts/verify-package.ts",
         "release": "bun scripts/release.ts",
         "changelog:section": "bun scripts/changelog-section.ts",
-        "changelog:draft": "bun scripts/changelog-draft.ts"
+        "changelog:draft": "bun scripts/changelog-draft.ts",
+        "docs:generate": "bun scripts/export-docs-openapi.ts",
+        "docs:check": "bun scripts/export-docs-openapi.ts --check && bun scripts/check-docs.ts && bun scripts/eval-index.ts --check && bun scripts/bench/summary.ts --check",
+        "evals:index": "bun scripts/bench/summary.ts && bun scripts/eval-index.ts"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.11",

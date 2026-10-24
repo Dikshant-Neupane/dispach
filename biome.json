@@ -7,7 +7,9 @@
             "!**/dist",
             "!**/node_modules",
             "!**/*.tsbuildinfo",
-            "!evals/**/results.json"
+            "!developer-docs/reference/openapi.json",
+            "!evals/**/results.json",
+            "!evals/index.json"
         ]
     },
     "formatter": {
@@ -18,6 +20,9 @@
     },
     "linter": {
         "enabled": true,
+        "domains": {
+            "react": "recommended"
+        },
         "rules": {
             "preset": "recommended",
             "suspicious": {
@@ -48,6 +53,10 @@
         {
             "includes": ["**/tsconfig*.json"],
             "json": { "parser": { "allowComments": true } }
+        },
+        {
+            "includes": ["site/**/*.css"],
+            "css": { "parser": { "tailwindDirectives": true } }
         }
     ]
 }

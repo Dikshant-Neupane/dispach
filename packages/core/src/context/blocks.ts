@@ -58,6 +58,11 @@ export const SLOT = {
      * *After* breakpoint A, and that is the entire reason the tier exists: this content changes when
      * the agent writes to memory, and content ahead of the breakpoint that changes invalidates the
      * cached prefix on every write. The cost rises and nothing anywhere reports it.
+     *
+     * A **user** message, as are the reminder and recall: OpenAI through OpenRouter treats the leading
+     * run of system messages as one block and reuses none of it if any byte changes. With this tier as
+     * a system message every memory write, and with recall as one every new question, cached 0 of a
+     * 3,300-token prefix on GPT-6.1 Sol (2026-10-22). Only byte-stable slots may be system messages.
      */
     volatile: 4,
     /** Active skill body. Cache breakpoint B. Phase 5. */
@@ -89,10 +94,19 @@ export const SLOT = {
      * drop it.
      */
     memory: 10,
+    /**
+     * The embedder's note about this one message (pilot.5, #13): the active project, today's date
+     * in the person's zone. Pinned, for this turn only, never stored in history.
+     *
+     * Its own block rather than prepended to the input, because prepended it was stored as if the
+     * person had typed it and the model quoted it back as theirs (a pilot). Just before the input,
+     * so the cached prefix is untouched and the note sits beside the text it is about.
+     */
+    note: 11,
     /** Current input and current task line. Pinned. */
-    input: 11,
+    input: 12,
     /** Last error, if any. Pinned. */
-    error: 12,
+    error: 13,
 } as const
 
 export type SlotName = keyof typeof SLOT
@@ -139,6 +153,34 @@ export interface ContextBlock {
  *
  * Deliberately short: it is paid on every turn, after breakpoint A, forever.
  */
+/**
+ * The closing lines of the three framed blocks that are user messages (decision 14.118), so the
+ * person's own message cannot read as part of them.
+ *
+ * Claude through OpenRouter merges consecutive user messages into one turn, which put the request
+ * inside a block that says "the person did not write this". Haiku 5.5 then answered a request to
+ * message someone with "you haven't asked me to send anything" (chain tasks 0 of 10). Replaying the
+ * real request with these lines appended: 0 of 8 sends without them, 8 of 8 with them. Static text,
+ * so the prefix stays byte-stable and the cache gain 14.118 was for is kept. Framing, not rewriting.
+ */
+export const VOLATILE_END =
+    "That is everything I already know; the person's message follows separately."
+export const REMINDER_END =
+    "End of my restated instructions; the person's message follows separately."
+export const MEMORY_END = "End of the remembered excerpt; the person's message follows separately."
+
+/** Frames a `SLOT.note` block, so the model can tell it from what the person wrote. */
+export const NOTE_HEADER =
+    "From the application this conversation runs in, about the next message. The person did not write this."
+
+/**
+ * The reminder tier's frame (pilot.14). It was the one block after the history with none,
+ * and on a transport that turns a later system message into user text it read as something the
+ * person had pasted: asked "how are you", Haiku told them they had pasted its instructions.
+ */
+export const REMINDER_HEADER =
+    "From my own instructions, restated each turn so I keep them in mind. The person did not write this."
+
 export const VOLATILE_HEADER =
     "What I already know, carried from before this conversation and kept current. " +
     "Not a transcript — these are standing facts about the person I work for and my own working notes. " +

@@ -1,0 +1,26 @@
+pass  single-kv-set            r2  4 calls  34738 ms  $0.00075
+pass  single-read-answer       r2  2 calls  12496 ms  $0.00073
+FAIL  single-calculator        r2  2 calls  10405 ms  $0.00072  — wrong product
+FAIL  single-now               r2  2 calls  12575 ms  $0.00071  — wrong weekday
+FAIL  single-send              r2  2 calls  23887 ms  $0.00074  — empty reply
+pass  chain-order-notify       r2  3 calls  48384 ms  $0.00113
+pass  chain-file-to-kv         r2  4 calls  22407 ms  $0.00110
+pass  chain-sum-to-file        r2  3 calls  35265 ms  $0.00114
+pass  chain-kv-to-send         r2  5 calls  33347 ms  $0.00110
+pass  chain-edit-json          r2  3 calls  57320 ms  $0.00115  (3 429 retries)
+pass  recall-fact              r2  4 calls  52457 ms  $0.00150
+pass  recall-preference        r2  4 calls  60975 ms  $0.00150  (1 429 retries)
+pass  recall-correction        r2  4 calls  39883 ms  $0.00147
+pass  abstain-chitchat         r2  1 calls  15249 ms  $0.00037
+pass  abstain-knowledge        r2  1 calls  4294 ms  $0.00035
+pass  abstain-draft-only       r2  1 calls  21380 ms  $0.00037
+pass  abstain-cannot           r2  1 calls  43390 ms  $0.00040
+FAIL  recover-retry            r2  2 calls  23964 ms  $0.00074  — never got past the failure
+FAIL  recover-persist          r2  3 calls  36098 ms  $0.00115  — file never written
+FAIL  recover-bad-expression   r2  2 calls  16118 ms  $0.00072  — wrong answer
+pass  recover-missing-file     r2  2 calls  22266 ms  $0.00074
+pass  recover-unknown-order    r2  2 calls  25083 ms  $0.00074
+FAIL  long-log-needle          r2  2 calls  21455 ms  $0.00118  (1 429 retries)  — error code not stored
+pass  long-count-orders        r2  10 calls  189400 ms  $0.01541  (1 429 retries)
+pass  long-handbook            r2  11 calls  133031 ms  $0.01177
+dispach-native · qwen3.5-9b: 18/25 passed → evals/harness/runs/ab-not-enabled-small/variant/native.qwen3.5-9b.r2.jsonl

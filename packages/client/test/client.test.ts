@@ -227,6 +227,36 @@ describe("a turn, end to end", () => {
         await runtime.stop()
     })
 
+    test("send({ chunks }) keeps a reply that streamed before the reader attached", async () => {
+        // The web page lost every quick reply this way: the turn finished its tokens in the gap
+        // between the POST and the attach, the replay had none, and the reply was never drawn.
+        const { client, runtime } = await harness({ reply: "Quick answer." })
+        const turn = await client.agent("assistant").send("hi", { chunks: true })
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        let text = ""
+        for await (const item of turn.stream({ chunks: true })) {
+            if (item.kind === "event" && item.event.type === "model.chunk") {
+                if (item.event.data.kind === "text") text += item.event.data.delta
+            }
+        }
+        expect(text).toBe("Quick answer.")
+        await runtime.stop()
+    })
+
+    test("children is asked for on the stream's query, and only when set", async () => {
+        const urls: string[] = []
+        const recording = (async (url: string | URL | Request) => {
+            urls.push(String(url))
+            return new Response("", { headers: { "content-type": "text/event-stream" } })
+        }) as typeof fetch
+        const client = createClient({ baseUrl: "http://127.0.0.1:7420", fetch: recording })
+        const turn = client.agent("assistant").turn("turn_1")
+        for await (const _ of turn.stream({ children: true, chunks: true })) break
+        for await (const _ of turn.stream()) break
+        expect(urls[0]).toEndWith("/turns/turn_1/stream?chunks=true&children=true")
+        expect(urls[1]).toEndWith("/turns/turn_1/stream")
+    })
+
     test("tokens are absent unless asked for", async () => {
         // Default off, per connection. `stream()` with no options must carry no `model.chunk`.
         const { client, runtime } = await harness()
@@ -606,6 +636,38 @@ describe("introspection", () => {
     })
 })
 
+describe("configuration writes (pilot.15)", () => {
+    test("setConfigs makes several changes in one reload, and a repeated one reloads nothing", async () => {
+        const { client, runtime } = await harness()
+        const agent = client.agent("assistant")
+        let reloads = 0
+        runtime.bus.on("agent.reloaded", () => {
+            reloads += 1
+        })
+        const first = await agent.setConfigs([
+            { path: "limits.maxSteps", value: "12" },
+            { path: "model.main.temperature", value: "0.2" },
+        ])
+        expect(first.changes.map((change) => change.changed)).toEqual([true, true])
+        expect(first.reloaded).toBe(true)
+        expect(reloads).toBe(1)
+        const again = await agent.setConfigs([
+            { path: "limits.maxSteps", value: "12" },
+            { path: "model.main.temperature", remove: true },
+        ])
+        expect(again.changes.map((change) => change.changed)).toEqual([false, true])
+        expect(reloads).toBe(2)
+        const same = await agent.setConfig("limits.maxSteps", "12")
+        expect({ changed: same.changed, reloaded: same.reloaded }).toEqual({
+            changed: false,
+            reloaded: false,
+        })
+        expect(reloads).toBe(2)
+        expect(runtime.list()[0]?.manifest.limits.maxSteps).toBe(12)
+        await runtime.stop()
+    })
+})
+
 describe("the frame mapper", () => {
     /** A synthetic SSE body, so a frame this client's own paths never produce can be tested. */
     function sse(frames: { event: string; data: unknown }[]): ReadableStream<Uint8Array> {
@@ -775,6 +837,64 @@ describe("webhooks", () => {
         expect(JSON.stringify(listed)).not.toContain(created.secret)
         expect((await client.deleteWebhook(created.subscriptionId)).deleted).toBe(true)
         expect(await client.webhooks()).toEqual([])
+        await runtime.stop()
+    })
+})
+
+describe("conversations", () => {
+    test("participants, conversations and the message log are the shapes the server sends", async () => {
+        const { client, runtime } = await harness()
+        const agentId = (await client.agents())[0]?.id ?? ""
+        await client.registerParticipant({ id: "user:ada", role: "admin" })
+        const participants = await client.participants()
+        expect(Array.isArray(participants)).toBe(true)
+        expect(participants.map((p) => p.id)).toEqual(["user:ada"])
+
+        const room = await client.createConversation({
+            kind: "room",
+            members: ["user:ada", `agent:${agentId}`],
+        })
+        expect(Array.isArray(room.members)).toBe(true)
+        const listed = await client.conversations()
+        expect(Array.isArray(listed)).toBe(true)
+        expect((await client.conversation(room.id)).id).toBe(room.id)
+
+        // No mention, so no agent answers: the log holds exactly what was posted.
+        const posted = await client.postMessage(room.id, { text: "hello", authorId: "user:ada" })
+        expect(posted.hop).toBe(0)
+        const log = await client.conversationMessages(room.id)
+        expect(Array.isArray(log.messages)).toBe(true)
+        expect(log.messages.map((m) => m.text)).toEqual(["hello"])
+        expect(log.nextAfter).toBe(posted.seq)
+
+        expect((await client.setPresence("user:ada", "offline")).presence).toBe("offline")
+        const actions = await client.actions({ status: "pending" })
+        expect(Array.isArray(actions)).toBe(true)
+
+        const assigned = await client.agent(agentId).assign("user:ada")
+        expect(assigned.participantId).toBe("user:ada")
+        expect((await client.agent(agentId).unassign()).unassigned).toBe(true)
+
+        // Shared memory scopes (Phase 29): lists are lists, records are records.
+        const note = await client.addNote({ scope: "space", text: "The launch is on Friday" })
+        expect(note.scope).toBe("space")
+        const notes = await client.notes("space")
+        expect(Array.isArray(notes)).toBe(true)
+        expect(notes.map((n) => n.id)).toEqual([note.id])
+        expect(Array.isArray(await client.memoryReads("user:ada"))).toBe(true)
+        const project = await client.putProject("apollo", { agents: [agentId] })
+        expect(Array.isArray(project.agents)).toBe(true)
+        expect((await client.projects()).map((p) => p.id)).toEqual(["apollo"])
+        expect((await client.setSpaceWriter("user:ada")).writer).toBe("user:ada")
+        expect((await client.deleteNote(note.id)).deleted).toBe(true)
+        expect((await client.deleteProject("apollo")).deleted).toBe(true)
+
+        // An agent bundle (R11): a list of files out, a report with lists in.
+        const bundle = await client.agent(agentId).exportBundle()
+        expect(Array.isArray(bundle.files)).toBe(true)
+        const report = await client.agent(agentId).importBundle(bundle)
+        expect(Array.isArray(report.added)).toBe(true)
+        expect(report.reload).toBe("none")
         await runtime.stop()
     })
 })

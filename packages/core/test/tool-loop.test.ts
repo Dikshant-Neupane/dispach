@@ -23,6 +23,7 @@ const ENV = { MODEL_API_KEY: "test-key" }
 function workspace(
     toolsSection = "  local:\n    - now\n    - memory_write\n",
     dialect: "nlt" | "native" = "nlt",
+    extraLimits = "",
 ): string {
     const dir = mkdtempSync(join(tmpdir(), "tool-loop-"))
     writeFileSync(
@@ -44,7 +45,7 @@ tools:
 ${toolsSection}limits:
   maxSteps: 4
   turnTimeoutMs: 5000
-`,
+${extraLimits}`,
     )
     writeFileSync(join(dir, "IDENTITY.md"), "You are a test fixture.")
     return dir
@@ -89,7 +90,7 @@ function scripted(script: readonly string[]): Scripted {
 
 async function run(
     script: readonly string[],
-    options: { toolsSection?: string } = {},
+    options: { toolsSection?: string; extraLimits?: string } = {},
 ): Promise<{
     result: Awaited<ReturnType<import("../src/runtime/agent.ts").Agent["send"]>>
     history: readonly { role: string; content: string }[]
@@ -97,7 +98,7 @@ async function run(
     requests: Scripted["requests"]
     runtime: Runtime
 }> {
-    const dir = workspace(options.toolsSection)
+    const dir = workspace(options.toolsSection, "nlt", options.extraLimits)
     const { fetch, requests } = scripted(script)
     const runtime = await Runtime.create({ agents: [join(dir, "agent.yaml")], env: ENV, fetch })
     const events: AnyEvent[] = []
@@ -317,6 +318,88 @@ describe("repair", () => {
     })
 })
 
+describe("silence after a tool result, or a promise with no call (14.123)", () => {
+    test("an empty reply after a tool result gets one note, and the answer that follows stands", async () => {
+        // qwen3.5-9b put its answer in its reasoning and ended the turn there: 16 of 49 failures.
+        const { result, events, requests, runtime } = await run([
+            "ACTION: now\nEND",
+            "",
+            "It is nine.",
+        ])
+        expect(result.reason).toBe("final")
+        expect(result.steps).toBe(3)
+        expect(result.text).toBe("It is nine.")
+        const repairs = events.filter((event) => event.type === "tool.repair")
+        expect(payload<{ errors: string[] }>(repairs[0]).errors).toEqual([
+            "no visible reply after a tool result",
+        ])
+        expect(requests[2]?.messages.some((m) => m.content.includes("had no visible text"))).toBe(
+            true,
+        )
+        await runtime.stop()
+    })
+
+    test("a promise with no call, on the first step, gets one note and then the call", async () => {
+        // Grok 4.7 under NLT wrote "I'll store it under locker_code." and stopped: 0 of 8 on a chain.
+        const { result, events, requests, runtime } = await run([
+            "I'll check the clock for you.",
+            "ACTION: now\nEND",
+            "It is nine.",
+        ])
+        expect(result.reason).toBe("final")
+        expect(events.some((event) => event.type === "tool.call")).toBe(true)
+        expect(
+            requests[1]?.messages.some((m) => m.content.includes("you said you would do that")),
+        ).toBe(true)
+        await runtime.stop()
+    })
+
+    test("the note is sent once; a second silence is the reply", async () => {
+        const { result, events, runtime } = await run(["I'll check.", "I'll check."])
+        expect(result.reason).toBe("final")
+        expect(result.steps).toBe(2)
+        expect(events.filter((event) => event.type === "tool.repair").length).toBe(1)
+        await runtime.stop()
+    })
+
+    test("a reply claiming a save that never happened gets one note", async () => {
+        // qwen3.5-9b read a file and answered "I've saved it under the key meal_limit" with no save.
+        const { result, events, requests, runtime } = await run([
+            "ACTION: now\nEND",
+            "It is nine, and I've saved that for you.",
+            "ACTION: memory_write\ntext: nine\nEND",
+            "Saved.",
+        ])
+        expect(
+            payload<{ errors: string[] }>(events.find((e) => e.type === "tool.repair")).errors,
+        ).toEqual(["said it was done and nothing that acts ran"])
+        expect(requests[2]?.messages.some((m) => m.content.includes("so it was not done"))).toBe(
+            true,
+        )
+        expect(result.reason).toBe("final")
+        await runtime.stop()
+    })
+
+    test("the same claim after a real write is a reply", async () => {
+        const { result, events, runtime } = await run([
+            "ACTION: memory_write\ntext: nine\nEND",
+            "I've saved that for you.",
+        ])
+        expect(result.steps).toBe(2)
+        expect(events.some((e) => e.type === "tool.repair")).toBe(false)
+        await runtime.stop()
+    })
+
+    test("a closing like 'let me know' or a question is a reply, not a promise", async () => {
+        const closing = await run(["It is nine. Let me know if you need anything else."])
+        expect(closing.result.steps).toBe(1)
+        await closing.runtime.stop()
+        const question = await run(["Shall I check the clock?"])
+        expect(question.result.steps).toBe(1)
+        await question.runtime.stop()
+    })
+})
+
 describe("the step cap", () => {
     /**
      * Four *different* calls, because the script's last entry repeats forever and identical repeats
@@ -386,6 +469,42 @@ describe("no progress", () => {
         expect(result.reason).toBe("final")
         expect(result.text).toBe("Done.")
         await runtime.stop()
+    })
+
+    test("finalText is the last step's prose; text still joins every step's (pilot.14)", async () => {
+        const { result, events, runtime } = await run([
+            "Yes, Outlook. Let me try.\nACTION: memory_write\ntext: alpha\nEND",
+            "Yes, Outlook. Let me try.\nACTION: memory_write\ntext: beta\nEND",
+            "You have two unread messages.",
+        ])
+        expect(result.reason).toBe("final")
+        expect(result.text.match(/Let me try/g)?.length).toBe(2)
+        expect(result.finalText).toBe("You have two unread messages.")
+        const end = events.find((event) => event.type === "turn.end")
+        expect((end?.data as { finalText?: string } | undefined)?.finalText).toBe(
+            "You have two unread messages.",
+        )
+        await runtime.stop()
+    })
+
+    test("sameTool ends a turn going round one tool with new arguments (pilot.13)", async () => {
+        const script = [
+            "ACTION: memory_write\ntext: alpha\nEND",
+            "ACTION: memory_write\ntext: beta\nEND",
+            "ACTION: memory_write\ntext: gamma\nEND",
+            "Done.",
+        ]
+        const limited = await run(script, { extraLimits: "  noProgress:\n    sameTool: 2\n" })
+        expect(limited.result.reason).toBe("no_progress")
+        // The third call is refused before it runs: two writes happened, not three.
+        expect(limited.events.filter((event) => event.type === "tool.result").length).toBe(2)
+        const warning = limited.events.find(
+            (event) =>
+                event.type === "agent.warning" &&
+                (event.data as { field?: string }).field === "limits.noProgress.sameTool",
+        )
+        expect(JSON.stringify(warning?.data)).toContain("memory_write")
+        await limited.runtime.stop()
     })
 })
 
@@ -657,6 +776,72 @@ describe("what a native message costs", () => {
         const { requests, runtime } = await runNative([{ text: "Nine." }])
         const tools = requests[0]?.tools ?? []
         expect(tools.length).toBe(2)
+        await runtime.stop()
+    })
+})
+
+// ─── a retry the server asked for (14.127) ───────────────────────────────────────────────
+
+/** A read tool that fails with `message` on its first two calls and works on the third. */
+function flakyProvider(message: string): ToolProviderFactory {
+    let calls = 0
+    return () => ({
+        id: "flaky",
+        resolve: (slugs) =>
+            Promise.resolve(
+                slugs.includes("check_status")
+                    ? [
+                          {
+                              spec: {
+                                  slug: "check_status",
+                                  provider: "flaky",
+                                  summary: "Reads the status board.",
+                                  whenToUse: "the person asks for the status",
+                                  whenNotToUse: "they did not ask about status",
+                                  mutating: false,
+                                  trust: "trusted" as const,
+                                  trustReason: "a test fixture",
+                                  tags: ["read"],
+                                  parameters: { type: "object" as const, properties: {} },
+                              },
+                              handler: () => {
+                                  calls += 1
+                                  if (calls <= 2) throw new Error(message)
+                                  return "all green"
+                              },
+                          },
+                      ]
+                    : [],
+            ),
+    })
+}
+
+async function runFlaky(message: string) {
+    const dir = workspace("  provider: flaky\n  pinned:\n    - check_status\n")
+    const call = "Checking.\nACTION: check_status\nEND"
+    const { fetch } = scripted([call, call, call, "All green."])
+    const runtime = await Runtime.create({
+        agents: [join(dir, "agent.yaml")],
+        env: ENV,
+        fetch,
+        toolProviders: { flaky: flakyProvider(message) },
+    })
+    const result = await runtime.agent("test").send("what is the status?")
+    return { result, runtime }
+}
+
+describe("the repeat guard and a temporary failure", () => {
+    test("a third identical call goes through when the last two failed as temporary", async () => {
+        // recover-persist: two "temporarily unavailable" refusals, then a write. The guard refused it on every model.
+        const { result, runtime } = await runFlaky("Service temporarily unavailable. Try again.")
+        expect(result.reason).toBe("final")
+        expect(result.text).toContain("All green.")
+        await runtime.stop()
+    })
+
+    test("a failure that is not temporary still ends the turn on the third identical call", async () => {
+        const { result, runtime } = await runFlaky("Invalid argument: no such board.")
+        expect(result.reason).toBe("no_progress")
         await runtime.stop()
     })
 })

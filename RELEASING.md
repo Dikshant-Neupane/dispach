@@ -10,12 +10,12 @@ One package, one number, one tag. Semver. Short bullets in `CHANGELOG.md`; the r
 2. **Cut it** from a clean `main`:
 
    ```bash
-   bun run release 0.1.3
+   bun run release 0.2.0
    ```
 
-   Writes the version into `packages/cli/package.json`, `packages/core/src/version.ts` and the
-   lockfile, dates the changelog section, runs the gate (`build`, `test`, `typecheck`, `lint`,
-   `verify:package`), and prints the two git commands. It commits nothing.
+   Writes the version into `packages/cli/package.json`, `packages/core/src/version.ts`, the
+   lockfile and the generated API reference, dates the changelog section, runs the gate (`build`,
+   `test`, `typecheck`, `lint`, `docs:check`, `verify:package`), and prints the two git commands. It commits nothing.
 3. **Review the diff, commit, tag, push the tag.** The tag is what publishes.
 4. **Watch the workflow.** `release.yml` publishes to npm, creates the GitHub Release with the
    changelog section as its body, commits the formula to `moeen-mahmud/homebrew-tap`, and pushes
@@ -26,7 +26,7 @@ One package, one number, one tag. Semver. Short bullets in `CHANGELOG.md`; the r
    ```bash
    npm view dispach version
    brew update && brew info moeen-mahmud/tap/dispach
-   docker pull ghcr.io/moeen-mahmud/dispach:0.1.3
+   docker pull ghcr.io/moeen-mahmud/dispach:0.2.0
    ```
 
 A release that failed part-way: fix, cut the *next* patch number. npm versions are immutable, and

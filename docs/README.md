@@ -50,28 +50,26 @@ subsystems are only testable end-to-end.
 
 ## Status
 
-**Shipped: `dispach@0.1.3`.** Phases 0 through 19 are built, the last being the VelaOps cutover. This section named Phase 3 as the
+**Shipped: `dispach@0.2.0`.** Phases 0 through 19 are built, the last being the VelaOps cutover, and the 0.2.0 line on top of them. This section named Phase 3 as the
 frontier and "everything from Phase 4 on" as design-only for long enough to be actively misleading,
 which is the drift the closing paragraph below warns about — so it is now a pointer rather than a
 second copy of the plan:
 
-> **`05-PLAN.md` marks every phase `built` with the date it landed.** Read it there. A status
-> summary maintained by hand in a second file is a status summary that is right on the day it is
-> written, which is the whole lesson of the six phantom event rows in doc 04 and the
-> `packages/channel-whatsapp` that was listed in doc 01 and has never existed.
+> **`05-PLAN.md` marks every phase through 19 `built` with the date it landed.** The 0.2.0 work
+> after it is summarised in `CHANGELOG.md` and `developer-docs/runtime/whats-new-0-2-0.md`. Read it
+> there. A status summary maintained by hand in a second file is a status summary that is right on
+> the day it is written, which is the whole lesson of the six phantom event rows in doc 04 — and of
+> this section, which went on calling WhatsApp and the MCP provider unbuilt after both had shipped.
 
 In one paragraph: the manifest and loop, the store, both tool dialects, the tiered workspace, the
-system and web providers with a policy engine and a hardline floor, Telegram, the HTTP/SSE/WS
+system and web providers with a policy engine and a hardline floor, MCP as a tool provider
+(`packages/tools-mcp`, one provider among several per decision 4.7, never the substrate),
+Telegram and WhatsApp channels plus Slack, Teams and A2A (experimental in 0.2.0), the HTTP/SSE/WS
 server, an idempotent outbox, memory on FTS5, skills with two catalogues, the compaction ladder,
 phase scoping, scheduling, the plugin API with all four middleware wrap points, supervisor
 delegation, launchd services, the Docker image and compose front door, a typed client, scoped
 operator keys, the full-screen TUI, and a browser UI on the same origin as the API — which since
 0.1.1 edits settings and schedules rather than only reporting them.
-
-Not built: **WhatsApp**, which decision 8.4 makes a legal question rather than an engineering one,
-and which a plugin channel can now supply; and **MCP as a tool provider**, which decision 4.7 keeps
-as *one provider among several, never the substrate* — planned, not refused, and never written.
-`01-ARCHITECTURE.md` listed a `tools-mcp/` package in its tree for months; it has never existed.
 
 Measured numbers live in `evals/`, each with a script to reproduce it.
 

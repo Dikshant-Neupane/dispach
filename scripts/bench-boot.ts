@@ -2,18 +2,23 @@
 /**
  * Boot benchmark: process start → `runtime.ready`.
  *
- *   bun scripts/bench-boot.ts [--runs 7] [--ci] [--manifest path]
+ *   bun scripts/bench-boot.ts [--runs 7] [--ci] [--manifest path] [--write]
  *
  * Measured in a fresh child process every run, because the headline number includes interpreter
  * startup and a warm in-process measurement would flatter it by an order of magnitude.
  *
  * Reports the slowest phase, so a regression names its own cause instead of prompting a
  * bisect. The budget is 1000 ms; `--ci` fails the run above 1200 ms.
+ *
+ * `--write` records the run in `evals/boot/results.json` with the machine state it was taken on,
+ * because a boot figure without its machine is a number about somebody's afternoon.
  */
 
 import { spawnSync } from "node:child_process"
-import { resolve } from "node:path"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { Runtime } from "../packages/core/src/runtime/runtime.ts"
+import { provenance } from "./lib/provenance.ts"
 
 const BUDGET_MS = 1000
 const CI_FAIL_MS = 1200
@@ -135,6 +140,29 @@ if (medianProcess > BUDGET_MS) {
         `\nbench-boot: over budget — median ${medianProcess.toFixed(1)} ms exceeds the ${BUDGET_MS} ms target but is under the CI ceiling.`,
     )
     if (args.includes("--ci")) process.exit(0)
+}
+
+if (args.includes("--write")) {
+    const result = {
+        ...provenance(),
+        runs,
+        budgetMs: BUDGET_MS,
+        ciFailMs: CI_FAIL_MS,
+        processMs: {
+            median: Number(medianProcess.toFixed(1)),
+            min: Number(minProcess.toFixed(1)),
+            max: Number(maxProcess.toFixed(1)),
+        },
+        createMs: Number(medianCreate.toFixed(1)),
+        importsMs: Number((medianProcess - medianCreate).toFixed(1)),
+        phasesMs: Object.fromEntries(
+            phaseMedians.map((phase) => [phase.name, Number(phase.ms.toFixed(2))]),
+        ),
+    }
+    const dir = join(ROOT, "evals", "boot")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, "results.json"), `${JSON.stringify(result, null, 4)}\n`)
+    console.log(`  written                 evals/boot/results.json`)
 }
 
 console.log("\nbench-boot: ok")

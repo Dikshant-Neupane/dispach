@@ -34,8 +34,9 @@
  */
 
 import { createClient, type DispachClient, DispachError } from "@dispach/client"
+import { DEFAULT_BRAND } from "@dispach/core/wire"
 
-const STORAGE_KEY = "dispach.key"
+const STORAGE_KEY = `${DEFAULT_BRAND.slug}.key`
 
 export type Credential =
     /** A key we hold, from storage or from a claim we just exchanged. */

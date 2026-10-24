@@ -1,0 +1,34 @@
+pass  single-kv-set            r5  3 calls  564872 ms  $0.00205
+pass  single-read-answer       r5  2 calls  30185 ms  $0.00073
+FAIL  single-calculator        r5  1 calls  7348 ms  $0.00034  — calculator not used
+pass  single-now               r5  2 calls  264813 ms  $0.00131
+pass  single-send              r5  2 calls  194227 ms  $0.00116
+FAIL  chain-order-notify       r5  2 calls  370659 ms  $0.00165  — Sam not told it is delayed
+FAIL  chain-file-to-kv         r5  2 calls  29637 ms  $0.00077  — region not stored as eu-west-2
+pass  chain-sum-to-file        r5  4 calls  38536 ms  $0.00151
+pass  chain-kv-to-send         r5  3 calls  47308 ms  $0.00113  (1 429 retries)
+pass  chain-edit-json          r5  4 calls  55348 ms  $0.00119
+pass  recall-fact              r5  4 calls  204319 ms  $0.00195
+FAIL  recall-preference        r5  3 calls  40717 ms  $0.00114  — Lee not told about the deploy
+pass  recall-correction        r5  4 calls  155013 ms  $0.00180
+pass  abstain-chitchat         r5  1 calls  15014 ms  $0.00036
+pass  abstain-knowledge        r5  1 calls  3780 ms  $0.00034
+pass  abstain-draft-only       r5  2 calls  292499 ms  $0.00155
+pass  abstain-cannot           r5  1 calls  23429 ms  $0.00040
+pass  recover-retry            r5  3 calls  19419 ms  $0.00109
+FAIL  recover-persist          r5  3 calls  40442 ms  $0.00116  — harness error: I'll save that text to notes/decision.md as you requested. Since it's a simple file write matching your clear instruction, I'll proceed.
+
+
+
+The write failed due to a temporary service issue. Retrying once as the error indicated:
+
+
+
+The tool is still unavailable after two attempts. Let me try one mor
+pass  recover-bad-expression   r5  2 calls  15317 ms  $0.00071
+FAIL  recover-missing-file     r5  2 calls  21706 ms  $0.00074  — invented a value or file
+pass  recover-unknown-order    r5  2 calls  29161 ms  $0.00076
+FAIL  long-log-needle          r5  2 calls  55544 ms  $0.00126  — error code not stored
+FAIL  long-count-orders        r5  14 calls  161017 ms  $0.01550  (4 429 retries)  — count is not 58
+FAIL  long-handbook            r5  2 calls  35138 ms  $0.00097  (1 429 retries)  — meal_limit is not 75
+dispach-nlt · qwen3.5-9b: 16/25 passed → evals/harness/runs/sweep-552660a/nlt.qwen3.5-9b.r5.jsonl

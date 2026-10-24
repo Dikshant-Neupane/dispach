@@ -12,6 +12,7 @@
  * upstream has to remember to catch one.
  */
 
+import { relative } from "node:path"
 import { assembleContext, reassemble, slotReport } from "../context/assemble.ts"
 import type { ContextBlock } from "../context/blocks.ts"
 import { SLOT } from "../context/blocks.ts"
@@ -21,27 +22,42 @@ import type { Displaced } from "../context/compaction/stages.ts"
 import { estimateMessageTokens } from "../context/tokens.ts"
 import {
     type ErrorDetail,
-    HarnessError,
+    isHarnessError,
     toolRepairFailed,
     turnStopped,
     turnTimeout,
 } from "../errors.ts"
 import type { EventBus } from "../events/bus.ts"
-import type { TurnEndReason } from "../events/types.ts"
-import type { ChatMessage, ToolDefinition } from "../model/provider.ts"
+import type { EventContext, TurnEndReason } from "../events/types.ts"
+import { imageReference } from "../media/image-input.ts"
+import type { ChatMessage, ImageInput, ToolDefinition } from "../model/provider.ts"
 import { type ResolvedRole, requestParamsFor } from "../model/roles.ts"
 import { compose, type Middleware } from "../plugins/middleware.ts"
 import type { ParsedOutput, StepOutput, ToolDialect } from "../tools/dialect/dialect.ts"
 import { nativeWireTokens } from "../tools/dialect/native.ts"
-import { type ApprovalRequest, executeIntents } from "../tools/execute.ts"
+import type { EventDetail } from "../tools/event-detail.ts"
+import { type ApprovalRequest, type ExecuteInput, executeIntents } from "../tools/execute.ts"
 import { phaseSetTool } from "../tools/local.ts"
 import type { PolicyConfig } from "../tools/policy.ts"
 import type { ToolRegistry } from "../tools/registry.ts"
 import type { OnMutate } from "../tools/trust.ts"
-import type { DisplacedArtifact, Tool, ToolResult, WorkspaceWriteTarget } from "../tools/types.ts"
+import type {
+    DisplacedArtifact,
+    Tool,
+    ToolContext,
+    ToolResult,
+    WorkspaceWriteTarget,
+} from "../tools/types.ts"
 import { newStepId, newTurnId } from "./ids.ts"
 import { allowFor, otherPhases, type PhaseMap } from "./phases.ts"
-import { frameSenderInput, senderLabel, type TurnSender, trustOfSender } from "./sender.ts"
+import {
+    type ActingParticipant,
+    frameSenderInput,
+    senderLabel,
+    type TurnSender,
+    trustOfSender,
+} from "./sender.ts"
+import { failedTransiently, SILENCE_NOTE, silenceOf, TRANSIENT_RETRIES } from "./silence.ts"
 import { runStep, type StepUsage } from "./step.ts"
 
 export interface TurnLimits {
@@ -53,7 +69,7 @@ export interface TurnLimits {
      * cap should be generous enough for real recovery, and this should be tight enough to catch a
      * repeat. Sizing one number for both is how a six-step budget came to cut an agent off mid-task.
      */
-    readonly noProgress: { readonly identicalCalls: number }
+    readonly noProgress: { readonly identicalCalls: number; readonly sameTool?: number | undefined }
     readonly turnTimeoutMs: number
     readonly toolTimeoutMs: number
     readonly maxParallelTools: number
@@ -85,6 +101,8 @@ export interface ToolRuntime {
     readonly wireTokens: number
     /** The agent's directory. A tool touching the filesystem resolves against it, not the cwd. */
     readonly dir: string
+    /** Routed slugs whose subagent declares its own `timeoutMs`, used instead of the tool bound. */
+    readonly timeoutFor?: ReadonlyMap<string, number>
     /** Where `memory_write` lands, resolved from the workspace at load. Absent means no workspace
      * declared anywhere writable, and the tool falls back to the agent's own directory. */
     readonly writeTarget?: WorkspaceWriteTarget
@@ -98,6 +116,8 @@ export interface ToolRuntime {
      * `ChatMessage.toolCalls`, `TurnInput.skills`, `ToolContext.readArtifact`), and it cost one here.
      */
     readonly memoryDir?: string
+    /** `tools.eventDetail: redacted`. Absent: events carry the hash and sizes only. */
+    readonly eventDetail?: EventDetail
     readonly observationMaxTokens: number
     /**
      * What to do when untrusted content is in the turn and the model asks for a mutating tool.
@@ -122,6 +142,8 @@ export interface TurnInput {
     readonly agentId: string
     /** Handed to every `runStep` this turn makes. See `StepInput.meter`. */
     readonly meter?: (usage: StepUsage) => void
+    /** Who sent this turn, onto every `model.result` it produces. Absent for the operator. */
+    readonly sender?: string
     readonly sessionKey: string
     readonly input: string
     readonly history: readonly ChatMessage[]
@@ -180,6 +202,12 @@ export interface TurnInput {
     /** Declared phases and where this session currently is. Absent means one implicit phase. */
     readonly phases?: TurnPhases
     /**
+     * Told when a tool pinned this turn made `tools.pinned` differ from what the agent loaded with
+     * (pilot.14). The agent queues a reload, so whatever could not be added to this turn is there
+     * from the next message, with no restart.
+     */
+    readonly onPinned?: () => void
+    /**
      * Tools layered onto the registry for this turn only, beside any a skill brought.
      *
      * The same seam a skill's script tools use and for the same reason: they are **never** rendered
@@ -201,6 +229,8 @@ export interface TurnInput {
     readonly middleware?: readonly Middleware[]
     /** Where the turn came from, for the `turn.start` event: `repl`, `api`, `schedule`, … */
     readonly source: string
+    /** `voice` when the input is a transcribed voice note, for the `turn.start` event. */
+    readonly inputKind?: "voice"
     /**
      * Who sent `input`, when it was not the operator.
      *
@@ -213,6 +243,42 @@ export interface TurnInput {
      * no sender; a peer agent reaching the API has both.
      */
     readonly from?: TurnSender
+    /** Who the turn acts for, handed to every tool as `ToolContext.actingParticipant`. Absent: nobody. */
+    readonly participant?: ActingParticipant
+    /**
+     * A sentence the runtime puts before the input, outside any fence around it: a stand-in's
+     * instructions. Runtime-authored, so it is not the sender's text and is not framed as theirs.
+     */
+    readonly runtimeNote?: string
+    /**
+     * The embedder's note about this message (`POST /messages {runtimeNote}`). Its own block before
+     * the input, never in history: unlike `runtimeNote` above, which is a stand-in's instructions and
+     * is stored with the input because every later turn of that conversation needs it.
+     */
+    readonly turnNote?: string
+    /** Images sent with the input. Sent on every step of this turn, stored as references. */
+    readonly images?: readonly ImageInput[]
+    /**
+     * A schedule's `tools.allow`: the agent's own catalogue narrowed for this turn, with the phase
+     * grammar. Applied before a skill's scripts and the turn's own tools are layered on, so it narrows
+     * what the agent may call without breaking what the turn itself brings.
+     */
+    readonly toolsAllow?: readonly string[]
+    /** Personal tools withheld from this turn (pilot.15). See `ExecuteInput.withheld`. */
+    readonly withheld?: readonly string[]
+    /** Every mutating call is queued rather than run: a stand-in's turn. See `ExecuteInput.defer`. */
+    readonly deferMutations?: ExecuteInput["defer"]
+    /** Forwarded to `ToolContext.writeNote`: set when this agent is the space writer (Phase 29). */
+    readonly writeNote?: (text: string) => Promise<string>
+    /** Forwarded to `ToolContext.forgetMemory` (pilot.15). */
+    readonly forgetMemory?: ToolContext["forgetMemory"]
+    /**
+     * The turn starts tainted, by this source: a subagent of a parent turn that had read untrusted
+     * content. Its task was written by a model that read it, so the write gate applies from step one.
+     */
+    readonly taintedBy?: string
+    /** A subagent's parent turn, stamped on every event this turn emits. */
+    readonly parent?: { readonly turnId: string; readonly sessionKey: string }
     /** Caller's cancellation. A disconnect must never be wired to this. */
     readonly signal?: AbortSignal
     readonly turnId?: string
@@ -264,6 +330,13 @@ export interface TurnCompaction {
 export interface TurnResult {
     readonly turnId: string
     readonly text: string
+    /**
+     * The last step's prose alone (pilot.14). `text` joins every step's prose, so a model
+     * that writes the same lead-in before each tool call ("Yes, Outlook. Let me try…") says it once
+     * per step there. Absent when no step wrote any, and when a `wrapTurn` middleware rewrote `text`,
+     * since it could still hold what that middleware removed.
+     */
+    readonly finalText?: string
     readonly reasoning: string
     readonly reason: TurnEndReason
     readonly steps: number
@@ -299,6 +372,16 @@ export interface TurnResult {
     readonly resets?: number
     /** The phase the turn ended in. Absent when the agent declares no phases. */
     readonly phase?: string
+    /** Files tools produced for the reply, absolute paths. Absent when there are none. */
+    readonly attachments?: readonly TurnAttachmentFile[]
+    /** Untrusted content reached this turn: its input, or a tool result. */
+    readonly tainted?: true
+}
+
+/** A file a tool handed to `ToolContext.attach`. */
+export interface TurnAttachmentFile {
+    readonly path: string
+    readonly mimeType: string
 }
 
 /**
@@ -419,8 +502,11 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
             appended: [],
         }
     }
+    const { finalText, ...rest } = core
     return {
-        ...core,
+        ...rest,
+        // Kept only if the middleware left the reply alone; a rewrite may have removed text it holds.
+        ...(finalText !== undefined && outcome.text === core.text ? { finalText } : {}),
         text: outcome.text,
         reason: outcome.reason as TurnResult["reason"],
         steps: outcome.steps,
@@ -457,9 +543,37 @@ function withRenderedTools(
     }
 }
 
+/**
+ * The catalogue a schedule's `tools.allow` leaves, re-rendered like a phase view: slot 1 and the wire
+ * schemas both shrink, so the model is told about exactly the tools it may call. A different slot 1
+ * means no cache hit on the agent's usual prefix, which costs nothing here: a schedule run's session
+ * is its own.
+ */
+function narrowedTools(tools: ToolRuntime, allow: readonly string[]): ToolRuntime {
+    const registry = tools.registry.inPhase(allow)
+    if (registry === tools.registry) return tools
+    const specs = registry.specs()
+    const requestTools = tools.dialect.requestTools(specs)
+    const { requestTools: _wide, ...rest } = tools
+    return {
+        ...rest,
+        registry,
+        blocks: tools.dialect.renderCatalogue(specs, registry.notEnabled),
+        ...(requestTools === undefined ? {} : { requestTools }),
+        wireTokens: requestTools === undefined ? 0 : nativeWireTokens(requestTools),
+    }
+}
+
 async function runTurnCore(input: TurnInput): Promise<TurnResult> {
     const turnId = input.turnId ?? newTurnId()
-    const context = { agentId: input.agentId, sessionKey: input.sessionKey, turnId }
+    const context: EventContext = {
+        agentId: input.agentId,
+        sessionKey: input.sessionKey,
+        turnId,
+        ...(input.parent === undefined
+            ? {}
+            : { parentTurnId: input.parent.turnId, parentSessionKey: input.parent.sessionKey }),
+    }
     const started = performance.now()
 
     /**
@@ -475,7 +589,15 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
      * and does not have to be baked into the evidence. History is the other way round — it is prompt
      * material, so it carries the fence, exactly as a rendered observation already does.
      */
-    const promptInput = frameSenderInput(input.input, input.from)
+    const framedInput = frameSenderInput(input.input, input.from)
+    const noted =
+        input.runtimeNote === undefined ? framedInput : `${input.runtimeNote}\n\n${framedInput}`
+    // The reference lines are in the text the prompt and the history both carry, so the model knows
+    // the image's path, and a later turn knows one was sent, after the bytes are gone.
+    const promptInput =
+        input.images === undefined || input.images.length === 0
+            ? noted
+            : `${noted}\n\n${input.images.map(imageReference).join("\n")}`
     const inputTrust = trustOfSender(input.from)
 
     const link = linkSignals(input.signal, input.limits.turnTimeoutMs)
@@ -515,6 +637,8 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
     let error: TurnResult["error"]
     /** Consecutive repair attempts. Reset by any step whose calls were usable. */
     let repairs = 0
+    /** The silence nudge has been spent this turn: once, then the reply stands (decision 14.123). */
+    let nudged = false
     /**
      * Signatures of the most recent tool-calling steps, oldest first, capped at the threshold.
      *
@@ -523,6 +647,18 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
      */
     const identicalCalls = input.limits.noProgress.identicalCalls
     const recentCalls: string[] = []
+    /**
+     * The signature whose last run failed in words that say the failure is temporary, and how many times
+     * each signature has been let past the identical-call check for that (decision 14.127). A retry the
+     * server asked for is not a loop: `recover-persist` writes after two "temporarily unavailable" refusals,
+     * and the guard refused the third attempt on every model. Bounded, so a tool that always says "try
+     * again" still ends the turn.
+     */
+    let transientFailed: string | undefined
+    const transientRetries = new Map<string, number>()
+    const sameTool = input.limits.noProgress.sameTool
+    /** Calls per tool this turn, for `sameTool`. */
+    const callsByTool = new Map<string, number>()
 
     input.bus.emit(
         "turn.start",
@@ -532,6 +668,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             // reporting the bare message would understate every peer turn by the notice's length.
             inputTokens: estimateMessageTokens(promptInput),
             trust: inputTrust,
+            ...(input.inputKind === undefined ? {} : { inputKind: input.inputKind }),
             ...(input.from === undefined
                 ? {}
                 : { from: { id: input.from.id, kind: input.from.kind } }),
@@ -554,6 +691,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
     ]
     /** Prose from the current step that no history message carries yet. */
     let pendingProse = ""
+    let finalText = ""
     /** A mutating tool succeeded. Its effect happened, whatever the turn's outcome turns out to be. */
     let sideEffects = false
     /**
@@ -578,8 +716,12 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
      * re-derives it from *that* message's sender, so a conversation with a peer stays gated for as
      * long as the peer is the one talking.
      */
-    let untrustedSeen = inputTrust === "untrusted"
-    let untrustedSource = input.from === undefined ? undefined : senderLabel(input.from)
+    let untrustedSeen = inputTrust === "untrusted" || input.taintedBy !== undefined
+    // Files a tool produced for the reply (`image_generate`). Collected across every step, carried
+    // out on the result, and sent by whichever surface delivers the text.
+    const attachments: TurnAttachmentFile[] = []
+    let untrustedSource =
+        input.taintedBy ?? (input.from === undefined ? undefined : senderLabel(input.from))
 
     try {
         const history: ChatMessage[] = [...input.history]
@@ -618,10 +760,15 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
          */
         const rendered = input.turnTools ?? []
         const layered = [...turnScripts, ...rendered]
-        const baseTools =
-            input.tools === undefined || layered.length === 0
+        const ownTools =
+            input.tools === undefined || input.toolsAllow === undefined
                 ? input.tools
-                : withRenderedTools(input.tools, layered, rendered.length > 0)
+                : narrowedTools(input.tools, input.toolsAllow)
+        // `let`: a tool pinned mid-turn (`pinTools`) is layered onto this and the views rebuilt.
+        let baseTools =
+            ownTools === undefined || layered.length === 0
+                ? ownTools
+                : withRenderedTools(ownTools, layered, rendered.length > 0)
 
         /**
          * The catalogue as one phase sees it, rebuilt only when the phase changes.
@@ -704,7 +851,19 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                     // messages it is handed rather than from `history`, because the ladder may have
                     // replaced that array by the time this runs.
                     protectedTail: Math.max(0, messages.length - initialHistoryLength),
+                    // On for every model since 0.2.0. Behind the input, the person's request reads as
+                    // unanswered and finished calls are re-issued into the repeat guard; Claude's signed
+                    // thinking also needs it, and a cached prefix is only reused if each step appends.
+                    // See `traceAfterInput`.
+                    traceAfterInput:
+                        input.role.capabilities.thinking === "anthropic" ||
+                        input.role.capabilities.promptCache === "bedrock" ||
+                        input.role.capabilities.traceAfterInput !== false,
                     input: promptInput,
+                    ...(input.turnNote === undefined ? {} : { note: input.turnNote }),
+                    ...(input.images === undefined || input.images.length === 0
+                        ? {}
+                        : { inputImages: input.images }),
                     // Reduced by whatever the dialect puts in the request body rather than in a block.
                     // Zero under NLT, so this is the same arithmetic it always was.
                     window: windowForTurn,
@@ -820,8 +979,13 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                     if (result.displaced.length > 0 && input.compaction.persist !== undefined) {
                         await input.compaction.persist(result.displaced)
                     }
+                    // Copied before the clear: a ladder whose stages changed nothing returns the
+                    // array it was given, which is this one, so clearing first and pushing from it
+                    // emptied the turn's whole history (since d1deecb). The model then lost its own
+                    // call and result, repeated the call, and the turn ended in `no_progress`.
+                    const compacted = [...result.history]
                     history.length = 0
-                    history.push(...result.history)
+                    history.push(...compacted)
                     assembled = assembleWith(history)
                 }
             }
@@ -908,6 +1072,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                     context: stepContext,
                     signal: link.signal,
                     ...(input.meter === undefined ? {} : { meter: input.meter }),
+                    ...(input.sender === undefined ? {} : { sender: input.sender }),
                 }),
             )
             const step = await callStep({
@@ -963,6 +1128,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             // steps: "let me check the calendar" is narration they should see, and the block that
             // follows it is not.
             if (parsed.text !== "") text = text === "" ? parsed.text : `${text}\n\n${parsed.text}`
+            if (parsed.text !== "") finalText = parsed.text
             pendingProse = parsed.text
 
             if (step.aborted) break
@@ -1006,6 +1172,29 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 break
             }
 
+            // Same tool, new arguments, over and over: checked before the calls run, for the reason
+            // above. Counted per call, so one step calling a tool twice counts twice.
+            const over =
+                sameTool === undefined
+                    ? undefined
+                    : parsed.intents.find((intent) => {
+                          const count = (callsByTool.get(intent.slug) ?? 0) + 1
+                          callsByTool.set(intent.slug, count)
+                          return count > sameTool
+                      })
+            if (over !== undefined && sameTool !== undefined) {
+                reason = "no_progress"
+                const detail: ErrorDetail = {
+                    code: "no_progress",
+                    message: `The model called ${over.slug} more than ${sameTool} times in this turn, so the turn was stopped.`,
+                    hint: "Each call had new arguments, so the identical-call check could not see it, but the turn was going round one tool. Usually the tool returns a page or a delta the model keeps following; return more per call, or say in its result when there is nothing further. `limits.noProgress.sameTool` sets the number.",
+                    field: "limits.noProgress.sameTool",
+                }
+                error = detail
+                input.bus.emit("agent.warning", detail, context)
+                break
+            }
+
             // The same limit, with text on the floor. Untreated this was the quietest ending in the
             // runtime: the reply is cut mid-sentence, the loop falls through the no-tool-call break
             // below, and the turn is recorded `final` — a truncated answer reported as a complete
@@ -1029,6 +1218,22 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 break
             }
 
+            // The model, or a guardrail in front of it, declined. Ended as an error rather than recorded
+            // as the answer: a refusal often arrives with no text, and a turn that ends `final` on an
+            // empty reply is the silent shape. `content_filter` is chat-completions' spelling and the
+            // Bedrock transport's for a refusal, a guardrail and a content filter alike.
+            if (step.finishReason === "content_filter" || step.finishReason === "refusal") {
+                reason = "error"
+                const detail: ErrorDetail = {
+                    code: "model_refused",
+                    message: `The model declined to answer (finish reason ${step.finishReason})${step.text.trim() === "" ? " and returned no text" : ""}.`,
+                    hint: "A safety classifier or a guardrail stopped this reply; retrying the same request will usually end the same way. Rephrase it, or give this kind of task to a different model. model.<role>.fallbacks does not apply: it moves on only when the endpoint fails, and a refusal is an answer.",
+                }
+                error = detail
+                input.bus.emit("agent.warning", detail, context)
+                break
+            }
+
             const output: StepOutput = { text: step.text, calls: step.calls }
             /** Calls the dialect could not read at all. Only `native` can produce these. */
             const unreadable = parsed.malformed ?? []
@@ -1037,6 +1242,42 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             // An unreadable call counts as work: breaking here would drop it silently and report the
             // turn as a clean reply, which is the one outcome that must never happen.
             if (tools === undefined || (parsed.intents.length === 0 && unreadable.length === 0)) {
+                // A step that ends the turn without doing what it needs (nothing visible after a tool
+                // result, or a promise to act with no call) gets one framed note and one more step.
+                const silence =
+                    tools === undefined || nudged
+                        ? undefined
+                        : silenceOf(parsed.text, trace, sideEffects)
+                if (silence !== undefined && tools !== undefined) {
+                    nudged = true
+                    const said: ChatMessage[] =
+                        parsed.text === ""
+                            ? []
+                            : [{ ...tools.dialect.renderCall(output), origin: "call" }]
+                    const note: ChatMessage = {
+                        role: "user",
+                        content: SILENCE_NOTE[silence],
+                        origin: "repair",
+                    }
+                    history.push(...said, note)
+                    trace.push(...said, note)
+                    pendingProse = ""
+                    input.bus.emit(
+                        "tool.repair",
+                        {
+                            slugs: [],
+                            errors: [
+                                silence === "empty"
+                                    ? "no visible reply after a tool result"
+                                    : silence === "claim"
+                                      ? "said it was done and nothing that acts ran"
+                                      : "said it would act and made no call",
+                            ],
+                        },
+                        context,
+                    )
+                    continue
+                }
                 // The model chose to stop. Recorded, because this is the *only* exit that means the
                 // work is finished, and it is indistinguishable afterwards from the cap being reached:
                 // both leave `steps === maxSteps` when the answer arrives on the last permitted step.
@@ -1057,7 +1298,13 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 recentCalls.push(signature)
                 if (recentCalls.length > identicalCalls) recentCalls.shift()
             }
+            const forgiven =
+                signature === transientFailed &&
+                (transientRetries.get(signature) ?? 0) < TRANSIENT_RETRIES
+            if (forgiven)
+                transientRetries.set(signature, (transientRetries.get(signature) ?? 0) + 1)
             if (
+                !forgiven &&
                 recentCalls.length === identicalCalls &&
                 recentCalls.every((entry) => entry === signature)
             ) {
@@ -1079,7 +1326,17 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             // Tagged here rather than in each dialect: `origin` is a fact about who produced the
             // message, and the loop is the only place that knows. Compaction reads it to tell a tool
             // observation from a human message, which under a text dialect the *role* cannot.
-            const call: ChatMessage = { ...tools.dialect.renderCall(output), origin: "call" }
+            //
+            // Signed thinking rides on the call when the model's family requires it back with the
+            // tool results (decision 14.18). Within the turn only: `history` reaches the store, which
+            // drops the field, and the next turn starts a fresh tool loop that needs none of it.
+            const call: ChatMessage = {
+                ...tools.dialect.renderCall(output),
+                origin: "call",
+                ...(input.role.capabilities.thinking === "anthropic" && step.thinking.length > 0
+                    ? { thinking: step.thinking }
+                    : {}),
+            }
             history.push(call)
             trace.push(call)
             pendingProse = ""
@@ -1125,6 +1382,12 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                               ...(tools.memoryDir === undefined
                                   ? {}
                                   : { memoryDir: tools.memoryDir }),
+                              ...(input.writeNote === undefined
+                                  ? {}
+                                  : { writeNote: input.writeNote }),
+                              ...(input.forgetMemory === undefined
+                                  ? {}
+                                  : { forgetMemory: input.forgetMemory }),
                               // Wired from the compaction seam rather than from `tools`, because the
                               // artifact store and the compaction that fills it are one capability:
                               // an agent with a store but no thresholds has no pointers to follow,
@@ -1139,6 +1402,31 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                               // change take effect on the *next step of this turn* rather than the next
                               // turn — deferring it would recreate the two-hop shape 4.7 refuses in the
                               // feature that exists for the models which fail it.
+                              // A tool pinned by `config_set` this turn (pilot.14): added for the next
+                              // step when a provider resolves it without the network, and rendered
+                              // into the catalogue, because a tool the catalogue does not list is one
+                              // the model will not call. Slot 1 changes for the rest of this turn,
+                              // the price of not asking the person twice (decision 14.96).
+                              pinTools: async (slugs: readonly string[]) => {
+                                  input.onPinned?.()
+                                  const base = baseTools
+                                  if (base === undefined) return []
+                                  const found = await base.registry.resolveMore(slugs)
+                                  if (found.length === 0) return []
+                                  const layered = withRenderedTools(base, found, true)
+                                  // A turn narrowed to some tools (a schedule's `tools.allow`, a peer
+                                  // ask without `handoff`) stays narrowed: a pin cannot widen it.
+                                  baseTools =
+                                      input.toolsAllow === undefined
+                                          ? layered
+                                          : narrowedTools(layered, input.toolsAllow)
+                                  views.clear()
+                                  tools = viewFor(phase)
+                                  const now = baseTools
+                                  return found
+                                      .map((tool) => tool.spec.slug)
+                                      .filter((slug) => now.registry.has(slug))
+                              },
                               ...(input.phases === undefined
                                   ? {}
                                   : {
@@ -1158,18 +1446,45 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                               // the deadline actually in force. Seeded here so the shape is complete.
                               deadlineMs: input.limits.toolTimeoutMs,
                               now: tools.now ?? (() => new Date()),
+                              actingParticipant: input.participant ?? null,
+                              attach: (file) => {
+                                  attachments.push(file)
+                              },
                           },
                           bus: input.bus,
                           eventContext: stepContext,
                           timeoutMs: input.limits.toolTimeoutMs,
+                          ...(tools.timeoutFor === undefined
+                              ? {}
+                              : { timeoutFor: tools.timeoutFor }),
+                          ...(input.withheld === undefined || input.withheld.length === 0
+                              ? {}
+                              : { withheld: new Set(input.withheld) }),
                           maxParallel: input.limits.maxParallelTools,
                           observationMaxTokens: tools.observationMaxTokens,
+                          ...(tools.eventDetail === undefined
+                              ? {}
+                              : { eventDetail: tools.eventDetail }),
+                          // Both halves or neither, for the reason `readArtifact` above gives: a stored
+                          // artifact nothing can read is a pointer to nowhere.
+                          ...(input.compaction?.persist === undefined ||
+                          input.compaction.read === undefined
+                              ? {}
+                              : { keepFull: input.compaction.persist }),
                           untrustedInTurn: untrustedSeen,
                           onMutate: tools.untrustedOnMutate,
                           policy: tools.policy,
                           ...(tools.approve === undefined ? {} : { approve: tools.approve }),
                           ...(untrustedSource === undefined ? {} : { untrustedSource }),
+                          ...(input.deferMutations === undefined
+                              ? {}
+                              : { defer: input.deferMutations }),
                       })
+
+            transientFailed =
+                outcome.results.length > 0 && outcome.results.every(failedTransiently)
+                    ? signature
+                    : undefined
 
             if (outcome.results.some((result) => result.ok)) {
                 // Optional-chained rather than narrowed: `tools` became reassignable when phases landed,
@@ -1249,13 +1564,19 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
             error = abortDetail(reason, turnId, input.limits.turnTimeoutMs)
         } else {
             reason = "error"
-            const harness = caught instanceof HarnessError ? caught : undefined
+            // `isHarnessError`, not `instanceof`: a model transport is a separate package (Bedrock's)
+            // carrying its own copy of core, and `instanceof` against this copy turned its typed
+            // error — `bedrock_credentials_missing`, hint and all — into "a bug worth reporting".
+            // Found running the image, where the two copies are real.
+            const harness = isHarnessError(caught) ? caught : undefined
             error = {
                 code: harness?.code ?? "turn_failed",
                 message: caught instanceof Error ? caught.message : String(caught),
                 hint:
                     harness?.hint ??
                     "Unexpected failure inside the turn. The stack is on the `error` event; this is a bug worth reporting.",
+                // A provider's own words (pilot.14), kept beside the message rather than in it.
+                ...(harness?.detail === undefined ? {} : { detail: harness.detail }),
             }
             input.bus.emit(
                 "error",
@@ -1305,6 +1626,18 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
                 ...(cacheSource === undefined ? {} : { cacheSource }),
             },
             durationMs,
+            ...(finalText === "" ? {} : { finalText }),
+            ...(attachments.length === 0
+                ? {}
+                : {
+                      attachments: attachments.map((file) => ({
+                          path:
+                              input.tools === undefined
+                                  ? file.path
+                                  : relative(input.tools.dir, file.path),
+                          mimeType: file.mimeType,
+                      })),
+                  }),
         },
         context,
     )
@@ -1312,6 +1645,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
     return {
         turnId,
         text,
+        ...(finalText === "" ? {} : { finalText }),
         reasoning,
         reason,
         steps,
@@ -1329,5 +1663,7 @@ async function runTurnCore(input: TurnInput): Promise<TurnResult> {
         // it too — `persist` inside the turn covers a crash mid-turn, and this covers the ordinary path
         // without making the caller subscribe to an event to learn where its own session got to.
         ...(input.phases === undefined ? {} : { phase }),
+        ...(attachments.length === 0 ? {} : { attachments }),
+        ...(untrustedSeen ? { tainted: true as const } : {}),
     }
 }

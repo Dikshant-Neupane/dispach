@@ -4,12 +4,15 @@ A typed client for the Dispach agent server. No dependency beyond the standard l
 `@dispach/core`, which supplies the SSE parser and the event types — so the client cannot drift
 from the runtime's own catalogue.
 
+This is a workspace package and is not published on its own. It ships inside the one npm package,
+`dispach`, as the `dispach/client` subpath:
+
 ```bash
-bun add @dispach/client
+npm i dispach
 ```
 
 ```ts
-import { createClient } from "@dispach/client"
+import { createClient } from "dispach/client"
 
 const client = createClient({
     baseUrl: "http://localhost:7420",
@@ -161,7 +164,7 @@ Every failure is a `DispachError` carrying the wire's own `code`, `hint`, `field
 Branch on `code`, never on `message`.
 
 ```ts
-import { DispachError } from "@dispach/client"
+import { DispachError } from "dispach/client"
 
 try {
     await agent.send("hi")
@@ -232,8 +235,10 @@ Four things about `setConfig`, each of which has a wrong answer that looks right
   one parser decides whether `["a", "b"]` is a list of two strings. Passing `JSON.stringify(x)` is
   right for a list or a map and **wrong for a string**, where it would send the quotes.
 - **Read `applied`.** The manifest is written and *then* the agent is replaced, because an agent's
-  settings are fixed for its instance's lifetime. The replace is refused while a turn is in flight,
-  so a successful write can arrive with `applied: false` and the reason under `pending`.
+  settings are fixed for its instance's lifetime. While a turn is in flight the reload is accepted
+  and deferred — the running turn finishes on the old settings and the swap follows, announced by
+  `agent.reloaded` — so a successful write can arrive with `applied: false` and the reason
+  (`reload_pending`) under `pending`.
 - **Two fields need `{ confirm: true }`**, and `config()` says which by carrying a `confirm`
   sentence on the row. Show that sentence first; the server refuses without it, at
   `409 config_confirm_required`.
@@ -269,6 +274,10 @@ const client = createClient({
     fetch: (url, init) => handler(new Request(url as string, init)),
 })
 ```
+
+`createHandler` comes from `@dispach/server`, a workspace package that is not published, so this
+works from a repository checkout; against an installed `dispach`, point the client at a running
+`dispach serve` instead.
 
 That is how this package's own tests run, deliberately: a mocked transport would let the client
 agree with a fixture instead of with the runtime.

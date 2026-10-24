@@ -115,7 +115,7 @@ export interface WebhookAllowlist {
 
 export const EMPTY_ALLOWLIST: WebhookAllowlist = { hosts: new Set(), ranges: [] }
 
-/** Parse `velacrew-api, 172.16.0.0/12, fd00::/8`. Throws naming the entry it cannot read. */
+/** Parse `internal-api, 172.16.0.0/12, fd00::/8`. Throws naming the entry it cannot read. */
 export function parseWebhookAllowlist(raw: string | undefined, source: string): WebhookAllowlist {
     if (raw === undefined || raw.trim() === "") return EMPTY_ALLOWLIST
     const hosts = new Set<string>()
@@ -135,7 +135,7 @@ export function parseWebhookAllowlist(raw: string | undefined, source: string): 
             throw new HarnessError({
                 code: "webhook_allowlist_invalid",
                 message: `${source} has an entry that is neither a hostname nor an address range: "${entry}".`,
-                hint: "List hostnames and CIDR ranges, comma-separated: velacrew-api, 172.16.0.0/12, fd00::/8. A link-local range is refused whatever this says.",
+                hint: "List hostnames and CIDR ranges, comma-separated: internal-api, 172.16.0.0/12, fd00::/8. A link-local range is refused whatever this says.",
                 field: source,
             })
         }
@@ -409,6 +409,14 @@ export class WebhookDispatcher {
                 ...(this.#options.lookup === undefined ? {} : { lookup: this.#options.lookup }),
             })
         } catch (error) {
+            // A name that does not resolve *right now* is a receiver restarting or a DNS blip, not a
+            // refusal: nothing was sent, so retrying it probes nothing. Failing it outright lost the
+            // event — found live, a receiver container stopped for twelve seconds and the turn it
+            // missed never arrived. It takes the ordinary backoff and gives up the ordinary way.
+            if (error instanceof HarnessError && error.code === "webhook_target_unresolved") {
+                await this.#retryOrFail(row, messageOf(error), false)
+                return
+            }
             // Permanent, and not retried: a URL that now resolves somewhere refused stays refused,
             // and retrying a refusal is how a checker becomes a scanner on a timer.
             await store.markFailed(row.subscriptionId, row.messageId, messageOf(error), at)
@@ -455,6 +463,15 @@ export class WebhookDispatcher {
         } finally {
             clearTimeout(timer)
         }
+        await this.#retryOrFail(row, failure, permanent)
+    }
+
+    async #retryOrFail(
+        row: WebhookDeliveryRecord,
+        failure: string,
+        permanent: boolean,
+    ): Promise<void> {
+        const store = this.#options.store
         if (permanent || row.attempts > this.#backoff.length) {
             await store.markFailed(row.subscriptionId, row.messageId, failure, this.#iso())
             return

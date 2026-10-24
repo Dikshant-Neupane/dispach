@@ -12,6 +12,8 @@ import { isAbsolute, resolve } from "node:path"
 import { BRAND } from "../brand.ts"
 import { STAGE_ORDER, type StageName } from "../context/compaction/stages.ts"
 import { apiVersionMismatch, type ErrorDetail, HarnessError } from "../errors.ts"
+import { resolveCapabilities } from "../model/capabilities.ts"
+import { nearest } from "../nearest.ts"
 import { parseSchedule } from "../schedule/kinds.ts"
 import { planWorkspace, type WorkspaceFileRef } from "../workspace/load.ts"
 import { planSoul } from "../workspace/soul.ts"
@@ -222,7 +224,7 @@ function validateContextBudget(manifest: AgentManifest, resolvedWindow: number):
         {
             code: "manifest_reserve_output_too_large",
             message: `context.reserveOutput (${reserveOutput}) must be less than the context window (${resolvedWindow}).`,
-            hint: "reserveOutput is held back from the window for the response. Set context.window explicitly if the shipped capability registry is wrong for your endpoint.",
+            hint: "reserveOutput is held back from the window for the response. Set context.window explicitly (`config set <agent> context.window <tokens>`) if the shipped capability registry is wrong for your endpoint.",
             field: "context.reserveOutput",
         },
     ]
@@ -382,7 +384,8 @@ function validateBaseUrls(manifest: AgentManifest): ErrorDetail[] {
 
     for (const role of configuredRoles(manifest.model)) {
         const config = manifest.model[role]
-        if (config === undefined) continue
+        // Another transport addresses its endpoint its own way, and validates it itself.
+        if (config?.baseUrl === undefined) continue
         const field = `model.${role}.baseUrl`
 
         let url: URL
@@ -553,6 +556,45 @@ const UNSUPPORTED_SECTIONS: readonly { key: string; feature: string; phase: stri
  * agent, the schedule fired correctly every 15 minutes and every send came back `Bad Request: chat
  * not found`. It cannot be an error, because `@somechannel` is a legitimate target.
  */
+/**
+ * A fallback smaller than the model it stands in for.
+ *
+ * The primary's capabilities, dialect and window govern the whole turn, fallback or not — the prompt
+ * was assembled for them before anyone knew the primary would fail. So a fallback with a smaller
+ * window can be sent a prompt it refuses, and one without native tools a native catalogue it cannot
+ * read. Warned rather than refused: the fallback exists for an outage, and it may well be the right
+ * trade to have a smaller model answer than none.
+ */
+export function fallbackWarnings(manifest: AgentManifest): ErrorDetail[] {
+    const found: ErrorDetail[] = []
+    for (const role of configuredRoles(manifest.model)) {
+        const config = manifest.model[role]
+        if (config?.fallbacks === undefined) continue
+        const primary = resolveCapabilities(config.id, config.capabilities)
+        for (const [index, entry] of config.fallbacks.entries()) {
+            const field = `model.${role}.fallbacks.${index}`
+            const theirs = resolveCapabilities(entry.id, entry.capabilities)
+            if (theirs.contextWindow < primary.contextWindow) {
+                found.push({
+                    code: "model_fallback_smaller",
+                    message: `${field} (${entry.id}) has a ${theirs.contextWindow.toLocaleString("en-US")}-token window, smaller than ${config.id}'s ${primary.contextWindow.toLocaleString("en-US")}.`,
+                    hint: "Prompts are assembled for the primary's window, so a long session can overflow the fallback. Pick a fallback at least as large, or set model.<role>.capabilities.contextWindow to the smaller figure.",
+                    field,
+                })
+            }
+            if (primary.nativeTools && !theirs.nativeTools) {
+                found.push({
+                    code: "model_fallback_no_native_tools",
+                    message: `${field} (${entry.id}) is not known to support native tool calls, and ${config.id} is.`,
+                    hint: "Under the native dialect the fallback is sent a tools parameter it may not read. Pick a fallback with native tools, or declare capabilities.nativeTools on it if the registry is wrong.",
+                    field,
+                })
+            }
+        }
+    }
+    return found
+}
+
 export function scheduleDeliveryWarnings(manifest: AgentManifest): ErrorDetail[] {
     const found: ErrorDetail[] = []
     const typeOf = new Map(manifest.channels.map((channel) => [channel.id, channel.type]))
@@ -682,8 +724,16 @@ export function validateSchedules(
         }
     }
 
+    // A child's role is a reference too, and `subagent` is the one its children use by default.
+    for (const child of manifest.subagents ?? []) referencedRoles.add(child.model ?? "subagent")
+
     for (const name of customRoleNames(manifest.model)) {
         if (referencedRoles.has(name)) continue
+        // Refused only where it looks like a typo of a built-in role, which is the failure this exists
+        // for: a misspelled `compacter` silently falls back to main. Any other name is a role declared
+        // ahead of the schedules that will use it — a template's `fast` or `deep`, named by schedules
+        // created over the API — and refusing it made a per-schedule model impossible (pilot.4).
+        if (nearest(name, MODEL_ROLES) === undefined) continue
         found.push({
             code: "model_role_unreferenced",
             message: `model.${name} is declared but no schedule names it, so nothing will ever use it.`,
@@ -692,6 +742,75 @@ export function validateSchedules(
         })
     }
 
+    return found
+}
+
+/**
+ * A child narrows the parent and never widens it, and every routed slug has exactly one child.
+ *
+ * Checked against `tools.pinned` and `tools.local` as written rather than against the resolved
+ * catalogue, so `validate` can answer without reaching a provider. A pinned slug nothing resolves is
+ * refused at load by `resolve()` anyway, child or no child.
+ */
+export function validateSubagents(manifest: AgentManifest): ErrorDetail[] {
+    const found: ErrorDetail[] = []
+    const parent = new Set([...manifest.tools.pinned, ...manifest.tools.local])
+    const declaredRoles = new Set<string>([...MODEL_ROLES, ...customRoleNames(manifest.model)])
+    const names = new Set<string>()
+    const routedBy = new Map<string, string>()
+
+    for (const [index, child] of (manifest.subagents ?? []).entries()) {
+        const field = `subagents[${index}]`
+        if (names.has(child.name)) {
+            found.push({
+                code: "subagent_name_duplicate",
+                message: `Two subagents are called "${child.name}".`,
+                hint: "Give each subagent its own name: it is how events, sessions and usage rows say which child ran.",
+                field: `${field}.name`,
+            })
+        }
+        names.add(child.name)
+
+        const outside = child.tools.filter((slug) => !parent.has(slug))
+        if (outside.length > 0) {
+            found.push({
+                code: "subagent_tool_not_pinned",
+                message: `Subagent "${child.name}" lists ${outside.join(", ")}, which this agent does not pin.`,
+                hint: "A subagent may only use tools its parent has, so it can never act with more authority than the parent. Add the slug to tools.pinned (or tools.local), or remove it from the subagent.",
+                field: `${field}.tools`,
+            })
+        }
+
+        for (const slug of child.route.tools) {
+            if (!child.tools.includes(slug)) {
+                found.push({
+                    code: "subagent_route_outside_tools",
+                    message: `Subagent "${child.name}" routes ${slug} but does not list it under tools, so it could not make the call it is handed.`,
+                    hint: `Add ${slug} to subagents[${index}].tools.`,
+                    field: `${field}.route.tools`,
+                })
+            }
+            const other = routedBy.get(slug)
+            if (other !== undefined && other !== child.name) {
+                found.push({
+                    code: "subagent_route_duplicate",
+                    message: `${slug} is routed to both "${other}" and "${child.name}".`,
+                    hint: "A routed call runs exactly one child. Route the slug from one subagent only.",
+                    field: `${field}.route.tools`,
+                })
+            }
+            routedBy.set(slug, child.name)
+        }
+
+        if (child.model !== undefined && !declaredRoles.has(child.model)) {
+            found.push({
+                code: "subagent_role_unknown",
+                message: `Subagent "${child.name}" names the model role "${child.model}", which is not declared under model:. Declared: ${[...declaredRoles].join(", ")}.`,
+                hint: "Add the role under model:, or remove model: from the subagent to use model.subagent (or main).",
+                field: `${field}.model`,
+            })
+        }
+    }
     return found
 }
 
@@ -820,6 +939,23 @@ export interface ValidateOptions {
     now?: number
 }
 
+/** A channel's `role:` names a declared model role (pilot.14). One check for `validate`, load and edits. */
+export function validateChannelRoles(manifest: AgentManifest): ErrorDetail[] {
+    const declaredRoles = new Set<string>([...MODEL_ROLES, ...customRoleNames(manifest.model)])
+    return (manifest.channels ?? []).flatMap((channel, index) =>
+        channel.role === undefined || declaredRoles.has(channel.role)
+            ? []
+            : [
+                  {
+                      code: "channel_role_unknown",
+                      message: `Channel "${channel.id}" names the model role "${channel.role}", which is not declared under model:. Declared: ${[...declaredRoles].join(", ")}.`,
+                      hint: "Add the role under model:, or point the channel at one of the declared roles. Omit role to run its turns on main.",
+                      field: `channels[${index}].role`,
+                  },
+              ],
+    )
+}
+
 /** Every rule this build can enforce. Returns all failures; the caller decides how to report. */
 export function validateManifest(manifest: AgentManifest, options: ValidateOptions): ErrorDetail[] {
     return [
@@ -832,6 +968,8 @@ export function validateManifest(manifest: AgentManifest, options: ValidateOptio
         ...validateApiKeyEnv(manifest, options.env),
         ...validateDialectSupport(manifest, options.capabilities),
         ...validateSchedules(options.raw, manifest, options.now ?? Date.now()),
+        ...validateSubagents(manifest),
+        ...validateChannelRoles(manifest),
         ...validateSupportedSections(options.raw),
     ]
 }

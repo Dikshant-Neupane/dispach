@@ -30,12 +30,15 @@
 
 import {
     ConfigError,
+    type MediaProviderFactory,
     type Tool,
     type ToolAvailability,
     type ToolProvider,
     type ToolProviderContext,
+    type ToolProviderFactory,
 } from "@dispach/core"
 import { configTools } from "./config.ts"
+import { childEnv, type EnvPolicy, envPolicy } from "./env.ts"
 import { execTool } from "./exec.ts"
 import { fileTools } from "./files.ts"
 import { SYSTEM_PROVIDER_ID } from "./paths.ts"
@@ -52,6 +55,10 @@ export interface SystemProviderOptions {
      * workspace files are identified by where they are rather than only by what they are called.
      */
     readonly dir: string
+    /** The runtime's provider factories, so `config_set` can have a `tools.providers` edit checked. */
+    readonly providers?: Readonly<Record<string, ToolProviderFactory>>
+    /** The runtime's media providers, so a `media` edit is checked before it is written. */
+    readonly mediaProviders?: Readonly<Record<string, MediaProviderFactory>>
     /**
      * Extra protected patterns from `tools.providerConfig.protect`.
      *
@@ -62,6 +69,8 @@ export interface SystemProviderOptions {
     readonly protect?: readonly string[]
     /** Extra writable directories. Absolute, or relative to the agent directory. */
     readonly writeRoots?: readonly string[]
+    /** Confine `file_read`, `glob` and `grep` to the same roots (pilot.14). Off by default. */
+    readonly confineReads?: boolean
 }
 
 function normalise(slug: string): string {
@@ -80,7 +89,11 @@ export class SystemProvider implements ToolProvider {
     readonly #tools: readonly Tool[]
 
     constructor(options: SystemProviderOptions) {
-        const roots = resolveRoots(options.dir, options.writeRoots ?? [])
+        const roots = resolveRoots(
+            options.dir,
+            options.writeRoots ?? [],
+            options.confineReads === true,
+        )
         const shared = {
             sessions: this.#sessions,
             agentDir: options.dir,
@@ -91,7 +104,13 @@ export class SystemProvider implements ToolProvider {
             execTool({ sessions: this.#sessions, env: options.env, roots }),
             ...fileTools(shared),
             ...searchTools({ sessions: this.#sessions, roots }),
-            ...configTools({ agentDir: options.dir }),
+            ...configTools({
+                agentDir: options.dir,
+                ...(options.providers === undefined ? {} : { providers: options.providers }),
+                ...(options.mediaProviders === undefined
+                    ? {}
+                    : { mediaProviders: options.mediaProviders }),
+            }),
         ]
     }
 
@@ -158,9 +177,12 @@ export const SYSTEM_TOOL_SLUGS: readonly string[] = [
  */
 export const SYSTEM_READONLY_SLUGS: readonly string[] = ["file_read", "glob", "grep"]
 
-const CONFIG_KEYS = ["protect", "writeRoots"] as const
+const CONFIG_KEYS = ["protect", "writeRoots", "env", "confineReads"] as const
 
-export function systemFromConfig(context: ToolProviderContext): SystemProvider {
+export function systemFromConfig(
+    context: ToolProviderContext,
+    onPolicy?: (policy: EnvPolicy) => void,
+): SystemProvider {
     const unknown = Object.keys(context.config).filter(
         (key) => !CONFIG_KEYS.includes(key as (typeof CONFIG_KEYS)[number]),
     )
@@ -175,12 +197,27 @@ export function systemFromConfig(context: ToolProviderContext): SystemProvider {
 
     const protect = context.config.protect
     const writeRoots = context.config.writeRoots
+    const confineReads = context.config.confineReads
+    if (confineReads !== undefined && typeof confineReads !== "boolean") {
+        throw new ConfigError({
+            code: "system_config_invalid",
+            message: "tools.providers.system.confineReads must be true or false.",
+            hint: "true confines file_read, glob and grep to the agent's directory and its writeRoots; false, or leaving it out, keeps reads unconfined as before.",
+            field: "tools.providers.system.confineReads",
+        })
+    }
+    const policy = envPolicy(context.config.env)
+    // The same policy reaches the skill-script runner this agent's plugin setup registered.
+    onPolicy?.(policy)
     return new SystemProvider({
-        env: context.env,
+        env: childEnv(context.env, policy),
         dir: context.dir,
+        ...(context.providers === undefined ? {} : { providers: context.providers }),
+        ...(context.mediaProviders === undefined ? {} : { mediaProviders: context.mediaProviders }),
         ...(Array.isArray(protect) ? { protect: protect.map((entry) => String(entry)) } : {}),
         ...(Array.isArray(writeRoots)
             ? { writeRoots: writeRoots.map((entry) => String(entry)) }
             : {}),
+        ...(confineReads === true ? { confineReads: true } : {}),
     })
 }

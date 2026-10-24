@@ -1,0 +1,1132 @@
+{
+    "measuredAt": "2026-10-21T15:08:50.738Z",
+    "commit": "8267f61",
+    "runtime": "bun 1.3.5",
+    "machine": {
+        "cpu": "Apple M4 Pro",
+        "os": "darwin 27.0.0",
+        "loadAverage": [
+            4.72,
+            3.09,
+            3.37
+        ]
+    },
+    "arms": [
+        {
+            "arm": "native.glm-5.3",
+            "harness": "dispach-native",
+            "model": "glm-5.3",
+            "provider": "z-ai/fp8",
+            "overall": {
+                "pass": 118,
+                "n": 125,
+                "rate": 0.944,
+                "low": 0.8889,
+                "high": 0.9726
+            },
+            "errored": 1,
+            "retries": 0,
+            "cost": 1.3397,
+            "promptTokens": 1823382,
+            "completionTokens": 114468,
+            "medianWallMs": 11961,
+            "categories": {
+                "single": {
+                    "pass": 25,
+                    "n": 25,
+                    "rate": 1,
+                    "low": 0.8668,
+                    "high": 1
+                },
+                "chain": {
+                    "pass": 25,
+                    "n": 25,
+                    "rate": 1,
+                    "low": 0.8668,
+                    "high": 1
+                },
+                "recall": {
+                    "pass": 15,
+                    "n": 15,
+                    "rate": 1,
+                    "low": 0.7961,
+                    "high": 1
+                },
+                "abstention": {
+                    "pass": 18,
+                    "n": 20,
+                    "rate": 0.9,
+                    "low": 0.699,
+                    "high": 0.9721
+                },
+                "recovery": {
+                    "pass": 20,
+                    "n": 25,
+                    "rate": 0.8,
+                    "low": 0.6087,
+                    "high": 0.9114
+                },
+                "long": {
+                    "pass": 15,
+                    "n": 15,
+                    "rate": 1,
+                    "low": 0.7961,
+                    "high": 1
+                }
+            },
+            "tasks": {
+                "single-kv-set": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-read-answer": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-calculator": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-now": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-send": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-order-notify": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-file-to-kv": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-sum-to-file": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-kv-to-send": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-edit-json": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-fact": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-preference": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-correction": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-chitchat": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-knowledge": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-draft-only": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-cannot": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "recover-retry": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-persist": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "recover-bad-expression": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-missing-file": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-unknown-order": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-log-needle": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-count-orders": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-handbook": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                }
+            },
+            "against": {
+                "dir": "evals/harness/runs/after-ac5dcc5",
+                "overallPp": 0.8,
+                "categoriesPp": {
+                    "single": 8,
+                    "chain": 0,
+                    "recall": 0,
+                    "abstention": -5,
+                    "recovery": 0,
+                    "long": 0
+                },
+                "tasksPp": {
+                    "single-kv-set": 0,
+                    "single-read-answer": 0,
+                    "single-calculator": 0,
+                    "single-now": 40,
+                    "single-send": 0,
+                    "chain-order-notify": 0,
+                    "chain-file-to-kv": 0,
+                    "chain-sum-to-file": 0,
+                    "chain-kv-to-send": 0,
+                    "chain-edit-json": 0,
+                    "recall-fact": 0,
+                    "recall-preference": 0,
+                    "recall-correction": 0,
+                    "abstain-chitchat": 0,
+                    "abstain-knowledge": 0,
+                    "abstain-draft-only": 0,
+                    "abstain-cannot": -20,
+                    "recover-retry": 0,
+                    "recover-persist": 0,
+                    "recover-bad-expression": 0,
+                    "recover-missing-file": 0,
+                    "recover-unknown-order": 0,
+                    "long-log-needle": 0,
+                    "long-count-orders": 0,
+                    "long-handbook": 0
+                }
+            }
+        },
+        {
+            "arm": "native.gpt-6-luna",
+            "harness": "dispach-native",
+            "model": "gpt-6-luna",
+            "provider": "openai",
+            "overall": {
+                "pass": 114,
+                "n": 125,
+                "rate": 0.912,
+                "low": 0.8493,
+                "high": 0.9502
+            },
+            "errored": 0,
+            "retries": 0,
+            "cost": 0.1004,
+            "promptTokens": 1526493,
+            "completionTokens": 19164,
+            "medianWallMs": 7038,
+            "categories": {
+                "single": {
+                    "pass": 20,
+                    "n": 25,
+                    "rate": 0.8,
+                    "low": 0.6087,
+                    "high": 0.9114
+                },
+                "chain": {
+                    "pass": 24,
+                    "n": 25,
+                    "rate": 0.96,
+                    "low": 0.8046,
+                    "high": 0.9929
+                },
+                "recall": {
+                    "pass": 15,
+                    "n": 15,
+                    "rate": 1,
+                    "low": 0.7961,
+                    "high": 1
+                },
+                "abstention": {
+                    "pass": 20,
+                    "n": 20,
+                    "rate": 1,
+                    "low": 0.8389,
+                    "high": 1
+                },
+                "recovery": {
+                    "pass": 20,
+                    "n": 25,
+                    "rate": 0.8,
+                    "low": 0.6087,
+                    "high": 0.9114
+                },
+                "long": {
+                    "pass": 15,
+                    "n": 15,
+                    "rate": 1,
+                    "low": 0.7961,
+                    "high": 1
+                }
+            },
+            "tasks": {
+                "single-kv-set": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "single-read-answer": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-calculator": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-now": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-send": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-order-notify": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-file-to-kv": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-sum-to-file": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-kv-to-send": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-edit-json": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "recall-fact": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-preference": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-correction": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-chitchat": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-knowledge": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-draft-only": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-cannot": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-retry": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-persist": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "recover-bad-expression": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-missing-file": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-unknown-order": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-log-needle": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-count-orders": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "long-handbook": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                }
+            },
+            "against": {
+                "dir": "evals/harness/runs/after-ac5dcc5",
+                "overallPp": 0,
+                "categoriesPp": {
+                    "single": -16,
+                    "chain": -4,
+                    "recall": 0,
+                    "abstention": 0,
+                    "recovery": 20,
+                    "long": 0
+                },
+                "tasksPp": {
+                    "single-kv-set": -100,
+                    "single-read-answer": 0,
+                    "single-calculator": 0,
+                    "single-now": 20,
+                    "single-send": 0,
+                    "chain-order-notify": 0,
+                    "chain-file-to-kv": 0,
+                    "chain-sum-to-file": 0,
+                    "chain-kv-to-send": 0,
+                    "chain-edit-json": -20,
+                    "recall-fact": 0,
+                    "recall-preference": 0,
+                    "recall-correction": 0,
+                    "abstain-chitchat": 0,
+                    "abstain-knowledge": 0,
+                    "abstain-draft-only": 0,
+                    "abstain-cannot": 0,
+                    "recover-retry": 100,
+                    "recover-persist": 0,
+                    "recover-bad-expression": 0,
+                    "recover-missing-file": 0,
+                    "recover-unknown-order": 0,
+                    "long-log-needle": 0,
+                    "long-count-orders": 0,
+                    "long-handbook": 0
+                }
+            }
+        },
+        {
+            "arm": "nlt.glm-5.3",
+            "harness": "dispach-nlt",
+            "model": "glm-5.3",
+            "provider": "z-ai/fp8",
+            "overall": {
+                "pass": 86,
+                "n": 125,
+                "rate": 0.688,
+                "low": 0.6022,
+                "high": 0.7626
+            },
+            "errored": 0,
+            "retries": 0,
+            "cost": 1.1935,
+            "promptTokens": 1304171,
+            "completionTokens": 150071,
+            "medianWallMs": 12058,
+            "categories": {
+                "single": {
+                    "pass": 22,
+                    "n": 25,
+                    "rate": 0.88,
+                    "low": 0.7004,
+                    "high": 0.9583
+                },
+                "chain": {
+                    "pass": 10,
+                    "n": 25,
+                    "rate": 0.4,
+                    "low": 0.234,
+                    "high": 0.5926
+                },
+                "recall": {
+                    "pass": 15,
+                    "n": 15,
+                    "rate": 1,
+                    "low": 0.7961,
+                    "high": 1
+                },
+                "abstention": {
+                    "pass": 17,
+                    "n": 20,
+                    "rate": 0.85,
+                    "low": 0.6396,
+                    "high": 0.9476
+                },
+                "recovery": {
+                    "pass": 15,
+                    "n": 25,
+                    "rate": 0.6,
+                    "low": 0.4074,
+                    "high": 0.766
+                },
+                "long": {
+                    "pass": 7,
+                    "n": 15,
+                    "rate": 0.4667,
+                    "low": 0.2481,
+                    "high": 0.6988
+                }
+            },
+            "tasks": {
+                "single-kv-set": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-read-answer": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-calculator": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "single-now": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "single-send": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "chain-order-notify": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "chain-file-to-kv": {
+                    "pass": 1,
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
+                },
+                "chain-sum-to-file": {
+                    "pass": 1,
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
+                },
+                "chain-kv-to-send": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "chain-edit-json": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "recall-fact": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-preference": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recall-correction": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-chitchat": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "abstain-knowledge": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-draft-only": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-cannot": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "recover-retry": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-persist": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "recover-bad-expression": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-missing-file": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "recover-unknown-order": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "long-log-needle": {
+                    "pass": 1,
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
+                },
+                "long-count-orders": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "long-handbook": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                }
+            },
+            "against": {
+                "dir": "evals/harness/runs/after-ac5dcc5",
+                "overallPp": -4,
+                "categoriesPp": {
+                    "single": -4,
+                    "chain": -20,
+                    "recall": 20,
+                    "abstention": -15,
+                    "recovery": 8,
+                    "long": -6.7
+                },
+                "tasksPp": {
+                    "single-kv-set": 0,
+                    "single-read-answer": 0,
+                    "single-calculator": 0,
+                    "single-now": -20,
+                    "single-send": 0,
+                    "chain-order-notify": 20,
+                    "chain-file-to-kv": -60,
+                    "chain-sum-to-file": 0,
+                    "chain-kv-to-send": -60,
+                    "chain-edit-json": 0,
+                    "recall-fact": 0,
+                    "recall-preference": 60,
+                    "recall-correction": 0,
+                    "abstain-chitchat": -40,
+                    "abstain-knowledge": 0,
+                    "abstain-draft-only": 0,
+                    "abstain-cannot": -20,
+                    "recover-retry": 20,
+                    "recover-persist": -20,
+                    "recover-bad-expression": 0,
+                    "recover-missing-file": 0,
+                    "recover-unknown-order": 40,
+                    "long-log-needle": 20,
+                    "long-count-orders": -60,
+                    "long-handbook": 20
+                }
+            }
+        },
+        {
+            "arm": "nlt.gpt-6-luna",
+            "harness": "dispach-nlt",
+            "model": "gpt-6-luna",
+            "provider": "openai",
+            "overall": {
+                "pass": 82,
+                "n": 125,
+                "rate": 0.656,
+                "low": 0.5692,
+                "high": 0.7335
+            },
+            "errored": 0,
+            "retries": 0,
+            "cost": 0.1051,
+            "promptTokens": 1344305,
+            "completionTokens": 38170,
+            "medianWallMs": 6888,
+            "categories": {
+                "single": {
+                    "pass": 12,
+                    "n": 25,
+                    "rate": 0.48,
+                    "low": 0.3003,
+                    "high": 0.665
+                },
+                "chain": {
+                    "pass": 16,
+                    "n": 25,
+                    "rate": 0.64,
+                    "low": 0.4452,
+                    "high": 0.7975
+                },
+                "recall": {
+                    "pass": 13,
+                    "n": 15,
+                    "rate": 0.8667,
+                    "low": 0.6212,
+                    "high": 0.9626
+                },
+                "abstention": {
+                    "pass": 20,
+                    "n": 20,
+                    "rate": 1,
+                    "low": 0.8389,
+                    "high": 1
+                },
+                "recovery": {
+                    "pass": 9,
+                    "n": 25,
+                    "rate": 0.36,
+                    "low": 0.2025,
+                    "high": 0.5548
+                },
+                "long": {
+                    "pass": 12,
+                    "n": 15,
+                    "rate": 0.8,
+                    "low": 0.5481,
+                    "high": 0.9295
+                }
+            },
+            "tasks": {
+                "single-kv-set": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "single-read-answer": {
+                    "pass": 1,
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
+                },
+                "single-calculator": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "single-now": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "single-send": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "chain-order-notify": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "chain-file-to-kv": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "chain-sum-to-file": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "chain-kv-to-send": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "chain-edit-json": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "recall-fact": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "recall-preference": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "recall-correction": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-chitchat": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-knowledge": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-draft-only": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "abstain-cannot": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                },
+                "recover-retry": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "recover-persist": {
+                    "pass": 0,
+                    "n": 5,
+                    "rate": 0,
+                    "low": 0,
+                    "high": 0.4345
+                },
+                "recover-bad-expression": {
+                    "pass": 1,
+                    "n": 5,
+                    "rate": 0.2,
+                    "low": 0.0362,
+                    "high": 0.6245
+                },
+                "recover-missing-file": {
+                    "pass": 2,
+                    "n": 5,
+                    "rate": 0.4,
+                    "low": 0.1176,
+                    "high": 0.7693
+                },
+                "recover-unknown-order": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "long-log-needle": {
+                    "pass": 4,
+                    "n": 5,
+                    "rate": 0.8,
+                    "low": 0.3755,
+                    "high": 0.9638
+                },
+                "long-count-orders": {
+                    "pass": 3,
+                    "n": 5,
+                    "rate": 0.6,
+                    "low": 0.2307,
+                    "high": 0.8824
+                },
+                "long-handbook": {
+                    "pass": 5,
+                    "n": 5,
+                    "rate": 1,
+                    "low": 0.5655,
+                    "high": 1
+                }
+            },
+            "against": {
+                "dir": "evals/harness/runs/after-ac5dcc5",
+                "overallPp": 5.6,
+                "categoriesPp": {
+                    "single": 24,
+                    "chain": -12,
+                    "recall": 20,
+                    "abstention": 0,
+                    "recovery": 4,
+                    "long": 0
+                },
+                "tasksPp": {
+                    "single-kv-set": 0,
+                    "single-read-answer": 0,
+                    "single-calculator": 40,
+                    "single-now": 20,
+                    "single-send": 60,
+                    "chain-order-notify": 20,
+                    "chain-file-to-kv": -20,
+                    "chain-sum-to-file": -20,
+                    "chain-kv-to-send": 0,
+                    "chain-edit-json": -40,
+                    "recall-fact": -20,
+                    "recall-preference": 80,
+                    "recall-correction": 0,
+                    "abstain-chitchat": 0,
+                    "abstain-knowledge": 0,
+                    "abstain-draft-only": 0,
+                    "abstain-cannot": 0,
+                    "recover-retry": 40,
+                    "recover-persist": 0,
+                    "recover-bad-expression": 20,
+                    "recover-missing-file": -40,
+                    "recover-unknown-order": 0,
+                    "long-log-needle": -20,
+                    "long-count-orders": 0,
+                    "long-handbook": 20
+                }
+            }
+        }
+    ]
+}

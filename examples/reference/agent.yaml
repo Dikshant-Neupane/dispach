@@ -1,11 +1,8 @@
 # The reference manifest: every field `agent.yaml` accepts, in one place.
 #
-# Runnable as it stands. Everything a phase has not delivered yet is present but commented, with
-# the phase that unlocks it — so completing a phase means uncommenting a block here and watching it
-# work, rather than discovering the field name in a spec.
-#
-# The commenting is not cosmetic. A section this build does not implement is **refused at load**,
-# naming the phase, rather than parsed and ignored: a runtime that silently drops configuration
+# Runnable as it stands. Every section is live; what stays commented is an alternative inside a
+# block, or a section such as `extends` and `subagents` that an agent opts into. The one field a
+# build refuses by design is `tools.search.enabled: true` (`not_implemented_yet`).
 #
 # `docs/02-SPEC-MANIFEST.md` is the binding reference. This file is the worked copy.
 
@@ -196,6 +193,7 @@ tools:
   local:
     - now             # read-only: runs in parallel with other reads
     - memory_write    # mutating: serialises, holds a reserved write slot, never retried
+    - memory_forget   # mutating: lists by query, deletes only the ids it listed
     - artifact_read   # follows the pointer compaction leaves behind; without it the detail is gone
 
   budget:
@@ -227,6 +225,15 @@ tools:
   #       - ~/code/thing  #   absolute, or relative to this file
   #     protect:          # extra paths they refuse. Widening only — nothing removes a protection
   #       - "*.pem"
+  #     confineReads: true # file_read, glob and grep only inside this agent's directory and its
+  #                        #   writeRoots, so other agents' files in the same silo are out of reach.
+  #                        #   Off by default (reads go anywhere but a secret). Not exec.
+  #     env: inherit      # what exec and skill scripts see: inherit (default, everything), scrub
+  #                       #   (PATH, HOME, locale, TZ, TERM, TMPDIR only), or [NAMES] (scrub, plus
+  #                       #   these). Scrub keeps the runtime's tokens out of anything a command can
+  #                       #   print. Not the whole story: a command runs as this process's user and
+  #                       #   can read /proc/<pid>/environ — pass secrets as X_FILE, or mount /proc
+  #                       #   with hidepid=2. The agent's config_set can never change this.
   #
   #   # @dispach/tools-web — the public internet, read-only.
   #   #
@@ -239,9 +246,21 @@ tools:
   #   # reaching the cloud metadata endpoint. An operator who wants an internal HTTP call has `exec`
   #   # and `curl`, which is a grant made deliberately and narrowable by a policy rule.
   #   web:
-  #     backend: tavily              # tavily | brave | exa
+  #     backend: tavily              # tavily | brave | exa | firecrawl
   #     apiKeyEnv: TAVILY_API_KEY    # the variable's name, never the key
+  #     # baseUrl: http://relay:4000/web/tavily   # a relay that adds the real key, so no platform
+  #     #                                         # secret sits in this agent's environment. Same paths.
   #     maxBytes: 2000000            # stop reading a page here, mid-response, before extraction
+  #     # Firecrawl, first-class: with this block web_fetch reads through Firecrawl's scrape (pages
+  #     # that need JavaScript come back as markdown), and web_crawl (a site's pages) and web_map (a
+  #     # site's addresses) are offered. `backend: firecrawl` turns it on too. Every call is metered
+  #     # as a tool.usage event, in credits, with the participant it is billed to.
+  #     firecrawl:
+  #       apiKeyEnv: FIRECRAWL_API_KEY
+  #       # baseUrl: http://relay:4000/web/firecrawl/v2   # as above, for scrape, crawl and map
+  #       onlyMainContent: true      # drop headers, navigation and footers
+  #       maxAge: 172800000          # accept Firecrawl's cached copy this recent, in ms
+  #       timeoutMs: 60000           # Firecrawl's own limit for one page
   #
   #   # @dispach/tools-composio — a remote catalogue, called over HTTP and never through MCP.
   #   #
@@ -345,6 +364,9 @@ limits:
   # end the turn as `no_progress`. Two is a retry, which is often right. Three is a pattern.
   noProgress:
     identicalCalls: 3
+    # Calls to one tool in a turn, whatever the arguments, before it ends as `no_progress`. Off when
+    # absent. For a tool the model keeps following (a mail delta, a paged lookup).
+    # sameTool: 12
   # Must exceed any upstream timeout on the model endpoint.
   turnTimeoutMs: 1800000
   toolTimeoutMs: 120000
@@ -397,6 +419,9 @@ skills:
   dir: ./skills
   maxActive: 1
   threshold: 0.35        # normalised BM25 floor; the shipped fixtures score 0.369–0.600
+  # trusted: [pdf, data-visualization]   # only these skills' scripts run; any other skill is read
+  #                                      # for its steps and its scripts are documentation only.
+  #                                      # Absent: every skill's scripts run. config_set cannot set it.
   # No `budget` field, and it was removed rather than never added. A token cap refused at install,
   # at load *and* mid-turn, and its first real use turned eleven ticked skills into nine installed —
   # `maxActive` already bounds a turn to one body, so the second limit only ever converted the right
@@ -472,6 +497,9 @@ channels:
     mode: longpoll                 # or webhook; channel-specific fields reach the plugin's schema
     tokenEnv: TELEGRAM_BOT_TOKEN
     allowFrom: ["@moeen"]
+    # This channel's turns on another model role declared under model:, e.g. a cheaper one for
+    # chat apps. Absent is main; a role that is not declared refuses the manifest.
+    # role: lite
     # webhookUrl: https://agent.example.com/v1/channels/tg/webhook/reference
     # secretTokenEnv: TELEGRAM_WEBHOOK_SECRET   # naming it and leaving it unset is refused
   # `telegram` is the only type this binary registers. A second one comes from a plugin — see
@@ -496,6 +524,8 @@ channels:
 # first scheduled run, which is otherwise where it surfaces.
 delivery:
   default: tg                      # used when a turn has no origin — a schedule, or the API
+  # reply: final                   # a channel reply is the final answer alone, not every step's
+  #                                #   prose joined (all, the default)
   targets:
     owner: { channel: tg, to: "@moeen" }
 
@@ -557,6 +587,25 @@ schedules:
     # Runs on `model.cheap` below rather than on main. A heartbeat and a weekly report are worth
     # very different amounts of money, and this is how that is said without a second endpoint.
     role: cheap
+
+# ── subagents (0.2.0-pilot.6) ─────────────────────────────────────────────────────────────
+#
+# A call to a routed slug runs in a throwaway child of this agent, with its own context, and the
+# parent reads the child's artifact instead of the raw output. The harness routes, never the model,
+# and only after the policy and the write gate have allowed the call. `tools` must be slugs this
+# agent pins (or lists under tools.local): a child only ever narrows its parent. It inherits the
+# parent's taint, stand-in deferral, acting participant and cancellation, and spawns no children.
+# Add `subagent:` under model: for a cheaper child model; absent, children run on main.
+#
+# subagents:
+#   - name: inbox
+#     task: Read the mailbox and report what needs attention.
+#     tools: [GMAIL_FETCH_EMAILS, GMAIL_GET_THREAD]
+#     route:
+#       tools: [GMAIL_FETCH_EMAILS]
+#     maxSteps: 8                  # lowers limits.maxSteps for the child, never raises it
+#     # model: fast                # a role under model:; default model.subagent, else main
+#     # artifact: { type: object, properties: { summary: { type: string } }, required: [summary] }
 
 # ── plugins ───────────────────────────────────────────────────────────────────────────────
 # Trusted in-process code, documented as such — `permissions` is advisory vocabulary in v1,

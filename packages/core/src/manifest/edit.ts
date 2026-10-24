@@ -31,20 +31,31 @@
 
 import { readFileSync, writeFileSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
+import { dirname } from "node:path"
+import { isDeepStrictEqual } from "node:util"
 import { isMap, isSeq, parseDocument } from "yaml"
-import { HarnessError } from "../errors.ts"
+import { HarnessError, isHarnessError } from "../errors.ts"
+import { type MediaProviderFactory, resolveMedia } from "../media/provider.ts"
+import type { ToolProviderFactory } from "../tools/types.ts"
 import { resolveProviders } from "./providers.ts"
-import { AgentManifestSchema } from "./schema.ts"
-import { validateSchedules } from "./validate.ts"
-import { setInSource, uncommentInSource } from "./yaml-edit.ts"
+import { type AgentManifest, AgentManifestSchema } from "./schema.ts"
+import { validateChannelRoles, validateSchedules, validateSubagents } from "./validate.ts"
+import { removeInSource, setInSource, uncommentInSource } from "./yaml-edit.ts"
 
 export interface ManifestEdit {
     /** Absolute path to the manifest. */
     readonly file: string
     /** Dotted path, already split. */
     readonly path: readonly string[]
-    /** Already parsed from whatever the surface accepted. */
+    /** Already parsed from whatever the surface accepted. Ignored when `remove` is set. */
     readonly value: unknown
+    /**
+     * Take the key out instead of setting it, so a field set once can return to its default
+     * (seen in a pilot: a `temperature` left over from a template, on a model that refuses one). Checked
+     * like any edit, so removing a required field is refused by the schema. A key that is not there
+     * is a no-op.
+     */
+    readonly remove?: true
     /**
      * Used instead of the reflowing round-trip when the source editor cannot place the path.
      *
@@ -55,6 +66,19 @@ export interface ManifestEdit {
      * at the end of the file. Returning `undefined` falls through to the round-trip.
      */
     readonly fallback?: (source: string) => string | undefined
+    /**
+     * The provider factories the surface can build, so an edit to `tools.providers` is refused when a
+     * provider would refuse its own config — a malformed MCP server, a credential in its URL. Without
+     * this the writer checks only the schema, writes the file, and the provider is dropped with a
+     * warning at the next load. Absent skips the check, which is what a caller with no factories has.
+     */
+    readonly providers?: Readonly<Record<string, ToolProviderFactory>>
+    /**
+     * The media providers the surface can build, so an edit to `media` naming a provider that does
+     * not exist, or options it refuses, is refused before the file is written. A missing key is let
+     * through: enabling a provider and then filling its secret is the intended order.
+     */
+    readonly mediaProviders?: Readonly<Record<string, MediaProviderFactory>>
 }
 
 export interface ManifestEditResult {
@@ -71,10 +95,12 @@ export interface ManifestEditResult {
     readonly reflowed: boolean
     /** The validated manifest, for a caller that wants to say something about the result. */
     readonly manifest: ReturnType<typeof AgentManifestSchema.parse>
+    /** False when the value was already the one there: nothing was written for it. */
+    readonly changed: boolean
 }
 
 /** What a validated edit produced, before anybody has written it. */
-export interface PreparedEdit extends Omit<ManifestEditResult, "after"> {
+export interface PreparedEdit extends Omit<ManifestEditResult, "after" | "changed"> {
     /** The complete new file contents. */
     readonly next: string
 }
@@ -90,7 +116,7 @@ export interface PreparedEdit extends Omit<ManifestEditResult, "after"> {
  */
 export function prepareManifestEdit(
     source: string,
-    edit: Pick<ManifestEdit, "path" | "value" | "fallback">,
+    edit: Pick<ManifestEdit, "path" | "value" | "fallback" | "remove">,
 ): PreparedEdit {
     const parts = [...edit.path]
     const dotted = parts.join(".")
@@ -102,13 +128,18 @@ export function prepareManifestEdit(
     // then uncomment the block the generated manifest ships commented, which is what keeps a first-time
     // `channels` write from reflowing 98 lines. The round-trip below is the last resort.
     const placed =
-        setInSource(source, parts, edit.value) ??
-        edit.fallback?.(source) ??
-        (parts.length === 1 ? uncommentInSource(source, parts[0] ?? "", edit.value) : undefined)
+        edit.remove === true
+            ? removeInSource(source, parts)
+            : (setInSource(source, parts, edit.value) ??
+              edit.fallback?.(source) ??
+              (parts.length === 1
+                  ? uncommentInSource(source, parts[0] ?? "", edit.value)
+                  : undefined))
     let next: string
     if (placed === undefined) {
         const round = parseDocument(source)
-        round.setIn(parts, edit.value)
+        if (edit.remove === true) round.deleteIn(parts)
+        else round.setIn(parts, edit.value)
         next = String(round)
     } else {
         next = placed
@@ -144,7 +175,13 @@ export function prepareManifestEdit(
         parsed.data,
         Date.now(),
     )
-    const firstSchedule = scheduleFindings[0]
+    // Subagents too (pilot.15): `subagents` became settable, and a child naming a slug the parent does
+    // not pin is refused at load, so a writer that skipped this would report success on a manifest the
+    // next boot refuses. Run on every edit, because unpinning a slug a child uses is the same failure.
+    const firstSchedule =
+        scheduleFindings[0] ??
+        validateChannelRoles(parsed.data)[0] ??
+        validateSubagents(parsed.data)[0]
     if (firstSchedule !== undefined) {
         throw manifestEditInvalid(dotted, `${firstSchedule.message} ${firstSchedule.hint}`)
     }
@@ -170,17 +207,13 @@ export function prepareManifestEdit(
  *
  * Reads the file itself instead of taking source text: a caller that read it earlier would be writing
  * over whatever happened in between, and this is a file the agent, the person and `init` all touch.
+ *
+ * A value equal to the one already there writes nothing and reports `changed: false` (pilot.15),
+ * so a surface that applies its whole configuration every time can skip the reload.
  */
 export async function editManifest(edit: ManifestEdit): Promise<ManifestEditResult> {
-    let source: string
-    try {
-        source = await readFile(edit.file, "utf8")
-    } catch (cause) {
-        throw manifestEditUnreadable(edit.file, cause)
-    }
-    const prepared = prepareManifestEdit(source, edit)
-    await writeFile(edit.file, prepared.next, "utf8")
-    return { ...prepared, after: edit.value }
+    const { edits } = await editManifestChanges(edit.file, [edit])
+    return edits[0] as ManifestEditResult
 }
 
 /**
@@ -197,9 +230,65 @@ export function editManifestSync(edit: ManifestEdit): ManifestEditResult {
     } catch (cause) {
         throw manifestEditUnreadable(edit.file, cause)
     }
-    const prepared = prepareManifestEdit(source, edit)
-    writeFileSync(edit.file, prepared.next, "utf8")
-    return { ...prepared, after: edit.value }
+    const applied = applyChanges(source, edit.file, [edit])
+    if (applied.next !== source) writeFileSync(edit.file, applied.next, "utf8")
+    return applied.edits[0] as ManifestEditResult
+}
+
+/** One edit of several to one file: `ManifestEdit` without the file, which they share. */
+export type ManifestChange = Omit<ManifestEdit, "file">
+
+/**
+ * Several edits to one file, applied in order, validated, and written **once** (pilot.15:
+ * one PATCH per setting was one reload per setting). Each is checked against the file as the ones
+ * before it left it, so an edit that depends on another goes after it. Any refusal writes nothing.
+ */
+export async function editManifestChanges(
+    file: string,
+    changes: readonly ManifestChange[],
+): Promise<{ readonly edits: readonly ManifestEditResult[]; readonly written: boolean }> {
+    let source: string
+    try {
+        source = await readFile(file, "utf8")
+    } catch (cause) {
+        throw manifestEditUnreadable(file, cause)
+    }
+    const applied = applyChanges(source, file, changes)
+    const written = applied.next !== source
+    if (written) await writeFile(file, applied.next, "utf8")
+    return { edits: applied.edits, written }
+}
+
+function applyChanges(
+    source: string,
+    file: string,
+    changes: readonly ManifestChange[],
+): { readonly next: string; readonly edits: readonly ManifestEditResult[] } {
+    let current = source
+    const edits: ManifestEditResult[] = []
+    for (const change of changes) {
+        const edit = { ...change, file }
+        const prepared = prepareManifestEdit(current, edit)
+        // Compared as values, not as text: a value written in a different spelling (`"3"` for `3`'s
+        // twin, a re-quoted string) that reads back the same is not a change worth a reload.
+        const changed = !isDeepStrictEqual(
+            prepared.before,
+            plain(parseDocument(prepared.next), edit.path),
+        )
+        if (changed) {
+            checkProviders(edit, prepared.manifest)
+            checkMedia(edit, prepared.manifest)
+            current = prepared.next
+        }
+        edits.push({
+            before: prepared.before,
+            after: edit.remove === true ? undefined : edit.value,
+            reflowed: changed && prepared.reflowed,
+            manifest: prepared.manifest,
+            changed,
+        })
+    }
+    return { next: current, edits }
 }
 
 /**
@@ -264,6 +353,64 @@ function manifestEditUnreadable(file: string, cause: unknown): HarnessError {
         hint: "Check the path and file permissions. Nothing was written.",
         cause,
     })
+}
+
+/**
+ * Build each provider from the config the edit would write, and throw what one refuses.
+ *
+ * Construction touches no network (hard rule 4 holds for providers at boot, and this is the same
+ * call), so this is cheap and has no side effect beyond what a provider owns, which is stopped at
+ * once. The provider's own error is rethrown rather than paraphrased: its hint names the fix.
+ */
+function checkProviders(edit: ManifestEdit, manifest: AgentManifest): void {
+    const factories = edit.providers
+    if (factories === undefined || !edit.path.join(".").startsWith("tools.provider")) return
+    for (const selection of resolveProviders(manifest.tools).selections) {
+        const factory = factories[selection.id]
+        if (factory === undefined) {
+            throw manifestEditInvalid(
+                edit.path.join("."),
+                `no tool provider called "${selection.id}" is available here. Available: ${Object.keys(factories).join(", ") || "(none)"}.`,
+            )
+        }
+        let provider: ReturnType<ToolProviderFactory>
+        try {
+            provider = factory({
+                dir: dirname(edit.file),
+                env: {},
+                config: selection.config,
+                agentId: manifest.id,
+            })
+        } catch (cause) {
+            if (isHarnessError(cause)) throw cause
+            throw manifestEditInvalid(
+                edit.path.join("."),
+                `the ${selection.id} provider refused its config: ${cause instanceof Error ? cause.message : String(cause)}`,
+            )
+        }
+        void provider.stop?.()
+    }
+}
+
+/**
+ * Build each media section the edit would write, and throw what refuses — except a missing key,
+ * which is the person's next step rather than a mistake. Opens no socket.
+ */
+function checkMedia(edit: ManifestEdit, manifest: AgentManifest): void {
+    if (edit.mediaProviders === undefined || edit.path[0] !== "media") return
+    for (const section of ["transcription", "image", "speech"] as const) {
+        const config = manifest.media?.[section]
+        if (config === undefined) continue
+        try {
+            resolveMedia(
+                { ...manifest, media: { [section]: config } },
+                { env: {}, providers: new Map(Object.entries(edit.mediaProviders)) },
+            )
+        } catch (cause) {
+            if (isHarnessError(cause) && cause.code === "media_key_missing") continue
+            throw cause
+        }
+    }
 }
 
 function manifestEditInvalid(path: string, detail: string): HarnessError {

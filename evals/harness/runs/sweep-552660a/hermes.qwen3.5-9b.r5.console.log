@@ -1,0 +1,26 @@
+FAIL  single-kv-set            r5  3 calls  15194 ms  $0.00200  — locker_code not stored as 4417
+pass  single-read-answer       r5  3 calls  12544 ms  $0.00199
+pass  single-calculator        r5  3 calls  13112 ms  $0.00198
+pass  single-now               r5  3 calls  36172 ms  $0.00205
+pass  single-send              r5  3 calls  12563 ms  $0.00198
+pass  chain-order-notify       r5  4 calls  22696 ms  $0.00270
+pass  chain-file-to-kv         r5  5 calls  22622 ms  $0.00339
+pass  chain-sum-to-file        r5  6 calls  29763 ms  $0.00409
+pass  chain-kv-to-send         r5  5 calls  28594 ms  $0.00267
+pass  chain-edit-json          r5  6 calls  30003 ms  $0.00340
+pass  recall-fact              r5  4 calls  25917 ms  $0.00268
+pass  recall-preference        r5  6 calls  29515 ms  $0.00404
+pass  recall-correction        r5  6 calls  29893 ms  $0.00406
+pass  abstain-chitchat         r5  1 calls  9011 ms  $0.00066
+pass  abstain-knowledge        r5  1 calls  4981 ms  $0.00065
+pass  abstain-draft-only       r5  1 calls  15064 ms  $0.00068
+pass  abstain-cannot           r5  1 calls  12482 ms  $0.00067
+pass  recover-retry            r5  6 calls  27035 ms  $0.00270
+pass  recover-persist          r5  6 calls  41189 ms  $0.00346
+pass  recover-bad-expression   r5  3 calls  15077 ms  $0.00198
+pass  recover-missing-file     r5  20 calls  340539 ms  $0.01377
+pass  recover-unknown-order    r5  4 calls  14687 ms  $0.00268
+pass  long-log-needle          r5  3 calls  19410 ms  $0.00932
+pass  long-count-orders        r5  3 calls  177635 ms  $0.00553
+pass  long-handbook            r5  4 calls  24768 ms  $0.00651
+hermes · qwen3.5-9b: 24/25 passed → evals/harness/runs/sweep-552660a/hermes.qwen3.5-9b.r5.jsonl

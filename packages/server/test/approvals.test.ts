@@ -396,6 +396,7 @@ describe("the registry itself", () => {
             void registry.approver({
                 approvalId: id,
                 agentId: "assistant",
+                sessionKey: "api:default",
                 slug: "memory_write",
                 callId: "c1",
                 mutating: true,
@@ -416,6 +417,7 @@ describe("the registry itself", () => {
         const answer = registry.approver({
             approvalId: "a_x",
             agentId: "assistant",
+            sessionKey: "api:default",
             slug: "memory_write",
             callId: "c1",
             mutating: true,
@@ -449,6 +451,7 @@ describe("scoped to one agent", () => {
         void registry.approver({
             approvalId: id,
             agentId,
+            sessionKey: "api:default",
             slug: "exec",
             callId: "c1",
             match: `deploy --to production # ${agentId}`,

@@ -1,0 +1,126 @@
+pass  single-kv-set            r1  5 calls  49838 ms  $0.04307
+pass  single-read-answer       r1  4 calls  36922 ms  $0.03225
+pass  single-calculator        r1  4 calls  30194 ms  $0.03021
+pass  single-now               r1  3 calls  40076 ms  $0.02859
+pass  single-send              r1  4 calls  29423 ms  $0.03371
+pass  chain-order-notify       r1  5 calls  70437 ms  $0.03851
+pass  chain-file-to-kv         r1  5 calls  66058 ms  $0.03807
+pass  chain-sum-to-file        r1  6 calls  73779 ms  $0.05342
+pass  chain-kv-to-send         r1  5 calls  77826 ms  $0.03890
+pass  chain-edit-json          r1  5 calls  68950 ms  $0.03836
+pass  recall-fact              r1  8 calls  83084 ms  $0.06198
+pass  recall-preference        r1  11 calls  125262 ms  $0.09069
+pass  recall-correction        r1  6 calls  78421 ms  $0.04129
+pass  abstain-chitchat         r1  1 calls  12033 ms  $0.01574
+pass  abstain-knowledge        r1  1 calls  13797 ms  $0.01696
+FAIL  abstain-draft-only       r1  2 calls  22797 ms  $0.02307  — no draft in the reply
+pass  abstain-cannot           r1  5 calls  64478 ms  $0.04067
+pass  recover-retry            r1  5 calls  80961 ms  $0.03916
+pass  recover-persist          r1  7 calls  69372 ms  $0.04764
+pass  recover-bad-expression   r1  4 calls  37041 ms  $0.03013
+pass  recover-missing-file     r1  8 calls  103628 ms  $0.05758
+pass  recover-unknown-order    r1  5 calls  41567 ms  $0.02984
+FAIL  long-log-needle          r1  5 calls  65434 ms  $0.03849  — error code not stored
+FAIL  long-count-orders        r1  8 calls  110250 ms  $0.09246  — count is not 58
+pass  long-handbook            r1  5 calls  44545 ms  $0.03956
+pass  single-kv-set            r2  4 calls  57563 ms  $0.03483
+pass  single-read-answer       r2  4 calls  26156 ms  $0.03266
+pass  single-calculator        r2  4 calls  38258 ms  $0.03021
+pass  single-now               r2  3 calls  48561 ms  $0.02928
+pass  single-send              r2  4 calls  37200 ms  $0.03593
+pass  chain-order-notify       r2  5 calls  60457 ms  $0.03824
+pass  chain-file-to-kv         r2  5 calls  107346 ms  $0.03815
+pass  chain-sum-to-file        r2  5 calls  35040 ms  $0.03820
+pass  chain-kv-to-send         r2  5 calls  57098 ms  $0.03801
+pass  chain-edit-json          r2  5 calls  54758 ms  $0.03847
+FAIL  recall-fact              r2  10 calls  114741 ms  $0.07638  — flight not stored as BA 286
+pass  recall-preference        r2  9 calls  114790 ms  $0.08796
+pass  recall-correction        r2  7 calls  51319 ms  $0.04809
+pass  abstain-chitchat         r2  1 calls  15152 ms  $0.01547
+pass  abstain-knowledge        r2  1 calls  14983 ms  $0.01724
+pass  abstain-draft-only       r2  2 calls  61080 ms  $0.02326
+pass  abstain-cannot           r2  3 calls  31611 ms  $0.03038
+pass  recover-retry            r2  5 calls  56185 ms  $0.03921
+pass  recover-persist          r2  6 calls  97440 ms  $0.04306
+pass  recover-bad-expression   r2  4 calls  29552 ms  $0.03028
+pass  recover-missing-file     r2  8 calls  91070 ms  $0.05729
+pass  recover-unknown-order    r2  4 calls  63630 ms  $0.03659
+FAIL  long-log-needle          r2  5 calls  55163 ms  $0.03853  — error code not stored
+FAIL  long-count-orders        r2  12 calls  87743 ms  $0.11337  — count is not 58
+pass  long-handbook            r2  5 calls  55926 ms  $0.03821
+pass  single-kv-set            r3  4 calls  32188 ms  $0.03261
+pass  single-read-answer       r3  4 calls  53569 ms  $0.03266
+pass  single-calculator        r3  4 calls  32829 ms  $0.03035
+pass  single-now               r3  3 calls  28389 ms  $0.02861
+pass  single-send              r3  4 calls  44086 ms  $0.03370
+pass  chain-order-notify       r3  5 calls  64413 ms  $0.03838
+pass  chain-file-to-kv         r3  5 calls  72124 ms  $0.03813
+pass  chain-sum-to-file        r3  5 calls  30052 ms  $0.03835
+pass  chain-kv-to-send         r3  5 calls  78422 ms  $0.03803
+pass  chain-edit-json          r3  5 calls  58113 ms  $0.03839
+pass  recall-fact              r3  11 calls  126565 ms  $0.07522
+pass  recall-preference        r3  11 calls  154217 ms  $0.08006
+pass  recall-correction        r3  6 calls  72567 ms  $0.04230
+pass  abstain-chitchat         r3  1 calls  14783 ms  $0.01535
+pass  abstain-knowledge        r3  1 calls  11690 ms  $0.01616
+FAIL  abstain-draft-only       r3  1 calls  14208 ms  $0.01764  — no draft in the reply
+pass  abstain-cannot           r3  5 calls  83471 ms  $0.05384
+pass  recover-retry            r3  5 calls  53188 ms  $0.03969
+pass  recover-persist          r3  7 calls  67560 ms  $0.04772
+pass  recover-bad-expression   r3  4 calls  31188 ms  $0.03028
+pass  recover-missing-file     r3  7 calls  145687 ms  $0.05206
+pass  recover-unknown-order    r3  7 calls  83314 ms  $0.05583
+FAIL  long-log-needle          r3  5 calls  46266 ms  $0.03815  — error code not stored
+FAIL  long-count-orders        r3  20 calls  275789 ms  $0.17951  — count is not 58
+pass  long-handbook            r3  5 calls  45364 ms  $0.03777
+pass  single-kv-set            r4  4 calls  59560 ms  $0.03184
+pass  single-read-answer       r4  4 calls  67102 ms  $0.03236
+pass  single-calculator        r4  4 calls  64555 ms  $0.03021
+pass  single-now               r4  4 calls  76373 ms  $0.03441
+pass  single-send              r4  4 calls  51695 ms  $0.03362
+pass  chain-order-notify       r4  5 calls  73999 ms  $0.03853
+pass  chain-file-to-kv         r4  5 calls  51468 ms  $0.03772
+pass  chain-sum-to-file        r4  5 calls  68734 ms  $0.03931
+pass  chain-kv-to-send         r4  5 calls  81790 ms  $0.03791
+pass  chain-edit-json          r4  5 calls  69199 ms  $0.03820
+pass  recall-fact              r4  8 calls  141417 ms  $0.06054
+pass  recall-preference        r4  12 calls  173749 ms  $0.09167
+pass  recall-correction        r4  7 calls  86585 ms  $0.04924
+pass  abstain-chitchat         r4  1 calls  13266 ms  $0.01542
+pass  abstain-knowledge        r4  1 calls  19483 ms  $0.01658
+FAIL  abstain-draft-only       r4  1 calls  19715 ms  $0.01755  — no draft in the reply
+pass  abstain-cannot           r4  13 calls  208238 ms  $0.09949
+pass  recover-retry            r4  5 calls  45452 ms  $0.03724
+pass  recover-persist          r4  6 calls  56630 ms  $0.04258
+pass  recover-bad-expression   r4  4 calls  63163 ms  $0.03028
+pass  recover-missing-file     r4  8 calls  85892 ms  $0.06105
+pass  recover-unknown-order    r4  5 calls  86303 ms  $0.04234
+FAIL  long-log-needle          r4  5 calls  35896 ms  $0.03810  — error code not stored
+FAIL  long-count-orders        r4  10 calls  103393 ms  $0.09685  — count is not 58
+pass  long-handbook            r4  5 calls  72924 ms  $0.03784
+pass  single-kv-set            r5  4 calls  41136 ms  $0.03202
+pass  single-read-answer       r5  4 calls  85112 ms  $0.04439
+pass  single-calculator        r5  4 calls  46429 ms  $0.03021
+FAIL  single-now               r5  2 calls  24014 ms  $0.02085  — clock not read (a guess)
+pass  single-send              r5  4 calls  42403 ms  $0.03389
+pass  chain-order-notify       r5  5 calls  70020 ms  $0.04029
+pass  chain-file-to-kv         r5  5 calls  90496 ms  $0.03809
+pass  chain-sum-to-file        r5  5 calls  61504 ms  $0.03802
+pass  chain-kv-to-send         r5  5 calls  124129 ms  $0.03780
+pass  chain-edit-json          r5  6 calls  41391 ms  $0.04375
+FAIL  recall-fact              r5  11 calls  107304 ms  $0.09190  — flight not stored as BA 286
+pass  recall-preference        r5  11 calls  101194 ms  $0.08141
+pass  recall-correction        r5  6 calls  70722 ms  $0.04311
+pass  abstain-chitchat         r5  1 calls  13665 ms  $0.01542
+pass  abstain-knowledge        r5  1 calls  48326 ms  $0.01713
+FAIL  abstain-draft-only       r5  2 calls  23205 ms  $0.02271  — no draft in the reply
+pass  abstain-cannot           r5  9 calls  70497 ms  $0.06881
+pass  recover-retry            r5  5 calls  99655 ms  $0.03931
+pass  recover-persist          r5  6 calls  58491 ms  $0.04278
+pass  recover-bad-expression   r5  4 calls  51294 ms  $0.03024
+pass  recover-missing-file     r5  9 calls  76866 ms  $0.07057
+pass  recover-unknown-order    r5  5 calls  62742 ms  $0.04138
+FAIL  long-log-needle          r5  5 calls  43709 ms  $0.03840  — error code not stored
+FAIL  long-count-orders        r5  18 calls  163533 ms  $0.15771  — count is not 58
+pass  long-handbook            r5  5 calls  50517 ms  $0.03794
+openclaw · gemini-4-argon: 108/125 passed → evals/harness/runs/sweep-bfaf549/openclaw.gemini-4-argon.jsonl

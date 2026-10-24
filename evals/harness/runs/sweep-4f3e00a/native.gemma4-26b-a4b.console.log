@@ -1,0 +1,127 @@
+note: dispach-native — the registry does not know google/gemma-4-26b-a4b-it; init's agent did not load, so its window (262144) and native tool support (true) were set from google-vertex/global's published endpoint through config set model.main.
+pass  single-kv-set            r1  3 calls  4789 ms  $0.00112
+pass  single-read-answer       r1  5 calls  6844 ms  $0.00113
+pass  single-calculator        r1  3 calls  9137 ms  $0.00112
+pass  single-now               r1  2 calls  3915 ms  $0.00111
+pass  single-send              r1  2 calls  2436 ms  $0.00111
+pass  chain-order-notify       r1  3 calls  12357 ms  $0.00173
+pass  chain-file-to-kv         r1  4 calls  7535 ms  $0.00172
+pass  chain-sum-to-file        r1  4 calls  42132 ms  $0.00234
+pass  chain-kv-to-send         r1  7 calls  11198 ms  $0.00169
+pass  chain-edit-json          r1  5 calls  6541 ms  $0.00176
+pass  recall-fact              r1  5 calls  24192 ms  $0.00230
+pass  recall-preference        r1  4 calls  6418 ms  $0.00168  (2 429 retries)
+pass  recall-correction        r1  5 calls  24783 ms  $0.00227
+pass  abstain-chitchat         r1  1 calls  1411 ms  $0.00055
+pass  abstain-knowledge        r1  1 calls  1060 ms  $0.00055
+pass  abstain-draft-only       r1  3 calls  5846 ms  $0.00117
+pass  abstain-cannot           r1  1 calls  2551 ms  $0.00059
+pass  recover-retry            r1  4 calls  6688 ms  $0.00239
+pass  recover-persist          r1  7 calls  13988 ms  $0.00309  (2 429 retries)
+pass  recover-bad-expression   r1  4 calls  4689 ms  $0.00111
+pass  recover-missing-file     r1  2 calls  4005 ms  $0.00115
+pass  recover-unknown-order    r1  2 calls  3312 ms  $0.00115
+pass  long-log-needle          r1  5 calls  14134 ms  $0.01270
+FAIL  long-count-orders        r1  2 calls  4752 ms  $0.00333  (1 429 retries)  — count is not 58
+pass  long-handbook            r1  5 calls  16506 ms  $0.00549
+pass  single-kv-set            r2  4 calls  9441 ms  $0.00112
+pass  single-read-answer       r2  2 calls  5373 ms  $0.00113
+pass  single-calculator        r2  4 calls  5319 ms  $0.00112
+pass  single-now               r2  2 calls  2070 ms  $0.00111
+pass  single-send              r2  2 calls  2431 ms  $0.00111
+pass  chain-order-notify       r2  5 calls  7174 ms  $0.00174
+pass  chain-file-to-kv         r2  4 calls  9095 ms  $0.00172
+pass  chain-sum-to-file        r2  4 calls  8839 ms  $0.00234
+pass  chain-kv-to-send         r2  3 calls  31063 ms  $0.00169
+pass  chain-edit-json          r2  5 calls  8459 ms  $0.00176  (1 429 retries)
+pass  recall-fact              r2  3 calls  4779 ms  $0.00169
+pass  recall-preference        r2  8 calls  10230 ms  $0.00225
+pass  recall-correction        r2  5 calls  8912 ms  $0.00227
+pass  abstain-chitchat         r2  1 calls  1360 ms  $0.00055
+pass  abstain-knowledge        r2  1 calls  1376 ms  $0.00055
+pass  abstain-draft-only       r2  4 calls  8156 ms  $0.00118
+pass  abstain-cannot           r2  1 calls  40705 ms  $0.00058
+pass  recover-retry            r2  3 calls  6848 ms  $0.00177
+pass  recover-persist          r2  5 calls  10293 ms  $0.00309  (3 429 retries)
+pass  recover-bad-expression   r2  4 calls  4999 ms  $0.00111
+pass  recover-missing-file     r2  2 calls  2945 ms  $0.00115
+pass  recover-unknown-order    r2  2 calls  3131 ms  $0.00115
+FAIL  long-log-needle          r2  3 calls  7618 ms  $0.00060  — error code not stored
+FAIL  long-count-orders        r2  3 calls  3767 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-26b-a4b-it is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your r
+FAIL  long-handbook            r2  2 calls  1584 ms  $0.00000  (2 429 retries)  — harness error: model_http_error: Model endpoint returned 400 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"[{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Expected function 'arguments' in a(n) 'assistant' message to be pop
+FAIL  single-kv-set            r3  3 calls  2991 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-26b-a4b-it is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your r
+pass  single-read-answer       r3  2 calls  39150 ms  $0.00113  (1 429 retries)
+pass  single-calculator        r3  2 calls  6993 ms  $0.00112
+pass  single-now               r3  3 calls  4280 ms  $0.00111
+pass  single-send              r3  2 calls  7553 ms  $0.00112
+pass  chain-order-notify       r3  4 calls  16588 ms  $0.00173
+pass  chain-file-to-kv         r3  3 calls  5650 ms  $0.00172
+FAIL  chain-sum-to-file        r3  3 calls  4033 ms  $0.00000  — harness error: model_http_error: Model endpoint returned 503 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":503,"metadata":{"raw":"[{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"Connection to backend aborted, possibly due to server shutdown.; Re
+pass  chain-kv-to-send         r3  3 calls  4194 ms  $0.00169
+FAIL  chain-edit-json          r3  1 calls  13258 ms  $0.00058  — darkMode not true
+pass  recall-fact              r3  5 calls  12131 ms  $0.00230
+pass  recall-preference        r3  4 calls  41168 ms  $0.00225
+pass  recall-correction        r3  6 calls  14654 ms  $0.00227
+pass  abstain-chitchat         r3  1 calls  1446 ms  $0.00055
+pass  abstain-knowledge        r3  1 calls  1023 ms  $0.00055
+FAIL  abstain-draft-only       r3  1 calls  7971 ms  $0.00000  — no draft in the reply
+pass  abstain-cannot           r3  3 calls  6637 ms  $0.00059
+FAIL  recover-retry            r3  3 calls  3901 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-26b-a4b-it is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your r
+FAIL  recover-persist          r3  3 calls  4151 ms  $0.00000  (4 429 retries)  — harness error: model_http_error: Model endpoint returned 429 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-26b-a4b-it is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your r
+pass  recover-bad-expression   r3  4 calls  5048 ms  $0.00111
+pass  recover-missing-file     r3  3 calls  5458 ms  $0.00115
+pass  recover-unknown-order    r3  5 calls  31981 ms  $0.00116  (1 429 retries)
+pass  long-log-needle          r3  3 calls  17463 ms  $0.01270
+FAIL  long-count-orders        r3  2 calls  3962 ms  $0.00333  — count is not 58
+pass  long-handbook            r3  4 calls  7174 ms  $0.00549
+pass  single-kv-set            r4  2 calls  2738 ms  $0.00112
+pass  single-read-answer       r4  2 calls  3586 ms  $0.00113
+pass  single-calculator        r4  2 calls  5160 ms  $0.00112
+pass  single-now               r4  2 calls  3061 ms  $0.00111
+pass  single-send              r4  2 calls  3738 ms  $0.00111
+pass  chain-order-notify       r4  5 calls  7222 ms  $0.00174
+pass  chain-file-to-kv         r4  3 calls  9575 ms  $0.00172
+pass  chain-sum-to-file        r4  4 calls  12309 ms  $0.00234
+pass  chain-kv-to-send         r4  5 calls  7122 ms  $0.00169  (1 429 retries)
+pass  chain-edit-json          r4  3 calls  5558 ms  $0.00176
+pass  recall-fact              r4  4 calls  8095 ms  $0.00230
+pass  recall-preference        r4  5 calls  10241 ms  $0.00290
+pass  recall-correction        r4  4 calls  7269 ms  $0.00227
+pass  abstain-chitchat         r4  1 calls  2847 ms  $0.00055
+pass  abstain-knowledge        r4  1 calls  10853 ms  $0.00055
+pass  abstain-draft-only       r4  2 calls  4622 ms  $0.00118
+pass  abstain-cannot           r4  1 calls  2838 ms  $0.00058
+pass  recover-retry            r4  3 calls  4728 ms  $0.00176
+pass  recover-persist          r4  6 calls  28765 ms  $0.00310
+pass  recover-bad-expression   r4  2 calls  2711 ms  $0.00111
+pass  recover-missing-file     r4  2 calls  3475 ms  $0.00116
+pass  recover-unknown-order    r4  2 calls  2700 ms  $0.00115
+pass  long-log-needle          r4  3 calls  15005 ms  $0.01273
+FAIL  long-count-orders        r4  2 calls  4266 ms  $0.00333  — count is not 58
+pass  long-handbook            r4  4 calls  7197 ms  $0.00549
+FAIL  single-kv-set            r5  2 calls  2413 ms  $0.00000  — harness error: model_http_error: Model endpoint returned 400 for http://openrouter.ai:57724/v1/chat/completions: {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"[{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Expected function 'arguments' in a(n) 'assistant' message to be pop
+pass  single-read-answer       r5  2 calls  2821 ms  $0.00113
+pass  single-calculator        r5  3 calls  3638 ms  $0.00112
+pass  single-now               r5  2 calls  2290 ms  $0.00111
+pass  single-send              r5  2 calls  3908 ms  $0.00112
+pass  chain-order-notify       r5  3 calls  5000 ms  $0.00173
+pass  chain-file-to-kv         r5  3 calls  45282 ms  $0.00172
+pass  chain-sum-to-file        r5  4 calls  8021 ms  $0.00234
+pass  chain-kv-to-send         r5  3 calls  5119 ms  $0.00169
+FAIL  chain-edit-json          r5  1 calls  4435 ms  $0.00061  (2 429 retries)  — darkMode not true
+pass  recall-fact              r5  4 calls  5508 ms  $0.00230
+pass  recall-preference        r5  4 calls  6762 ms  $0.00227
+pass  recall-correction        r5  4 calls  7202 ms  $0.00227
+pass  abstain-chitchat         r5  1 calls  2245 ms  $0.00055
+pass  abstain-knowledge        r5  1 calls  1141 ms  $0.00055
+pass  abstain-draft-only       r5  2 calls  6124 ms  $0.00121
+pass  abstain-cannot           r5  1 calls  1952 ms  $0.00057
+pass  recover-retry            r5  4 calls  6204 ms  $0.00238
+pass  recover-persist          r5  4 calls  7134 ms  $0.00245
+pass  recover-bad-expression   r5  2 calls  2403 ms  $0.00111
+pass  recover-missing-file     r5  2 calls  3154 ms  $0.00115
+pass  recover-unknown-order    r5  2 calls  4881 ms  $0.00115
+FAIL  long-log-needle          r5  1 calls  4434 ms  $0.00061  — error code not stored
+FAIL  long-count-orders        r5  2 calls  4728 ms  $0.00333  — count is not 58
+pass  long-handbook            r5  3 calls  5630 ms  $0.00549
+dispach-native · gemma4-26b-a4b: 109/125 passed → evals/harness/runs/sweep-4f3e00a/native.gemma4-26b-a4b.jsonl
