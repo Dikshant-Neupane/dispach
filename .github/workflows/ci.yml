@@ -25,7 +25,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
+      - run: bun install
 
       # Cheapest first, so a lint error does not wait on a build. This is the only step that can
       # come before one.
@@ -319,7 +319,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: bun install --frozen-lockfile
+      - run: bun install
 
       # Required, not defensive: the CLI resolves every sibling package through its `dist/`, so on a
       # fresh checkout the bundle fails on a directory that does not exist yet.
@@ -451,7 +451,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-      - run: bun install --frozen-lockfile
+      - run: bun install
       - name: build
         run: bun run build
       # Proves the source tree stays importable by Node unbundled, which the `node --test` parity
