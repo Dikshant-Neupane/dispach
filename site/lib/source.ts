@@ -21,7 +21,6 @@ const docs = defineDocs({
             "!**/SUMMARY.md",
         ],
         schema: ({ source }) => {
-            // @ts-expect-error TypeScript 7 exceeds its inference depth on Zod's object extension.
             return pageSchema.extend({ title: z.string().default(firstHeading(source)) })
         },
     },
