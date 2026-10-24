@@ -1,4 +1,4 @@
-import { loader } from "fumadocs-core/source"
+import { type LoaderOutput, loader, type Page } from "fumadocs-core/source"
 import { metaSchema, pageSchema } from "fumadocs-core/source/schema"
 import { defineDocs } from "fumadocs-mdx/macro"
 import { z } from "zod"
@@ -20,24 +20,34 @@ const docs = defineDocs({
             "reference/**/*.md",
             "!**/SUMMARY.md",
         ],
-        schema: ({ source }) =>
-            pageSchema.extend({ title: z.string().default(firstHeading(source)) }),
+        schema: ({ source }) => {
+            // @ts-expect-error TypeScript 7 exceeds its inference depth on Zod's object extension.
+            return pageSchema.extend({ title: z.string().default(firstHeading(source)) })
+        },
     },
     meta: { schema: metaSchema },
 })
 
-export const source = loader(
-    {
-        docs: docs.toFumadocsSource(),
-        openapi: await openapi.staticSource({ baseDir: "reference/http" }),
+const sources = {
+    docs: docs.toFumadocsSource(),
+    openapi: await openapi.staticSource({ baseDir: "reference/http" }),
+} as const
+
+const loaded = loader<typeof sources>(sources, {
+    baseUrl: docsRoute,
+    // `README.md` is each folder's index.
+    slugs: (_file, next) => {
+        const slugs = next()
+        return slugs.at(-1) === "README" ? slugs.slice(0, -1) : slugs
     },
-    {
-        baseUrl: docsRoute,
-        // `README.md` is each folder's index.
-        slugs: (_file, next) => {
-            const slugs = next()
-            return slugs.at(-1) === "README" ? slugs.slice(0, -1) : slugs
-        },
-        plugins: [openapi.loaderPlugin()],
-    },
-)
+    plugins: [openapi.loaderPlugin()],
+})
+
+// TypeScript 7 widens macro-generated page data through loader(); preserve its emitted MDX fields.
+export const source = loaded as LoaderOutput<{
+    page:
+        | Page<"docs", (typeof docs.docs)[number]>
+        | Extract<(typeof loaded)["$inferPage"], { type: "openapi" }>
+    meta: (typeof loaded)["$inferMeta"]
+    i18n: undefined
+}>

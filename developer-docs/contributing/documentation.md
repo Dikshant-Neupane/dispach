@@ -1,6 +1,6 @@
 # Writing documentation
 
-Public documentation lives in `developer-docs/` and is published by the Next.js and Fumadocs site in `site/`, which reads the Markdown in place and serves it at `/docs`. The site is deployed on Vercel. Internal design history and binding contracts stay in `docs/`.
+Public documentation lives in `developer-docs/` and is published by the Next.js and Fumadocs site in `site/`, which reads the Markdown in place and serves it at `/docs`. The site is deployed on Vercel from the repository root because it also consumes sources from `packages/` and results from `evals/`; the build commands live in the root `vercel.json`. Internal design history and binding contracts stay in `docs/`.
 
 ## Choose the right home
 
@@ -17,7 +17,7 @@ Every top-level directory under `developer-docs/` is a section. `bun run docs:ch
 Preview the site locally:
 
 ```bash
-bun install --cwd site
+bun install
 bun run --cwd site dev
 ```
 

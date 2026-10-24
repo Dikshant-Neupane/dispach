@@ -9,7 +9,8 @@
         "url": "git+https://github.com/moeen-mahmud/dispach.git"
     },
     "workspaces": [
-        "packages/*"
+        "packages/*",
+        "site"
     ],
     "engines": {
         "node": ">=24"

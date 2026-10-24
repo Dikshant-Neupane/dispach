@@ -1,26 +1,24 @@
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import bootResult from "../../evals/boot/results.json"
+import benchResult from "../../evals/harness/summary.json"
+import tenancyResult from "../../evals/tenancy/results.json"
+import toolsResult from "../../evals/tools/results.json"
+import cliPackage from "../../packages/cli/package.json"
 
 /**
  * The landing page's numbers, read from the committed results at build time so the page cannot
  * say something `evals/` does not. Each figure has a row in `evals/CLAIMS.md`.
  */
-const read = <T>(path: string): T =>
-    JSON.parse(readFileSync(join(process.cwd(), "..", path), "utf8")) as T
-
-const boot = read<{ processMs: { median: number }; machine: { cpu: string } }>(
-    "evals/boot/results.json",
-)
-const tenancy = read<{ results: Record<string, { median: { idleRssKb: number } }> }>(
-    "evals/tenancy/results.json",
-)
-const tools = read<{
+const boot = bootResult as { processMs: { median: number }; machine: { cpu: string } }
+const tenancy = tenancyResult as {
+    results: Record<string, { median: { idleRssKb: number } }>
+}
+const tools = toolsResult as {
     results: {
         id: string
         nlt: { summary: { accuracy: number } }
         native: { summary: { accuracy: number } }
     }[]
-}>("evals/tools/results.json")
+}
 
 interface BenchCell {
     pass: number
@@ -39,13 +37,13 @@ interface BenchModel {
     hermes?: BenchCell
     openclaw?: BenchCell
 }
-const bench = read<{
+const bench = benchResult as {
     tasks: number
     repeats: number
     sweep: { commit: string }
     rivals: Record<"hermes" | "openclaw", { name: string; version: string }>
     models: BenchModel[]
-}>("evals/harness/summary.json")
+}
 
 /** The models measured on all three harnesses, and what the landing page says about them. */
 const h2h = bench.models.flatMap((m) =>
@@ -77,5 +75,5 @@ export const evidence = {
         nlt: Math.round(r.nlt.summary.accuracy * 1000) / 10,
         native: Math.round(r.native.summary.accuracy * 1000) / 10,
     })),
-    version: read<{ version: string }>("packages/cli/package.json").version,
+    version: cliPackage.version,
 }
