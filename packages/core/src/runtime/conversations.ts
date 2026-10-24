@@ -64,10 +64,17 @@ export function roomSessionKey(conversationId: string): string {
  * The members an agent's reply mentions: `@id` tokens naming a member, as written or with the agent
  * prefix (`@crew` for `agent:crew`). The author is never among them.
  */
+/** `@crew,` and `@crew.` name `crew`. A loop, because `/[.:,-]+$/` rescans a long run quadratically. */
+function withoutTrailingPunctuation(token: string): string {
+    let end = token.length
+    while (end > 0 && ".:,-".includes(token[end - 1] ?? "")) end -= 1
+    return token.slice(0, end)
+}
+
 export function mentionsIn(text: string, members: readonly string[], author: string): string[] {
     const found = new Set<string>()
     for (const match of text.matchAll(/@([A-Za-z0-9_.:-]+)/g)) {
-        const token = (match[1] ?? "").replace(/[.:,-]+$/, "")
+        const token = withoutTrailingPunctuation(match[1] ?? "")
         const id = members.includes(token)
             ? token
             : members.includes(agentParticipant(token))

@@ -22,6 +22,7 @@ import {
     type FetchLike,
     ISSUER,
     OPENID_METADATA,
+    plainText,
     type TeamsActivity,
     TeamsTransport,
     toInbound,
@@ -444,5 +445,16 @@ describe("voice messages", () => {
 
     test("an image cannot be carried, so the outbox will name it instead", () => {
         expect(setup().transport.limits.attachments).toBeUndefined()
+    })
+})
+
+describe("plain text", () => {
+    test("markup is stripped in linear time, even with no tag ever closed", () => {
+        // `/<[^>]+>/g` scanned to the end from every `<`: quadratic on this body.
+        const open = "<".repeat(100_000)
+        expect(plainText({ type: "message", text: `${open}b` } as TeamsActivity)).toBe(`${open}b`)
+        expect(
+            plainText({ type: "message", text: "<p>hi <b>there</b></p>" } as TeamsActivity),
+        ).toBe("hi there")
     })
 })

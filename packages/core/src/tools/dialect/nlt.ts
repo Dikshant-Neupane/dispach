@@ -144,7 +144,18 @@ const ATTEMPTED_CALL: readonly RegExp[] = [
 ]
 
 /** `ACTION:` after other text on its line, with an `END` alone on a later line. */
-const GLUED_ACTION = /\S[^\n]*?\bACTION\s*:\s*\S[\s\S]*?^\s*END\s*$/m
+/**
+ * `ACTION:` after other text on its line, with an `END` line somewhere below. Walked line by line: the
+ * single pattern this replaces (`/\S[^\n]*?\bACTION…/m`) restarted at every character of a long line,
+ * which is quadratic on text the model wrote.
+ */
+function gluedAction(text: string): boolean {
+    const lines = text.split("\n")
+    const at = lines.findIndex((line) =>
+        [...line.matchAll(/\bACTION\s*:\s*\S/g)].some((m) => line.slice(0, m.index).trim() !== ""),
+    )
+    return at !== -1 && lines.slice(at + 1).some((line) => line.trim() === "END")
+}
 
 /**
  * Did this step attempt a tool call the parser could not read?
@@ -156,7 +167,7 @@ function attemptedCall(text: string): FieldError | undefined {
     // with the fields and END on the lines after (5 of 125 runs, evals/harness/runs/baseline-aae8fe4).
     // The block parser only opens at a line start, so the markup was delivered as the reply. Its own
     // message, because the remedy is a line break, not a different format.
-    if (GLUED_ACTION.test(text))
+    if (gluedAction(text))
         return {
             field: "the block",
             message: "started in the middle of a line, so it was read as prose and nothing ran.",

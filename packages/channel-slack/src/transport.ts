@@ -349,6 +349,13 @@ export class SlackTransport implements ChannelTransport {
 
     /** A voice clip's bytes, with the bot token. Needs the `files:read` scope. */
     async #download(url: string, signal: AbortSignal): Promise<Uint8Array> {
+        // The URL comes off the inbound event and the request carries the bot token, so it goes
+        // only to Slack's own hosts: a token handed to whatever an event names is a token leaked.
+        if (!fromSlack(url)) {
+            throw new Error(
+                `refused to fetch ${url.slice(0, 80)} with the bot token: not an https slack.com address. Slack serves files from files.slack.com; an event naming anything else is not one to trust.`,
+            )
+        }
         const response = await this.#fetch(url, {
             method: "GET",
             headers: { authorization: `Bearer ${this.#botToken}` },
@@ -364,6 +371,18 @@ export class SlackTransport implements ChannelTransport {
             )
         }
         return new Uint8Array(await response.arrayBuffer())
+    }
+}
+
+/** An https URL on slack.com or one of its subdomains. */
+export function fromSlack(url: string): boolean {
+    try {
+        const { protocol, hostname } = new URL(url)
+        return (
+            protocol === "https:" && (hostname === "slack.com" || hostname.endsWith(".slack.com"))
+        )
+    } catch {
+        return false
     }
 }
 

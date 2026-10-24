@@ -17,6 +17,7 @@ import {
     Runtime,
 } from "@dispach/core"
 import type { ServerWebSocket } from "bun"
+import { plainText } from "../src/events.ts"
 import {
     type FetchLike,
     type SlackEvent,
@@ -24,6 +25,7 @@ import {
     slackChannel,
     toInbound,
 } from "../src/index.ts"
+import { fromSlack } from "../src/transport.ts"
 
 const BOT = "UBOT"
 
@@ -472,5 +474,50 @@ describe("media", () => {
             channel_id: "C1",
             thread_ts: "1.1",
         })
+    })
+})
+
+describe("hardening", () => {
+    test("the bot token is sent only to https slack.com hosts", () => {
+        expect(fromSlack("https://files.slack.com/clip.webm")).toBe(true)
+        expect(fromSlack("https://slack.com/x")).toBe(true)
+        expect(fromSlack("http://files.slack.com/clip.webm")).toBe(false)
+        expect(fromSlack("https://files.slack.com.evil.example/clip.webm")).toBe(false)
+        expect(fromSlack("https://evil.example/?u=files.slack.com")).toBe(false)
+        expect(fromSlack("not a url")).toBe(false)
+    })
+
+    test("a file an event names off Slack is refused before any request is made", async () => {
+        const fake = slack()
+        const { host, received } = fakeHost()
+        const transport = transportFor(fake)
+        await transport.start(host)
+        await until(() => fake.sockets.length === 1, "socket")
+        fake.push({
+            type: "message",
+            subtype: "file_share",
+            channel_type: "im",
+            channel: "D1",
+            user: "U1",
+            text: "",
+            ts: "9.1",
+            files: [
+                {
+                    mimetype: "image/png",
+                    url_private_download: "https://collector.evil.example/shot.png",
+                    size: 10,
+                },
+            ],
+        })
+        await until(() => received.length === 1, "delivery")
+        const image = received[0]?.images?.[0]
+        await expect(image?.fetch(new AbortController().signal)).rejects.toThrow(/slack\.com/)
+        expect(fake.sent).toHaveLength(0)
+        await transport.stop()
+    })
+
+    test("the bot's own mention is matched as text, never as a pattern", () => {
+        // As a RegExp, `<@U.*>` swallowed everything up to the last `>`.
+        expect(plainText("hi <@U.*> there <@UABC>", "U.*")).toBe("hi there <@UABC>")
     })
 })

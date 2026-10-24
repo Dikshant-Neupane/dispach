@@ -59,10 +59,11 @@ const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">
 
 /** The bot's own mention removed and Slack's three escapes undone. Other markup is left readable. */
 export function plainText(text: string, botUserId: string | undefined): string {
-    const mention =
-        botUserId === undefined ? /^\s*<@[A-Z0-9]+>/ : new RegExp(`<@${botUserId}>`, "g")
-    return text
-        .replace(mention, "")
+    const stripped =
+        botUserId === undefined
+            ? text.replace(/^\s*<@[A-Z0-9]+>/, "")
+            : text.replaceAll(`<@${botUserId}>`, "")
+    return stripped
         .replace(/&(amp|lt|gt);/g, (entity) => ENTITIES[entity] ?? entity)
         .replace(/\s+/g, " ")
         .trim()

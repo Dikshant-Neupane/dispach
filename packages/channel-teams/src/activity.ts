@@ -133,11 +133,14 @@ export function plainText(activity: TeamsActivity): string {
             entity.mentioned?.id === bot ? "" : (entity.mentioned?.name ?? ""),
         )
     }
-    return text
-        .replace(/<[^>]+>/g, "")
-        .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
-        .replace(/\s+/g, " ")
-        .trim()
+    return (
+        text
+            // `[^<>]`, not `[^>]`: a body of many `<` and no `>` made every start scan to the end.
+            .replace(/<[^<>]*>/g, "")
+            .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+            .replace(/\s+/g, " ")
+            .trim()
+    )
 }
 
 export function mentionsBot(activity: TeamsActivity): boolean {

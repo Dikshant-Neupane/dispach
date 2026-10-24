@@ -1008,6 +1008,13 @@ describe("shapes measured in the harness benchmark (evals/harness/runs/baseline-
         expect(parsed.malformed?.[0]?.message).toContain("middle of a line")
     })
 
+    test("a long line with no block is read in linear time", () => {
+        // The old single pattern restarted at every character: quadratic on 200,000 of them.
+        const parsed = parseNlt("!".repeat(200_000))
+        expect(parsed.intents).toEqual([])
+        expect(parsed.malformed).toBeUndefined()
+    })
+
     test("prose that merely mentions ACTION: is still prose", () => {
         const parsed = parseNlt("Write ACTION: and the tool name to call a tool.")
         expect(parsed.malformed).toBeUndefined()

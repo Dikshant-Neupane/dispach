@@ -298,6 +298,13 @@ describe("a room", () => {
         expect(mentionsIn("@alpha talking to myself", members, "agent:alpha")).toEqual([])
     })
 
+    test("a mention with a long run of punctuation inside it is read in linear time", () => {
+        const members = ["agent:alpha", "agent:beta"]
+        // `/[.:,-]+$/` tried every `-` as a start and scanned to the `a`: measured 3.9 s on Node at 100,000.
+        expect(mentionsIn(`@beta${"-".repeat(300_000)}a`, members, "agent:alpha")).toEqual([])
+        expect(mentionsIn("@beta--", members, "agent:alpha")).toEqual(["agent:beta"])
+    })
+
     test("assignment is recorded and announced; purging an agent removes it from rooms", async () => {
         const { runtime, events } = await boot({ crew: scripted(() => "ok") })
         const room = await runtime.conversations.create({

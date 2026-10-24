@@ -20,6 +20,7 @@ import type {
 } from "../manifest/schema.ts"
 import type { FetchLike } from "../model/provider.ts"
 import type { ConfigSchema } from "../plugins/plugin.ts"
+import { trimTrailingSlashes } from "../text.ts"
 
 export interface AudioInput {
     readonly bytes: Uint8Array
@@ -225,7 +226,7 @@ async function failure(response: Response, what: string, field: string): Promise
 export const OPENAI_MEDIA_PROVIDER: MediaProviderFactory = {
     create(context) {
         const { config, field } = context
-        const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "")
+        const baseUrl = trimTrailingSlashes(config.baseUrl ?? "https://api.openai.com/v1")
         const keyName = config.apiKeyEnv ?? "OPENAI_API_KEY"
         const key = context.env[keyName]
         if (key === undefined || key === "") {
