@@ -363,7 +363,9 @@ export class SlackTransport implements ChannelTransport {
                 `refused to fetch ${url.slice(0, 80)} with the bot token: not an https files.slack.com address. Slack serves private files only from there; an event naming anything else is not one to trust.`,
             )
         }
-        const response = await this.#fetch(`${SLACK_FILES}${path}`, {
+        // The origin is written out rather than read from SLACK_FILES: code scanning recognises a
+        // literal prefix ending in the host and a slash as fixing the host, and not a variable.
+        const response = await this.#fetch(`https://files.slack.com/${path}`, {
             method: "GET",
             headers: { authorization: `Bearer ${this.#botToken}` },
             signal,
