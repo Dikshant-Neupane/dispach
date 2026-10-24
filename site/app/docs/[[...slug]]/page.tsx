@@ -8,8 +8,7 @@ import { brand } from "@/lib/shared"
 import { source } from "@/lib/source"
 
 /**
- * Fumadocs resolves only `./` and `../` links; GitBook also resolved a bare `page.md`, which is how
- * the docs are written. A bare path is made explicit rather than rewriting every page.
+ * Fumadocs resolves only `./` and `../` links, and the docs are written with bare `page.md` links. A bare path is made explicit rather than rewriting every page.
  */
 const explicit = (href: string | undefined) =>
     href !== undefined && /^[\w-][^:]*\.md(#.*)?$/.test(href) ? `./${href}` : href

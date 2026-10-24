@@ -12,7 +12,7 @@ Public documentation lives in `developer-docs/` and is published by the Next.js 
 
 Each section (`runtime`, `contributing`, `control-plane`, `reference`) has its own `README.md`, which is the section's index page, and `SUMMARY.md`, which is its sidebar: `- [Releasing](releasing.md)` is a page, a bare `- Title` is a group, and two spaces of indent nest one level. Add every new page to that section's summary. A page's title is its first `#` heading; no frontmatter is needed.
 
-`developer-docs/gitbook-docs.yaml` lists the sections and their directories. Despite its name it no longer configures a hosted service: `bun run docs:check` reads it to find each section, then checks that each has a `README.md` and `SUMMARY.md`, every page appears in its summary, and every local link and anchor resolves. The site reads the same `SUMMARY.md` files (`site/lib/tree.ts`) and fails its build if a summary names a page that did not load. A new section needs an entry in that file and in `site/lib/tree.ts` and `site/lib/source.ts`.
+Every top-level directory under `developer-docs/` is a section. `bun run docs:check` checks that each has a `README.md` and `SUMMARY.md`, every page appears in its summary, every local link and anchor resolves, and the site's section lists in `site/lib/tree.ts` and `site/lib/source.ts` name exactly those directories. The site reads the same `SUMMARY.md` files and fails its build if a summary names a page that did not load. A new section is a new directory plus an entry in both of those files.
 
 Preview the site locally:
 
