@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.2.1 — 2026-10-26
+
 ### Changed
 
 - `POST /v1/agents/:id/sessions/:key/phase` answers `{ sessionKey, phase }`, matching the typed client.
