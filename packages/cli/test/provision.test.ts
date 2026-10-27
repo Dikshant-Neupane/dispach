@@ -538,6 +538,22 @@ describe("what an API caller may not decide", () => {
         expect((error as HarnessError).message).toContain("user")
         expect((error as HarnessError).message).toContain("name")
     })
+
+    test("over the provisioning API the refusal names answer keys, not flags", () => {
+        let error: unknown
+        try {
+            // The issue's own example: a name is supplied, no user answer is. An HTTP caller
+            // has no flag to pass, so the hint must name the answer key it can supply and
+            // point at the step list, while the code stays the one callers match on.
+            provisionAgent({ answers: { name: "milo" }, defaults: defaults() })
+        } catch (caught) {
+            error = caught
+        }
+        expect((error as HarnessError).code).toBe("cli_init_missing_answers")
+        expect((error as HarnessError).hint).toContain("answers.user")
+        expect((error as HarnessError).hint).not.toContain("--user")
+        expect((error as HarnessError).hint).toContain("GET /v1/provision")
+    })
 })
 
 describe("every answer the wizard has is reachable at the terminal", () => {
