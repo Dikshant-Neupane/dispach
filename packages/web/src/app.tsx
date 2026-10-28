@@ -50,8 +50,11 @@ import {
     rememberSession,
 } from "./lib/session.ts"
 import { EMPTY, emptyFor, reduce, type Transcript, withUser } from "./lib/transcript.ts"
+import { type ModelChange, ModelsPanel, type SecretRow } from "./models.tsx"
 import { Onboarding } from "./onboarding.tsx"
+import { ApiPanel, HomePanel, type TeamMember, TeamPanel, ThemeToggle } from "./overview.tsx"
 import {
+    AGENT_PANELS,
     AgentList,
     type AgentRow,
     type ChannelRow,
@@ -63,6 +66,7 @@ import {
     WarningsPanel,
     type WireError,
 } from "./panels.tsx"
+import { Wordmark } from "./wordmark.tsx"
 
 /** Where a live turn id is parked so a refresh can reattach. Per tab, not per browser. */
 const LIVE_TURN = `${DEFAULT_BRAND.slug}.turn`
@@ -111,6 +115,9 @@ function Gate(props: {
     return (
         <div className="gate">
             <div className="card">
+                <div className="brand">
+                    <Wordmark height={20} />
+                </div>
                 <h2>{props.title}</h2>
                 {props.children}
             </div>
@@ -150,15 +157,22 @@ function PasteCredential(props: {
 
     return (
         <Gate title="This server needs a credential">
-            <p>{props.because}</p>
+            {/* The usual `because` restates the title; only a different reason earns its line. */}
+            {props.because.replace(/\.$/, "") === "This server needs a credential" ? null : (
+                <p>{props.because}</p>
+            )}
             <input
                 value={value}
+                type="password"
+                autoComplete="off"
                 placeholder="paste a claim or an operator key"
                 onChange={(event) => setValue(event.target.value)}
             />
-            <p className="hint" style={{ margin: "8px 0 12px" }}>
+            <p className="hint" style={{ margin: "10px 0 16px" }}>
                 <code>{DEFAULT_BRAND.slug} serve</code> prints a one-time claim at boot while no key
-                exists. A claim is exchanged for a key this browser keeps; a key is used directly.
+                exists; a claim is exchanged for a key this browser keeps. To mint a key instead,
+                run <code>{DEFAULT_BRAND.slug} credential create</code> where the server runs. An
+                agent's own <code>.env</code> token is not the server's.
             </p>
             <div className="ask">
                 <div className="buttons">
@@ -211,6 +225,10 @@ type Panel = PanelName
 
 /** What the bar says for a panel that is not the chat. Keyed, so a new panel needs a title. */
 const TITLES: Readonly<Record<Exclude<Panel, "chat">, string>> = {
+    home: "Overview",
+    team: "Team",
+    models: "Models",
+    api: "API",
     new: "New agent",
     tools: "Tools",
     schedules: "Schedules",
@@ -263,7 +281,13 @@ function Workspace(props: {
     const [sessionKey, setSessionKey] = useState<string>()
     // Seeded from the address, so a bookmark of a panel opens on it. `useState`'s initialiser
     // semantics are what make this a seed rather than a prop that would fight a later navigation.
-    const [panel, setPanel] = useState<Panel>(() => placeFrom(window.location.href).panel)
+    // A bare address — no agent, no panel — lands on the overview: with several agents on a server
+    // "whichever is running" is a guess, and the grid is the answer to "what is here".
+    const [panel, setPanel] = useState<Panel>(() => {
+        const params = new URL(window.location.href).searchParams
+        if (params.get("agent") === null && params.get("panel") === null) return "home"
+        return placeFrom(window.location.href).panel
+    })
     const [state, setState] = useState<Transcript>(EMPTY)
     const [draft, setDraft] = useState("")
     const [error, setError] = useState<string>()
@@ -588,8 +612,10 @@ function Workspace(props: {
         readonly channels: readonly ChannelRow[]
         /** Boot findings: capabilities this agent could not set up. See `WarningsPanel`. */
         readonly warnings: readonly WireError[]
+        readonly team?: readonly TeamMember[]
+        readonly secrets: readonly SecretRow[]
         readonly config?: AgentConfig
-    }>({ tools: [], schedules: [], channels: [], warnings: [] })
+    }>({ tools: [], schedules: [], channels: [], warnings: [], secrets: [] })
 
     const [channelBusy, setChannelBusy] = useState<string | undefined>(undefined)
     const [channelNote, setChannelNote] = useState<string | undefined>(undefined)
@@ -603,7 +629,7 @@ function Workspace(props: {
      * and `createAgent` already use for re-reading the agent listing instead of trusting `adopted`.
      */
     const refreshReport = useCallback(async (target: AgentClient) => {
-        const [tools, schedules, described, config] = await Promise.all([
+        const [tools, schedules, described, config, secrets] = await Promise.all([
             target.tools(),
             target.schedules(),
             target.describe(),
@@ -612,12 +638,16 @@ function Workspace(props: {
             // panel changes what the schedule and tool panels say, and one round trip that
             // leaves two panels stale is how a surface comes to disagree with itself.
             target.config(),
+            // Whether each key variable is set, never its value: the models panel's "key missing".
+            target.secrets().catch(() => []),
         ])
         setReport({
             tools,
             schedules,
             channels: described.channels ?? [],
             warnings: described.warnings ?? [],
+            ...(described.team === undefined ? {} : { team: described.team }),
+            secrets,
             config,
         })
     }, [])
@@ -684,6 +714,8 @@ function Workspace(props: {
     useEffect(() => {
         if (agent === undefined) return
         if (
+            panel !== "team" &&
+            panel !== "models" &&
             panel !== "tools" &&
             panel !== "schedules" &&
             panel !== "channels" &&
@@ -760,6 +792,36 @@ function Workspace(props: {
                         : undefined
                 }
                 return `${path} was written to the manifest and is not in force yet: ${result.pending?.message ?? "the agent could not be replaced"}`
+            }),
+        [write],
+    )
+
+    /**
+     * The models panel's writes: several fields, one request and one reload (`setConfigs`), so a
+     * provider switch never lands half-applied. `applied` is read, not assumed, as for one setting.
+     */
+    const saveModels = useCallback(
+        (key: string, changes: readonly ModelChange[]) =>
+            void write(key, async (target) => {
+                const result = await target.setConfigs(changes)
+                if (!result.reloaded && result.applied) return "Nothing changed."
+                return result.applied
+                    ? "Saved — the agent was replaced and runs on it now."
+                    : `Written, not in force yet: ${result.pending?.message ?? "the agent could not be replaced"}`
+            }),
+        [write],
+    )
+
+    /** A key for a model role, into the agent's `.env`. Never read back by anything. */
+    const saveSecret = useCallback(
+        (name: string, value: string) =>
+            void write(`secret:${name}`, async (target) => {
+                const result = await target.setSecrets({ [name]: value })
+                if (result.shadowed.includes(name))
+                    return `${name} was written, and the server's own environment sets it too — that value wins.`
+                return result.applied === "none"
+                    ? `${name} written; ${result.error?.message ?? "the agent was not reloaded"}`
+                    : `${name} saved.`
             }),
         [write],
     )
@@ -895,73 +957,82 @@ function Workspace(props: {
         <div className="shell">
             <aside className="side">
                 <header>
-                    <div className="brand">{DEFAULT_BRAND.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--dim)" }}>{agentName ?? "…"}</div>
+                    <div className="brand">
+                        <Wordmark />
+                    </div>
+                    <span className="version">
+                        {agents.length} agent{agents.length === 1 ? "" : "s"}
+                    </span>
                 </header>
                 <nav>
                     {/*
-                     * Agents first, and only when there is more than one.
-                     *
-                     * A picker on a single-agent server is a control with one option — noise on the
-                     * shape this runtime is most often deployed in, one agent per container. The
-                     * *stopped* rows are the exception: those appear whatever the count, because an
-                     * agent that is off and invisible is the failure the CLI's `stop` was designed
-                     * around, and here it would leave a blank page with nothing explaining it.
+                     * Every agent, stopped ones included: an agent that is off and invisible is the
+                     * failure the CLI's `stop` was designed around, and here it would leave a blank
+                     * page with nothing explaining it.
                      */}
-                    {agents.length > 1 || agents.some((entry) => entry.status === "disabled") ? (
+                    <div className="group">Agents</div>
+                    <AgentList
+                        agents={agents}
+                        current={
+                            panel === "home" ||
+                            panel === "keys" ||
+                            panel === "api" ||
+                            panel === "new"
+                                ? undefined
+                                : agentId
+                        }
+                        onSelect={(id) => goTo({ agentId: id, panel: "chat" })}
+                        onStart={(id) => void startAgent(id)}
+                        {...(starting === undefined ? {} : { starting })}
+                    />
+                    {agentId === undefined ? null : (
                         <>
-                            <div className="group">Agents</div>
-                            <AgentList
-                                agents={agents}
-                                current={agentId}
-                                onSelect={(id) => goTo({ agentId: id })}
-                                onStart={(id) => void startAgent(id)}
-                                {...(starting === undefined ? {} : { starting })}
-                            />
+                            <div className="group">{agentName ?? agentId}</div>
+                            {/*
+                             * Generated from `AGENT_PANELS`, so a panel added to the union appears
+                             * here with nothing to remember. A hand-kept copy of this list is the
+                             * shape this repo has paid for repeatedly.
+                             */}
+                            {AGENT_PANELS.map((entry) => (
+                                <button
+                                    type="button"
+                                    key={entry.panel}
+                                    className="row-button"
+                                    aria-current={panel === entry.panel}
+                                    onClick={() =>
+                                        entry.panel === "chat"
+                                            ? void openSession(sessionKey)
+                                            : goTo({ panel: entry.panel })
+                                    }
+                                >
+                                    {entry.label}
+                                </button>
+                            ))}
+                            <div className="group">Conversations</div>
+                            <button
+                                type="button"
+                                className="row-button"
+                                aria-current={panel === "chat" && sessionKey === undefined}
+                                onClick={() => void openSession(undefined)}
+                            >
+                                + new conversation
+                            </button>
+                            {sessions.map((session) => (
+                                <button
+                                    type="button"
+                                    key={session.sessionKey}
+                                    className="row-button session"
+                                    aria-current={
+                                        panel === "chat" && sessionKey === session.sessionKey
+                                    }
+                                    onClick={() => void openSession(session.sessionKey)}
+                                >
+                                    {session.sessionKey}
+                                </button>
+                            ))}
                         </>
-                    ) : null}
-                    <div className="group">Conversation</div>
-                    <button
-                        type="button"
-                        className="row-button"
-                        aria-current={panel === "chat" && sessionKey === undefined}
-                        onClick={() => void openSession(undefined)}
-                    >
-                        + new
-                    </button>
-                    {sessions.map((session) => (
-                        <button
-                            type="button"
-                            key={session.sessionKey}
-                            className="row-button"
-                            aria-current={panel === "chat" && sessionKey === session.sessionKey}
-                            onClick={() => void openSession(session.sessionKey)}
-                        >
-                            {session.sessionKey}
-                        </button>
-                    ))}
+                    )}
                     <div className="group">Server</div>
-                    {/*
-                     * `new agent` is not in `SERVER_PANELS` and that is deliberate: those are the
-                     * read-only report panels, and this is the only surface on the page that
-                     * *writes*. It is offered whenever the panel has been opened or a link named
-                     * it, and while the offer is unknown — because hiding it until a fetch that
-                     * only happens on open has happened would mean it could never be opened.
-                     */}
-                    <button
-                        type="button"
-                        className="row-button"
-                        aria-current={panel === "new"}
-                        onClick={() => goTo({ panel: "new" })}
-                    >
-                        + new agent
-                    </button>
-                    {/*
-                     * Generated from `SERVER_PANELS`, so a panel added to the union appears here
-                     * with nothing to remember. A hand-kept copy of this list is the shape this
-                     * repo has paid for repeatedly — `NO_MANIFEST` omitting `soul`, the wire doc's
-                     * six phantom event rows — and it is always right on the day it is written.
-                     */}
                     {SERVER_PANELS.map((entry) => (
                         <button
                             type="button"
@@ -973,10 +1044,23 @@ function Workspace(props: {
                             {entry.label}
                         </button>
                     ))}
+                    {/*
+                     * `new agent` is not in `SERVER_PANELS`: it is the one surface here that
+                     * *writes*, and it is offered whatever the offer says, because hiding it until a
+                     * fetch that only happens on open has happened would mean it could never open.
+                     */}
+                    <button
+                        type="button"
+                        className="row-button"
+                        aria-current={panel === "new"}
+                        onClick={() => goTo({ panel: "new" })}
+                    >
+                        + New agent
+                    </button>
                 </nav>
                 <footer>
                     <span className={`dot ${state.running ? "busy" : "live"}`} />
-                    <span style={{ fontSize: 11, color: "var(--dim)" }}>
+                    <span style={{ fontSize: 12, color: "var(--dim)" }}>
                         {state.running ? "working" : "ready"}
                     </span>
                     {props.token === undefined ? (
@@ -992,7 +1076,7 @@ function Workspace(props: {
                                 window.location.reload()
                             }}
                         >
-                            forget key
+                            sign out
                         </button>
                     )}
                 </footer>
@@ -1001,19 +1085,68 @@ function Workspace(props: {
             <main className="main">
                 <div className="bar">
                     <strong>{panel === "chat" ? (agentName ?? "") : TITLES[panel]}</strong>
-                    {panel === "chat" ? <span>{sessionKey ?? "new conversation"}</span> : null}
+                    {panel === "chat" ? (
+                        <span className="crumb hide-narrow">
+                            {sessionKey ?? "new conversation"}
+                        </span>
+                    ) : null}
                     <span className="spacer" />
                     {pending.length > 0 ? (
                         <span style={{ color: "var(--warn)" }}>
                             {pending.length} waiting on you
                         </span>
                     ) : null}
+                    <button
+                        type="button"
+                        className="ghost hide-narrow"
+                        onClick={() => goTo({ panel: "api" })}
+                    >
+                        API
+                    </button>
+                    <a href={`${props.baseUrl}/docs`} target="_blank" rel="noreferrer">
+                        Docs ↗
+                    </a>
+                    <ThemeToggle />
                 </div>
-
                 {panel !== "chat" ? (
                     <div className="scroll">
-                        <div className="pad">
+                        <div className={panel === "home" ? "pad wide" : "pad"}>
                             {error === undefined ? null : <p className="row note bad">{error}</p>}
+                            {AGENT_PANELS.some((entry) => entry.panel === panel) ? (
+                                <WarningsPanel warnings={report.warnings} />
+                            ) : null}
+                            {panel === "home" ? (
+                                <HomePanel
+                                    agents={agents}
+                                    onOpen={(id) => goTo({ agentId: id, panel: "chat" })}
+                                    onStart={(id) => void startAgent(id)}
+                                    onNew={() => goTo({ panel: "new" })}
+                                    {...(starting === undefined ? {} : { starting })}
+                                />
+                            ) : null}
+                            {panel === "api" ? (
+                                <ApiPanel baseUrl={props.baseUrl} agentId={agentId} />
+                            ) : null}
+                            {panel === "models" ? (
+                                report.config === undefined ? (
+                                    <p className="empty">reading this agent's models…</p>
+                                ) : (
+                                    <ModelsPanel
+                                        settings={report.config.settings}
+                                        secrets={report.secrets}
+                                        {...(writing === undefined ? {} : { busy: writing })}
+                                        {...(writeNote === undefined ? {} : { note: writeNote })}
+                                        onChange={saveModels}
+                                        onSecret={saveSecret}
+                                    />
+                                )
+                            ) : null}
+                            {panel === "team" && agentId !== undefined ? (
+                                <TeamPanel
+                                    lead={{ id: agentId, name: agentName ?? agentId }}
+                                    team={report.team}
+                                />
+                            ) : null}
                             {/*
                              * Above every panel and outside the tabs, because each of these was a
                              * *refusal* until 0.1.3: a channel with no token, a plugin that would
@@ -1024,7 +1157,6 @@ function Workspace(props: {
                              * unread for weeks. Not on the chat panel, which is a conversation
                              * rather than a report.
                              */}
-                            <WarningsPanel warnings={report.warnings} />
                             {panel === "new" ? (
                                 offer === undefined ? (
                                     <p className="empty">reading this server's questions…</p>

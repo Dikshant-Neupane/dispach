@@ -1,0 +1,68 @@
+import { describe, expect, test } from "bun:test"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { EFFORTS, ModelsPanel } from "../src/models.tsx"
+import { faviconHref, Wordmark } from "../src/wordmark.tsx"
+
+const noop = () => undefined
+
+const render = (settings: Parameters<typeof ModelsPanel>[0]["settings"]) =>
+    renderToStaticMarkup(
+        createElement(ModelsPanel, {
+            settings,
+            secrets: [{ name: "MODEL_API_KEY", set: true }],
+            onChange: noop,
+            onSecret: noop,
+        }),
+    )
+
+describe("the models panel", () => {
+    const main = {
+        path: "model.main",
+        means: "",
+        value: {
+            id: "deepseek-v4-pro",
+            baseUrl: "https://api.deepseek.com/v1",
+            apiKeyEnv: "MODEL_API_KEY",
+            reasoningEffort: "low",
+        },
+    }
+
+    test("the main model, its provider, its key and its effort", () => {
+        const html = render([main, { path: "model.<role>", means: "" }])
+        expect(html).toContain("deepseek-v4-pro")
+        expect(html).toContain("DeepSeek")
+        expect(html).toContain("MODEL_API_KEY set")
+        // Every level is offered, and the one in the file is the pressed one.
+        for (const level of EFFORTS) expect(html).toContain(`>${level}<`)
+        expect(html).toContain('aria-pressed="true">low<')
+        // The template row is not a role.
+        expect(html).toContain("No roles yet")
+    })
+
+    test("a named role is its own card and can be removed; main cannot", () => {
+        const html = render([
+            main,
+            {
+                path: "model.fast",
+                means: "",
+                value: { id: "deepseek-v4-flash", apiKeyEnv: "FAST_KEY" },
+            },
+        ])
+        expect(html).toContain("deepseek-v4-flash")
+        expect(html).toContain("FAST_KEY missing")
+        expect(html.match(/>remove</g)?.length).toBe(1)
+    })
+})
+
+describe("the wordmark", () => {
+    test("is pixels, not text, so the brand is drawn from the name", () => {
+        const html = renderToStaticMarkup(createElement(Wordmark))
+        expect(html).toContain("<svg")
+        expect(html.match(/<rect /g)?.length ?? 0).toBeGreaterThan(20)
+    })
+
+    test("the favicon is an SVG data URI in the accent", () => {
+        expect(decodeURIComponent(faviconHref())).toContain("#d75fd7")
+    })
+})

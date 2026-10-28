@@ -3704,18 +3704,24 @@ export function createHandler(options: HandlerOptions): ServerHandler {
                     // client that cannot tell will offer a form whose save can only fail.
                     ...(file === undefined ? { editable: false } : { editable: true, file }),
                     // `model.<role>` is the one placeholder a person fills in: `model.fast`.
-                    settings: SETTINGS.filter(
-                        (setting) =>
-                            PERSON_SETTABLE_PATHS.includes(setting.path) ||
-                            setting.path === "model.<role>",
-                    ).map((setting) => ({
-                        path: setting.path,
-                        means: setting.means,
-                        ...(setting.confirm === undefined ? {} : { confirm: setting.confirm }),
-                        ...(text === undefined
-                            ? {}
-                            : { value: manifestValueAt(text, setting.path.split(".")) }),
-                    })),
+                    settings: [
+                        ...SETTINGS.filter(
+                            (setting) =>
+                                PERSON_SETTABLE_PATHS.includes(setting.path) ||
+                                setting.path === "model.<role>",
+                        ).map((setting) => ({
+                            path: setting.path,
+                            means: setting.means,
+                            ...(setting.confirm === undefined ? {} : { confirm: setting.confirm }),
+                            ...(text === undefined
+                                ? {}
+                                : { value: manifestValueAt(text, setting.path.split(".")) }),
+                        })),
+                        // Every named role the file declares, as its concrete path. Without these a
+                        // client can add `model.fast` and then never find it again: the template row
+                        // above has no value, and nothing else lists the roles.
+                        ...declaredRoles(text),
+                    ],
                 })
             }),
         { capability: "admin" },
@@ -5103,6 +5109,19 @@ function outsideTurn(
  * runtime itself asks before registering `phase_set`. An unphased agent has no entry phase to
  * name, so `entryPhase` is `null` there rather than inventing a name for the single implicit one.
  */
+/** `GET /config`'s rows for the named model roles the source declares, `main` excepted. */
+function declaredRoles(
+    text: string | undefined,
+): { readonly path: string; readonly means: string; readonly value: unknown }[] {
+    if (text === undefined) return []
+    const model = manifestValueAt(text, ["model"])
+    if (model === null || typeof model !== "object" || Array.isArray(model)) return []
+    const means = settingByPath("model.<role>")?.means ?? "a named model role"
+    return Object.entries(model as Record<string, unknown>)
+        .filter(([name]) => name !== "main")
+        .map(([name, value]) => ({ path: `model.${name}`, means, value }))
+}
+
 function summary(runtime: Runtime, agent: Agent) {
     const phases = agent.manifest.phases
     const phased = isPhased(phases)

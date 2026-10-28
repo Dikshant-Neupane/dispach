@@ -640,12 +640,20 @@ export function WarningsPanel(props: {
     readonly warnings: readonly WireError[]
 }): React.ReactElement | null {
     if (props.warnings.length === 0) return null
+    // A one-line headline that is always on screen, with the detail a click away: the count stays
+    // visible above every report panel, and a working agent stops reading as an outage.
     return (
-        <section className="warnings">
-            <h3>
-                {props.warnings.length} thing{props.warnings.length === 1 ? "" : "s"} this agent
-                could not set up
-            </h3>
+        <details className="warnings">
+            <summary>
+                <span className="dot warn" />
+                <h3>
+                    {props.warnings.length} thing{props.warnings.length === 1 ? "" : "s"} this agent
+                    could not set up
+                </h3>
+                <span className="sub" style={{ margin: "0 0 0 auto" }}>
+                    details
+                </span>
+            </summary>
             <p className="sub">
                 It is running. Each of these is a capability it does not have — fix the cause and
                 restart the agent.
@@ -659,7 +667,7 @@ export function WarningsPanel(props: {
                     {warning.hint === undefined ? null : <p className="hint">{warning.hint}</p>}
                 </div>
             ))}
-        </section>
+        </details>
     )
 }
 
@@ -806,13 +814,22 @@ function ChannelControls(props: {
     )
 }
 
-/** The sidebar's server group, so the shell does not restate the panel list. */
+/** The sidebar's per-agent group, so the shell does not restate the panel list. */
+export const AGENT_PANELS: readonly { readonly panel: PanelName; readonly label: string }[] = [
+    { panel: "chat", label: "Chat" },
+    { panel: "models", label: "Models" },
+    { panel: "team", label: "Team" },
+    { panel: "tools", label: "Tools" },
+    { panel: "schedules", label: "Schedules" },
+    { panel: "channels", label: "Channels" },
+    { panel: "config", label: "Settings" },
+]
+
+/** The sidebar's server group. `new` is the shell's own button, since it is the one that writes. */
 export const SERVER_PANELS: readonly { readonly panel: PanelName; readonly label: string }[] = [
-    { panel: "tools", label: "tools" },
-    { panel: "schedules", label: "schedules" },
-    { panel: "channels", label: "channels" },
-    { panel: "config", label: "config" },
-    { panel: "keys", label: "keys" },
+    { panel: "home", label: "Overview" },
+    { panel: "keys", label: "Keys" },
+    { panel: "api", label: "API" },
 ]
 
 /**
