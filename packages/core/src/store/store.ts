@@ -1700,7 +1700,7 @@ export interface Store {
      * **One store is shared by every agent in a sandbox root**, so this is a `DELETE … WHERE
      * agent_id = ?` rather than dropping a file — which makes the isolation a property of these
      * queries rather than of the filesystem, and makes "another agent's rows are untouched" a thing to
-     * assert rather than assume. `kv` is not cleaned: it has no `agent_id` column, and no consumer.
+     * assert rather than assume.
      */
     purgeAgent(agentId: string): Promise<AgentFootprint>
     /**
