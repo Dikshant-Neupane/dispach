@@ -459,6 +459,16 @@ export interface AgentDescriptionLike {
         }
     }[]
     readonly warnings?: readonly WireError[]
+    /**
+     * Who this agent delegates to, on `GET /v1/agents/:id` only. Members are observable here and
+     * addressable nowhere. Absent for an agent with no team.
+     */
+    readonly team?: readonly {
+        readonly id: string
+        readonly task: string
+        /** The field names the member hands back. */
+        readonly artifact: readonly string[]
+    }[]
     /** Set on a `disabled` row: when it was switched off, and why if anybody said. */
     readonly disabledAt?: string
     readonly reason?: string
